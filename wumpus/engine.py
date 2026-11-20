@@ -357,7 +357,7 @@ class Game:
 
     def _judge(self):
         keys = [(self.score[t], self.bases[t].hp, sum(1 for u in self.units if u.team == t)) for t in (0, 1)]
-        names = ('납품 금', '야영지 체력', '유닛 수')
+        names = ('바친 금', '야영지 체력', '유닛 수')
         for i in range(3):
             if keys[0][i] != keys[1][i]:
                 self.winner = 0 if keys[0][i] > keys[1][i] else 1

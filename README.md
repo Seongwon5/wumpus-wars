@@ -54,7 +54,7 @@ PDF 문서 (인쇄용):
 | 문서 | 내용 |
 |---|---|
 | [게임 규칙서](docs/pdf/rulebook.pdf) | 규칙 전체, 설명 그림, 수치 일람, 용어 (24쪽) |
-| [봇 API 가이드북](docs/pdf/api_guidebook.pdf) | API 참조, 개발 도구, 리플레이 도구, 봇 작성 안내 (32쪽) |
+| [봇 API 가이드북](docs/pdf/api_guidebook.pdf) | API 참조, 개발 도구, 리플레이 도구, 봇 작성 안내 (33쪽) |
 | [과제 제안서](docs/pdf/proposal.pdf) | 배틀코드형 과제 제안과 평가 방식 (23쪽) |
 
 ## 명령 한눈에

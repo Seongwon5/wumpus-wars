@@ -48,7 +48,7 @@ def explorer_turn(me, view, memory):
         breezy.add((me.x, me.y))
         debug.mark(me.x, me.y, 'yellow')          # 뷰어의 "머릿속" 에 보인다
 
-    # 금을 다 채웠으면 야영지로 돌아간다 (야영지 옆에 서면 저절로 납품된다)
+    # 금을 다 채웠으면 야영지로 돌아간다 (야영지 옆에 서면 저절로 바쳐진다)
     if me.carry >= CARRY_MAX:
         return step_toward(me, view, *view.my_camp)
 

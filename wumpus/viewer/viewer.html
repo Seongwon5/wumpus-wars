@@ -134,6 +134,12 @@ input[type=checkbox]{accent-color:#c79a55}
 #three{position:absolute;inset:0;display:none}
 #three canvas{display:block}
 #banner,#hover{z-index:2}
+#feed{position:absolute;left:14px;top:12px;z-index:2;display:flex;flex-direction:column;gap:4px;pointer-events:none;max-width:46%}
+#feed .it{font-size:12.5px;padding:3px 10px 3px 8px;border-radius:3px;background:rgba(14,10,6,.78);border:1px solid #3b2b1a;border-left:3px solid var(--bronze2);
+  color:#e9dcc0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#feed .it .rd{font-family:var(--serif);color:var(--dim);font-size:11px;margin-right:6px}
+#feed .it.pit{border-left-color:#9fd3ff} #feed .it.kill{border-left-color:#e5533f} #feed .it.camp{border-left-color:#ffb347}
+#bSpec.on{border-color:var(--bronze2);background:linear-gradient(#5a3f1c,#2e2010);color:#fff3d6}
 ::-webkit-scrollbar{width:9px} ::-webkit-scrollbar-thumb{background:#3b2b1a;border-radius:4px} ::-webkit-scrollbar-track{background:#0f0a06}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
@@ -156,12 +162,13 @@ input[type=checkbox]{accent-color:#c79a55}
       <div id="three"></div>
       <div id="banner"></div>
       <div id="hover"></div>
+      <div id="feed"></div>
       <div id="drop">리플레이가 없습니다.<br><code>python -m wumpus run logic random</code> 으로 만든<br>replays/*.json 파일을 이 창에 끌어다 놓으세요.</div>
     </div>
     <aside>
       <div class="card team" id="team0"></div>
       <div class="card team" id="team1"></div>
-      <div class="card"><h3>납품 금 추이</h3><canvas id="chart"></canvas></div>
+      <div class="card"><h3>바친 금 추이</h3><canvas id="chart"></canvas></div>
       <div class="card" id="mind"><h3>봇의 머릿속</h3><div id="mindbody" class="hint">유닛이나 야영지를 누르면 그 유닛이 아는 것과 추론한 것이 보입니다.</div></div>
       <div class="card"><h3>표시</h3>
         <div id="legend">
@@ -179,6 +186,7 @@ input[type=checkbox]{accent-color:#c79a55}
   <footer>
     <button id="b3d" title="2D / 3D 바꾸기">2D 보기</button>
     <button id="bCam" title="카메라를 처음 위치로 (끌어서 돌리기 · 휠로 확대)">카메라 ↺</button>
+    <button id="bSpec" title="싸움 · 사고가 난 곳을 카메라가 따라간다 (끌면 꺼짐)">관전 카메라</button>
     <button id="bStart" title="처음으로">⏮</button>
     <button id="bPrev" title="한 라운드 뒤로 (←)">◀</button>
     <button id="bPlay" class="main" title="재생 / 정지 (Space)">▶ 재생</button>
@@ -568,7 +576,26 @@ function updateHud(fi){
     <div class="pr"><i style="width:${100*fi/tot}%"></i></div>`;
 }
 let lastSide=-1,lastSel=null;
+// ---- 사건 알림 (최근 큰 사건 몇 줄) ----
+let feedFi=-1;
+function updateFeed(fi){
+  if(fi===feedFi)return; feedFi=fi;
+  const team=viewMode==='all'?-1:+viewMode, items=[];
+  const who=(id,f)=>{const bi=baseIds.indexOf(id);if(bi>=0)return `<span class="${'rb'[bi]}">${TEAM[bi].name} 야영지</span>`;
+    const u=umap[f].get(id)||umap[Math.max(0,f-1)].get(id);return u?`<span class="${'rb'[u[1]]}">${TEAM[u[1]].name} ${KIND[u[2]]} #${id}</span>`:'#'+id;};
+  for(let f=fi;f>=Math.max(1,fi-14)&&items.length<5;f--){
+    const vis=team>=0?visAt[team][f]:null, see=(x,y)=>!vis||vis[y*W+x]===1;
+    for(const e of F[f].e||[]){
+      if(e[0]==='trap'&&see(e[2],e[3]))items.push(['pit',f,`${who(e[1],f)} 구덩이에 빠짐`]);
+      else if(e[0]==='die'&&e[4]==='atk'&&see(e[2],e[3]))items.push(['kill',f,`${who(e[1],f)} 쓰러짐`]);
+    }
+    for(let t=0;t<2;t++){const d=F[f-1].bh[t]-F[f].bh[t];
+      if(d>0&&(team<0||team===t||see(R.map.bases[t][0],R.map.bases[t][1])))items.push(['camp',f,`<span class="${'rb'[t]}">${TEAM[t].name} 야영지</span> 공격받음 (-${d})`]);}
+  }
+  $('feed').innerHTML=items.slice(0,5).map(([c,f,h])=>`<div class="it ${c}" style="opacity:${Math.max(0.35,1-(fi-f)/15).toFixed(2)}"><span class="rd">R${f}</span>${h}</div>`).join('');
+}
 function updateSide(fi){
+  updateFeed(fi);
   $('slider').value=Math.round(P);
   $('rlabel').textContent=`라운드 ${fi} / ${N-1}`;
   updateHud(fi);
@@ -578,7 +605,7 @@ function updateSide(fi){
     let ne=0,ng=0;for(const u of fr.u)if(u[1]===t){if(u[2]==='E')ne++;else ng++;}
     const hp=fr.bh[t],mx=R.const.hp.B;
     $('team'+t).innerHTML=`<div class="top"><span class="nm ${'rb'[t]}">${TEAM[t].name}</span><span class="bot">${esc(R.meta.names[t])}</span></div>
-      <div class="stat"><span>납품 <b>${fr.sc[t]}</b></span><span>금고 <b>${fr.bk[t]}</b></span><span>탐험가 <b>${ne}</b></span><span>궁수 <b>${ng}</b></span></div>
+      <div class="stat"><span>바친 금 <b>${fr.sc[t]}</b></span><span>금고 <b>${fr.bk[t]}</b></span><span>탐험가 <b>${ne}</b></span><span>궁수 <b>${ng}</b></span></div>
       <div class="bar"><i style="width:${100*hp/mx}%;background:${TEAM[t].c}"></i></div>
       <div class="bot">야영지 체력 ${hp} / ${mx}</div>`;
   }
@@ -605,7 +632,7 @@ function updateSide(fi){
     else if(e[0]==='die'&&e[4]==='atk')L.push(`${who(e[1])} 쓰러짐`);
     else if(e[0]==='atk')L.push(`${who(e[1])} → ${who(e[6])} 공격`);
     else if(e[0]==='spawn')L.push(`<span class="${'rb'[e[2]]}">${TEAM[e[2]].name}</span> ${KIND[e[3]]} #${e[1]} 생산`);
-    else if(e[0]==='dlv')L.push(`${who(e[1])} 금 ${e[2]} 납품`);
+    else if(e[0]==='dlv')L.push(`${who(e[1])} 금 ${e[2]}개 바침`);
     else if(e[0]==='err')L.push(`<span style="color:#ff8080">오류</span> #${e[1]}: ${esc(e[2])}`);
   }
   const mines=(fr.e||[]).filter(e=>e[0]==='mine').length; if(mines)L.push(`채굴 ${mines}번`);
@@ -648,7 +675,7 @@ $('bStart').onclick=()=>jump(0);
 $('bEnd').onclick=()=>jump(N-1);
 $('slider').oninput=e=>jump(+e.target.value);
 $('speed').onchange=e=>speed=+e.target.value;
-$('viewSel').onchange=e=>{viewMode=e.target.value;lastSide=-1;};
+$('viewSel').onchange=e=>{viewMode=e.target.value;lastSide=-1;feedFi=-1;};
 $('mindSel').onchange=e=>{mindMode=e.target.value;};
 $('ckTrap').onchange=e=>showTraps=e.target.checked;
 document.addEventListener('keydown',e=>{
@@ -675,11 +702,13 @@ cv.addEventListener('mousemove',ev=>{const [x,y]=cellAt(ev);hoverCell(x,y);});
 function applyMode(){
   const on=mode3d&&!!window.View3D;
   cv.style.display=on?'none':'block';$('three').style.display=on?'block':'none';
-  $('b3d').textContent=mode3d?'2D 보기':'3D 보기';$('bCam').style.display=on?'':'none';
+  $('b3d').textContent=mode3d?'2D 보기':'3D 보기';$('bCam').style.display=on?'':'none';$('bSpec').style.display=on?'':'none';
   if(on){View3D.resize();}
 }
 $('b3d').onclick=()=>{ if(!window.View3D){$('b3d').textContent='3D (인터넷 필요)';return;} mode3d=!mode3d;applyMode();};
-$('bCam').onclick=()=>{if(window.View3D)View3D.resetCam();};
+$('bCam').onclick=()=>{if(window.View3D){View3D.setSpectate(false);$('bSpec').classList.remove('on');View3D.resetCam();}};
+$('bSpec').onclick=()=>{if(!window.View3D)return;const on=!$('bSpec').classList.contains('on');$('bSpec').classList.toggle('on',on);View3D.setSpectate(on);};
+window.onSpectateOff=()=>$('bSpec').classList.remove('on');
 window.onView3DReady=()=>{ if(R)View3D.build(); applyMode();
   const q=new URLSearchParams(location.hash.slice(1));   // 예: #cam=12,18,9 (칸 x,y 와 거리)
   if(R&&q.has('cam')){const [x,y,d]=q.get('cam').split(',').map(Number);View3D.focus(x,y,d||10);}

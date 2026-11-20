@@ -110,9 +110,9 @@ function numTex(n) {                 // 금맥에 남은 양: 금빛 테두리 �
   if (_num.has(n)) return _num.get(n);
   const c = document.createElement('canvas'); c.width = 128; c.height = 64;
   const g = c.getContext('2d');
-  g.beginPath(); g.roundRect(4, 4, 120, 56, 18); g.fillStyle = 'rgba(14,9,5,0.88)'; g.fill();
-  g.lineWidth = 4; g.strokeStyle = '#d9a441'; g.stroke();
-  g.fillStyle = '#ffd978'; g.font = '800 50px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.beginPath(); g.roundRect(6, 8, 116, 50, 16); g.fillStyle = 'rgba(14,9,5,0.55)'; g.fill();
+  g.lineWidth = 2.5; g.strokeStyle = 'rgba(217,164,65,0.45)'; g.stroke();
+  g.fillStyle = '#ecd29a'; g.font = '700 46px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText(String(n), 64, 36);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   _num.set(n, t);
@@ -472,7 +472,7 @@ function build() {
     grp.add(glint);
     grp.position.set(wx(x), 0, wz(y));
     const lbl = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true, depthTest: false, sizeAttenuation: false}));
-    lbl.position.set(0, 0.7, 0); lbl.scale.set(0.05, 0.026, 1); lbl.renderOrder = 14;
+    lbl.position.set(0, 0.8, 0); lbl.scale.set(0.045, 0.0235, 1); lbl.renderOrder = 14; lbl.material.opacity = 0.8;
     grp.add(lbl);
     grp.userData.cs = cs; grp.userData.glint = glint; grp.userData.glow = glow; grp.userData.lbl = lbl;
     root.add(grp);
@@ -481,12 +481,12 @@ function build() {
 
   // 구덩이
   const traps = new Map();
-  const ringGeo = new THREE.RingGeometry(0.22, 0.3, 28).rotateX(-Math.PI / 2);
+  const ringGeo = new THREE.RingGeometry(0.25, 0.29, 28).rotateX(-Math.PI / 2);
   const shaftG = new THREE.CylinderGeometry(0.69, 0.6, 2.1, 4, 1, true).rotateY(Math.PI / 4);
   const shaftM = new THREE.MeshBasicMaterial({map: shaftTex(), side: THREE.BackSide});
   const rimM = std(0x4a3a28, {roughness: 0.95});
   for (const [x, y] of R.map.traps) {
-    const hidden = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({color: 0xe5533f, transparent: true, opacity: 0.6, depthWrite: false}));
+    const hidden = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({color: 0xc0483a, transparent: true, opacity: 0.3, depthWrite: false}));
     hidden.position.set(wx(x), 0.012, wz(y));
     const rev = new THREE.Group();
     rev.position.set(wx(x), 0, wz(y));
@@ -950,8 +950,52 @@ function frame(f, g, a, fi, team, vis, seen) {
     world.sel.material.opacity = 0.6 + 0.4 * Math.sin(now * 5);
     world.sel.scale.setScalar(selId === R.map.base_ids[0] || selId === R.map.base_ids[1] ? 1.25 : 1);
   }
+  // 관전 카메라: 싸움 · 사고가 난 곳을 부드럽게 따라간다
+  if (spect) spectate(g);
   controls.update();
-  composer.render();
+  // 화면 흔들림: 큰 사건 (구덩이 추락 · 처치 · 야영지 피격) 때 잠깐
+  let amp = 0;
+  if (moving && a > 0.35) {
+    const k = Math.pow(1 - (a - 0.35) / 0.65, 2);
+    for (const e of evOf(g).list) {
+      if (e[0] === 'trap' && canSee(e[2], e[3])) amp = Math.max(amp, 0.16 * k);
+      else if (e[0] === 'die' && e[4] === 'atk' && canSee(e[2], e[3])) amp = Math.max(amp, 0.08 * k);
+      else if (e[0] === 'atk' && R.map.base_ids.includes(e[6]) && canSee(e[4], e[5])) amp = Math.max(amp, 0.05 * k);
+    }
+  }
+  amp *= Math.min(1.5, camera.position.distanceTo(controls.target) / 12);
+  if (amp > 0.001) {
+    SH.set(Math.sin(now * 61) * amp, Math.sin(now * 47 + 1) * amp * 0.6, Math.cos(now * 53) * amp);
+    camera.position.add(SH); composer.render(); camera.position.sub(SH);
+  } else composer.render();
+}
+
+const SH = new THREE.Vector3(), FOC = new THREE.Vector3(), OFF = new THREE.Vector3();
+let spect = false, focusPt = null, focusT = 0;
+function setSpectate(on) { spect = on; focusPt = null; }
+function spectate(g) {
+  const now = performance.now() / 1000;
+  let sx = 0, sz = 0, n = 0;
+  for (const e of evOf(g).list) {                       // 이번 라운드의 사건 자리
+    if (e[0] === 'atk') { sx += wx(e[4]) + wx(e[2]); sz += wz(e[5]) + wz(e[3]); n += 2; }
+    else if (e[0] === 'trap' || e[0] === 'die') { sx += wx(e[2]) * 3; sz += wz(e[3]) * 3; n += 3; }
+  }
+  if (n) { focusPt = [sx / n, sz / n]; focusT = now; }
+  else if (!focusPt || now - focusT > 2.5) {              // 사건이 없으면 적과 가까이 있는 유닛들 가운데
+    const us = F[g].u; let bx = 0, bz = 0, m = 0;
+    for (const u of us) for (const v of us) {
+      if (u[1] !== v[1] && Math.max(Math.abs(u[3] - v[3]), Math.abs(u[4] - v[4])) <= 4) { bx += wx(u[3]); bz += wz(u[4]); m++; break; }
+    }
+    if (m) focusPt = [bx / m, bz / m];
+    else { let cx = 0, cz = 0; for (const u of us) { cx += wx(u[3]); cz += wz(u[4]); } focusPt = us.length ? [cx / us.length, cz / us.length] : [0, 0]; }
+    focusT = now;
+  }
+  FOC.set(focusPt[0], 0, focusPt[1]);
+  OFF.copy(camera.position).sub(controls.target);
+  const len = OFF.length();
+  OFF.multiplyScalar((len + (13 - len) * 0.03) / len);
+  controls.target.lerp(FOC, 0.04);
+  camera.position.copy(controls.target).add(OFF);
 }
 
 // ---------------- 누르기 · 가리키기 ----------------
@@ -965,6 +1009,7 @@ function cellOf(ev) {
 }
 let down = null;
 renderer.domElement.addEventListener('pointerdown', ev => { down = [ev.clientX, ev.clientY]; });
+controls.addEventListener('start', () => { if (spect) { spect = false; if (window.onSpectateOff) window.onSpectateOff(); } });
 renderer.domElement.addEventListener('pointerup', ev => {
   if (down && Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) < 5) { const c = cellOf(ev); if (c) selectCell(c[0], c[1]); }
   down = null;
@@ -977,5 +1022,5 @@ function focus(x, y, d) {
   controls.update();
 }
 
-window.View3D = {build, frame, resize, resetCam, focus};
+window.View3D = {build, frame, resize, resetCam, focus, setSpectate};
 if (window.onView3DReady) window.onView3DReady();
