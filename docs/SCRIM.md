@@ -1,0 +1,127 @@
+# 스크림 도구 (오프라인 대전)
+
+스크림은 두 봇을 **여러 맵에서, 양쪽 진영으로** 겨루게 하고 승패를 세는 도구다. 내 봇을 고쳤을 때 정말 나아졌는지 숫자로 확인할 때 쓴다. 모두 내 컴퓨터에서 돌고, 인터넷이 필요 없다.
+
+```bash
+python -m wumpus scrim 봇A 봇B
+```
+
+봇은 `bots/` 안의 이름 (`logic`) 이나 파일 · 폴더 경로 (`bots/mybot`, `my_bot.py`) 로 준다.
+
+## 1. 첫 스크림
+
+```bash
+python -m wumpus scrim logic starter
+```
+
+```
+스크림: logic vs starter | 맵 10개 x 시드 1개 x 진영 2 = 20판 | 동시에 4판
+
+맵              시드  A 진영      결과       라운드     금 A:B  끝난 이유
+dusty_vault        1  logic 붉은  logic 승      166      75:32  야영지 파괴
+dusty_vault        1  logic 푸른  logic 승      163      40:25  야영지 파괴
+jackal_hall        1  logic 붉은  logic 승      114       50:5  야영지 파괴
+...
+scarab_maze        1  logic 붉은  logic 승      479    298:260  야영지 파괴
+...
+twin_pillars       1  logic 푸른  logic 승      202      61:42  야영지 파괴
+
+== 요약 (20판, 7초) ==
+logic: 20승  starter: 0승  무승부: 0   ->  logic 승률 100.0%
+평균 바친 금  logic 95.2  :  starter 54.6
+평균 라운드 168 | 야영지 파괴로 끝난 판 20/20
+차례 시간 (ms) 평균/최대  logic 0.63/35.7  starter 0.03/9.0
+```
+
+### 결과 읽는 법
+
+| 열 · 줄 | 뜻 |
+|---|---|
+| A 진영 | 그 판에서 봇A 가 붉은 원정대였는지 푸른 원정대였는지 |
+| 결과 | 그 판의 승자 |
+| 금 A:B | 봇A 가 바친 금 : 봇B 가 바친 금 (진영과 상관없이 늘 A 가 앞) |
+| 끝난 이유 | `야영지 파괴` 또는 `500라운드 끝, 납품 금` (금이 같으면 야영지 체력 → 유닛 수) |
+| 승률 | (승 + 무승부 × 0.5) / 판 수 |
+| 차례 시간 | 봇의 `turn` 한 번에 걸린 시간. 최대값이 크면 어느 차례에 계산이 몰린 것이다 |
+| 오류 사건 | 봇이 예외를 던진 수. 0 이 아니면 `python -m wumpus check 봇` 으로 원인을 본다 |
+
+## 2. 옵션
+
+| 옵션 | 기본 | 뜻 |
+|---|---|---|
+| `--maps` | `all` | `all` (maps/ 의 모든 맵) 또는 `temple_gate,scarab_maze` 처럼 쉼표 목록. `gen:7` 처럼 그 자리에서 만든 맵도 된다 |
+| `--seeds` | `1` | 경기 시드 목록. `1,2,3` 또는 `1-5`. 봇이 `random` 을 쓸 때만 결과가 달라진다 |
+| `--one-side` | 끔 | 진영을 바꿔 한 번 더 하지 않는다. 기본은 맵마다 양쪽 진영 모두 (공정하게) |
+| `--jobs` | CPU 수 - 1 (최대 4) | 동시에 돌릴 판 수. 1 이면 한 판씩 |
+| `--save` | 끔 | 모든 판의 리플레이 (.json + .html) 를 `replays/scrim-날짜-시각/` 에 저장 |
+| `--out` | `replays` | `--save` 때 저장할 폴더 |
+| `--csv 파일` | | 판마다 결과를 CSV 로 저장 (엑셀로 열린다) |
+| `--time-limit ms` | 없음 | 차례당 시간 한도. 넘긴 차례는 행동을 버리고 오류로 센다 |
+| `--quiet` | 끔 | 판마다 줄을 찍지 않고 요약만 |
+
+## 3. 자주 쓰는 방법
+
+**고친 봇이 정말 나아졌나 (A/B 비교)**
+
+```bash
+python -m wumpus new mybot_v1 --from mybot     # 고치기 전 봇을 보관
+# ... mybot 을 고친다 ...
+python -m wumpus scrim mybot mybot_v1 --save   # 20판. 진 판은 리플레이로 원인을 본다
+```
+
+- 판 수가 적으면 운이 섞인다. 20판에서 11승 9패는 거의 같은 실력이다. 차이가 작으면 `--seeds 1-3` 처럼 판을 늘린다 (봇이 `random` 을 쓸 때).
+- 진 판의 리플레이를 열어 **어디서 무엇이 틀렸는지** 보는 것이 가장 빨리 느는 길이다.
+
+**특정 맵만 빠르게**
+
+```bash
+python -m wumpus scrim mybot logic --maps scarab_maze,twin_pillars --jobs 1
+```
+
+**결과를 표로 모으기**
+
+```bash
+python -m wumpus scrim mybot logic --csv result.csv
+```
+
+CSV 열: `map, seed, A_side, result, reason, rounds, gold_A, gold_B`
+
+## 4. 한 판만 자세히: `run`
+
+스크림이 "몇 번 이겼나" 를 본다면, `run` 은 "한 판을 어떻게 이겼나" 를 본다.
+
+```bash
+python -m wumpus run mybot logic --map scarab_maze --open
+```
+
+| 옵션 | 뜻 |
+|---|---|
+| `--map` | 맵 이름 · .json 경로 · `gen:시드` (기본 `temple_gate`) |
+| `--seed` | 경기 시드 (기본 1) |
+| `--open` | 끝나면 뷰어를 브라우저로 연다 |
+| `--out`, `--name` | 리플레이 폴더 (기본 `replays`) 와 파일 이름 |
+| `--no-html` | `.json` 만 저장 |
+| `--time-limit` | 차례당 시간 한도 ms |
+
+## 5. 봇 점검: `check`
+
+```bash
+python -m wumpus check mybot
+```
+
+```
+봇 점검: mybot (bots/mybot/main.py)
+  불러오기 OK, turn 함수 있음
+  붉은 원정대 진영 vs random: 승 (500라운드 끝, 납품 금, 500라운드, 금 320:105)
+    차례 시간 평균 0.02 ms, 최대 3.0 ms | 오류 0번
+  푸른 원정대 진영 vs random: 승 (500라운드 끝, 납품 금, 500라운드, 금 350:50)
+    차례 시간 평균 0.02 ms, 최대 2.1 ms | 오류 0번
+```
+
+문법 오류, `turn` 없음, 경기 중 예외 (처음 몇 개의 메시지와 라운드), 차례 시간을 한 번에 본다. 제출 전에 꼭 돌린다.
+
+## 6. 알아 둘 것
+
+- 스크림은 판마다 별도 프로세스에서 돌린다. 그래서 봇끼리 전역 변수가 섞이지 않는다.
+- 같은 봇 · 맵 · 시드면 결과가 같다. 예시 추론 봇처럼 `random` 을 안 쓰는 봇끼리는 시드를 바꿔도 같은 결과가 나온다. 판을 늘리려면 **맵을 늘리는 것** (`maps gen`) 이 더 효과적이다.
+- 차례 시간은 컴퓨터마다 다르다. `--time-limit` 결과는 컴퓨터에 따라 조금 달라질 수 있다.
