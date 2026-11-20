@@ -49,6 +49,14 @@ python -m wumpus scrim mybot logic              # 맵 10개에서 양쪽 진영�
 | [리플레이 도구](docs/REPLAY.md) | 리플레이 파일, 3D · 2D 뷰어 사용법, 봇의 머릿속 보기 |
 | [맵](docs/MAPS.md) | 맵 목록 · 그림 보기 · 새 맵 만들기 · 맵 파일 형식 |
 
+PDF 문서 (인쇄용):
+
+| 문서 | 내용 |
+|---|---|
+| [게임 규칙서](docs/pdf/rulebook.pdf) | 규칙 전체, 설명 그림, 수치 일람, 용어 (24쪽) |
+| [봇 API 가이드북](docs/pdf/api_guidebook.pdf) | API 참조, 개발 도구, 리플레이 도구, 봇 작성 안내 (32쪽) |
+| [과제 제안서](docs/pdf/proposal.pdf) | 배틀코드형 과제 제안과 평가 방식 (23쪽) |
+
 ## 명령 한눈에
 
 | 명령 | 하는 일 |
