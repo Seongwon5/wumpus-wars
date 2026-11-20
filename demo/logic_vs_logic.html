@@ -54,8 +54,19 @@ header .vs{margin-left:auto;font-family:var(--kserif);font-weight:600}
 .st svg{width:30px;height:30px;flex:none;display:block}
 .st .lab{font-family:var(--kserif);font-size:11px;color:var(--dim);line-height:1;white-space:nowrap;letter-spacing:.05em}
 .st .val{font-family:var(--serif);font-size:27px;font-weight:800;line-height:1.08;font-variant-numeric:tabular-nums}
-.st.ore .val{color:#ffd978;text-shadow:0 0 12px rgba(232,182,74,.35)}
+.st.ore .val{color:#ffd978;text-shadow:0 0 14px rgba(232,182,74,.45)}
 .st.gold .val{color:#e9c27a}
+/* 바친 금 = 승패를 가르는 점수: 가장 크게 */
+.st.ore{padding:6px 16px 6px 12px;border-color:#a8813f;background:linear-gradient(#2a1d0e,#1a120b);
+  box-shadow:inset 0 1px 0 rgba(255,220,150,.12),0 0 18px -6px rgba(232,182,74,.55)}
+.st.ore svg{width:40px;height:40px}
+.st.ore .lab{font-size:12.5px;color:#d9b77a}
+.st.ore .val{font-size:40px;line-height:1}
+/* 금고 = 생산에 쓰는 돈: 작은 보조 칸 */
+.st.gold{padding:4px 9px;gap:6px;opacity:.9}
+.st.gold svg{width:20px;height:20px}
+.st.gold .val{font-size:19px}
+.st.gold .lab{font-size:10px}
 .st .dl{position:absolute;top:-9px;right:-4px;font-size:12px;font-weight:800;padding:0 5px;border-radius:4px;opacity:0;pointer-events:none}
 .st .dl.up{color:#14200d;background:#9fd88a}
 .st .dl.dn{color:#2a0b0b;background:#f08a7a}
@@ -451,7 +462,11 @@ function drawUnit(x,y,t,k,hp,carry,sc,al){
     for(let i=0;i<carry;i++){const ang=Math.PI*(1.15+i*0.175);const px=X+Math.cos(ang)*r*1.3,py=Y+Math.sin(ang)*r*1.3;
       ctx.fillStyle='#e8b64a';ctx.strokeStyle='#5a3a08';ctx.lineWidth=0.8;ctx.beginPath();ctx.arc(px,py,Math.max(1.6,S*0.07),0,7);ctx.fill();ctx.stroke();}}
   ctx.restore();
-  const mx=R.const.hp[k]; if(hp<mx&&al>0.2) hpBar(X-S*0.35,Y+S*0.4,S*0.7,hp/mx,T.c);
+  // 체력 고리: 12시부터 시계 방향으로 남은 체력만큼 팀 색 (30% 이하는 주황)
+  const mx=R.const.hp[k],fr=Math.max(0,Math.min(1,hp/mx));
+  if(al>0.2){ctx.save();ctx.globalAlpha=al;ctx.lineWidth=Math.max(2,S*0.09);ctx.lineCap='butt';
+    ctx.strokeStyle='rgba(20,12,6,0.85)';ctx.beginPath();ctx.arc(X,Y,r*1.28,0,7);ctx.stroke();
+    ctx.strokeStyle=fr<=0.3?'#ff6a3d':T.c;ctx.beginPath();ctx.arc(X,Y,r*1.28,-Math.PI/2,-Math.PI/2+Math.PI*2*fr);ctx.stroke();ctx.restore();}
 }
 function drawVib(x,y,now){
   // 바람: 몸 둘레를 도는 옅은 바람 줄기
@@ -764,8 +779,8 @@ controls.maxPolarAngle = 1.32;
 controls.minDistance = 4;
 controls.maxDistance = 90;
 
-scene.add(new THREE.HemisphereLight(0xffe0b0, 0x1a1008, 0.5));
-const sun = new THREE.DirectionalLight(0xffd59a, 1.7);
+scene.add(new THREE.HemisphereLight(0xffe0b0, 0x1a1008, 0.42));
+const sun = new THREE.DirectionalLight(0xffd59a, 1.3);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0004;
@@ -821,7 +836,61 @@ function billboard(obj, parent) {   // 부모가 돌아 있어도 카메라를 �
   obj.quaternion.copy(Q);
 }
 
-let _star = null, _hole = null, _shaft = null, _soft = null;
+let _star = null, _hole = null, _shaft = null, _soft = null, _slab = null, _brick = null;
+function rnd(seed) { let t = seed >>> 0; return () => { t += 0x6D2B79F5; let r = Math.imul(t ^ (t >>> 15), 1 | t); r ^= r + Math.imul(r ^ (r >>> 7), 61 | r); return ((r ^ (r >>> 14)) >>> 0) / 4294967296; }; }
+function speckle(g, w, h, R, n, lo, hi) {          // 돌 표면의 얼룩과 알갱이
+  for (let i = 0; i < n; i++) {
+    const v = lo + R() * (hi - lo), s = 1 + R() * 3;
+    g.fillStyle = `rgba(${v},${v * 0.86},${v * 0.66},${0.08 + R() * 0.14})`;
+    g.fillRect(R() * w, R() * h, s, s);
+  }
+}
+function slabTex() {                                 // 바닥 판석: 닳은 모서리, 금, 얼룩
+  if (_slab) return _slab;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'), R = rnd(7);
+  g.fillStyle = '#9c8466'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 18; i++) {                     // 큰 얼룩
+    const x = R() * 256, y = R() * 256, r = 30 + R() * 70, gr = g.createRadialGradient(x, y, 0, x, y, r);
+    const d = R() < 0.5 ? '70,52,34' : '196,170,130';
+    gr.addColorStop(0, `rgba(${d},${0.10 + R() * 0.12})`); gr.addColorStop(1, `rgba(${d},0)`);
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+  }
+  speckle(g, 256, 256, R, 2600, 60, 220);
+  g.strokeStyle = 'rgba(40,28,16,0.55)'; g.lineWidth = 1.6;          // 금
+  for (let k = 0; k < 3; k++) {
+    let x = R() * 256, y = R() * 256; g.beginPath(); g.moveTo(x, y);
+    for (let i = 0; i < 6; i++) { x += (R() - 0.5) * 60; y += (R() - 0.3) * 40; g.lineTo(x, y); }
+    g.stroke();
+  }
+  const e = g.createLinearGradient(0, 0, 256, 256);                   // 닳은 모서리 (빛 · 그늘)
+  g.lineWidth = 14; g.strokeStyle = 'rgba(30,20,10,0.35)'; g.strokeRect(0, 0, 256, 256);
+  g.lineWidth = 4; g.strokeStyle = 'rgba(255,230,190,0.18)'; g.strokeRect(9, 9, 238, 238);
+  _slab = new THREE.CanvasTexture(c); _slab.colorSpace = THREE.SRGBColorSpace; _slab.anisotropy = 8;
+  return _slab;
+}
+function brickTex() {                                // 석벽: 엇갈려 쌓은 돌과 줄눈
+  if (_brick) return _brick;
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'), R = rnd(11);
+  g.fillStyle = '#3a2c1e'; g.fillRect(0, 0, 256, 256);               // 줄눈
+  const rowsN = 4, rh = 256 / rowsN;
+  for (let r = 0; r < rowsN; r++) {
+    let x = r % 2 ? -40 : 0;
+    while (x < 256) {
+      const w = 70 + R() * 50, v = 120 + R() * 50;
+      g.fillStyle = `rgb(${v},${v * 0.83},${v * 0.62})`;
+      g.fillRect(x + 3, r * rh + 3, w - 6, rh - 6);
+      const gr = g.createLinearGradient(0, r * rh, 0, r * rh + rh);
+      gr.addColorStop(0, 'rgba(255,235,200,0.16)'); gr.addColorStop(1, 'rgba(0,0,0,0.28)');
+      g.fillStyle = gr; g.fillRect(x + 3, r * rh + 3, w - 6, rh - 6);
+      x += w;
+    }
+  }
+  speckle(g, 256, 256, R, 3000, 50, 210);
+  _brick = new THREE.CanvasTexture(c); _brick.colorSpace = THREE.SRGBColorSpace; _brick.anisotropy = 8;
+  return _brick;
+}
 function shaftTex() {
   if (_shaft) return _shaft;
   const c = document.createElement('canvas'); c.width = 64; c.height = 256;
@@ -855,8 +924,8 @@ function numTex(n) {                 // 금맥에 남은 양: 금빛 테두리 �
   _num.set(n, t);
   return t;
 }
-function badgeTex(kind, team, carry = 0) {
-  const key = kind + team + ':' + carry;
+function badgeTex(kind, team, carry = 0, hp10 = 10) {
+  const key = kind + team + ':' + carry + ':' + hp10;
   if (_badge.has(key)) return _badge.get(key);
   const c = document.createElement('canvas'); c.width = c.height = 256;
   const g = c.getContext('2d'), col = TC[team].css;
@@ -866,8 +935,11 @@ function badgeTex(kind, team, carry = 0) {
     else g.arc(128, 128, r, 0, 7);
   };
   shape(122); g.fillStyle = '#0b0705'; g.fill();               // 바깥 검은 테
-  shape(112); g.fillStyle = col; g.fill();                     // 팀 색 테두리
-  shape(90); g.fillStyle = '#1a110a'; g.fill();                // 어두운 바탕
+  shape(112); g.fillStyle = '#4a3b2c'; g.fill();               // 비어 있는 체력 (어두운 고리)
+  g.save(); shape(112); g.clip();                              // 남은 체력만큼 팀 색으로 (12시부터 시계 방향)
+  g.beginPath(); g.moveTo(128, 128); g.arc(128, 128, 140, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hp10 / 10); g.closePath();
+  g.fillStyle = hp10 <= 3 ? '#ff6a3d' : col; g.fill(); g.restore();
+  shape(84); g.fillStyle = '#1a110a'; g.fill();                // 어두운 바탕
   g.fillStyle = '#ffffff'; g.strokeStyle = '#ffffff'; g.lineCap = 'round'; g.lineJoin = 'round';
   if (kind === 'G') {          // 활: 굵은 활대 + 시위 + 화살
     g.lineWidth = 20; g.beginPath(); g.arc(98, 128, 62, -1.2, 1.2); g.stroke();
@@ -1116,12 +1188,12 @@ function build() {
   scene.add(root);
   const n = W * H, rows = R.map.rows;
 
-  const ground = new THREE.InstancedMesh(new RoundedBoxGeometry(0.97, 0.24, 0.97, 2, 0.05), std(0xffffff, {roughness: 0.95}), n);
+  const ground = new THREE.InstancedMesh(new RoundedBoxGeometry(0.97, 0.24, 0.97, 2, 0.05), std(0xffffff, {roughness: 0.95, map: slabTex()}), n);
   ground.receiveShadow = true;
   const gBase = new Float32Array(n * 3);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x, r = hash(x, y);
-    COL.setHSL(0.08 + r * 0.02, 0.1 + r * 0.05, 0.06 + r * 0.03 + (r > 0.94 ? 0.02 : 0));
+    COL.setHSL(0.08 + r * 0.03, 0.12 + r * 0.08, 0.16 + r * 0.07);
     gBase.set([COL.r, COL.g, COL.b], i * 3);
     M4.makeTranslation(wx(x), -0.12 - r * 0.025, wz(y));
     ground.setMatrixAt(i, M4);
@@ -1161,24 +1233,73 @@ function build() {
   const wallCells = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (rows[y][x] === '#') wallCells.push([x, y]);
   const nW = Math.max(1, wallCells.length);
-  const wall = new THREE.InstancedMesh(new RoundedBoxGeometry(0.9, 1, 0.9, 2, 0.05), std(0xffffff, {roughness: 0.88}), nW);
-  const cap = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 0.14, 1, 2, 0.04), std(0xffffff, {roughness: 0.8}), nW);
+  const wall = new THREE.InstancedMesh(new RoundedBoxGeometry(0.9, 1, 0.9, 2, 0.05), std(0xffffff, {roughness: 0.9, map: brickTex()}), nW);
+  const cap = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 0.14, 1, 2, 0.04), std(0xffffff, {roughness: 0.85, map: slabTex()}), nW);
   wall.castShadow = cap.castShadow = true; wall.receiveShadow = cap.receiveShadow = true;
   const wBase = new Float32Array(wallCells.length * 3), cBase = new Float32Array(wallCells.length * 3);
   wallCells.forEach(([x, y], k) => {
     const r = hash(x, y), ruin = hash(y + 17, x + 3) < 0.25, h = ruin ? 0.35 + r * 0.3 : 0.85 + r * 0.6;
     const rot = Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), (r - 0.5) * (ruin ? 0.6 : 0.12));
-    COL.setHSL(0.075 + r * 0.02, 0.2, 0.17 + r * 0.06);
+    COL.setHSL(0.08 + r * 0.02, 0.1, 0.45 + r * 0.15);
     wBase.set([COL.r, COL.g, COL.b], k * 3);
     M4.compose(V3.set(wx(x), h / 2, wz(y)), rot, S3.set(1, h, 1));
     wall.setMatrixAt(k, M4); wall.setColorAt(k, COL);
-    COL.setHSL(0.085 + r * 0.02, 0.24, 0.26 + r * 0.07);
+    COL.setHSL(0.09 + r * 0.02, 0.12, 0.55 + r * 0.12);
     cBase.set([COL.r, COL.g, COL.b], k * 3);
     M4.compose(V3.set(wx(x) + (ruin ? (r - 0.5) * 0.2 : 0), h + 0.05, wz(y)), rot, S3.set(ruin ? 0.8 : 1, 1, ruin ? 0.8 : 1));
     cap.setMatrixAt(k, M4); cap.setColorAt(k, COL);
   });
   wall.count = cap.count = wallCells.length;
   root.add(wall, cap);
+  // 무너진 돌 조각: 벽 칸 둘레 (안개 때 그 칸 색을 따른다)
+  const rubCells = [];
+  const rubble = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), std(0xffffff, {roughness: 0.95, flatShading: true, map: brickTex()}), Math.max(1, wallCells.length * 3));
+  rubble.castShadow = true; rubble.receiveShadow = true;
+  const rBase = [];
+  wallCells.forEach(([x, y]) => {
+    const m = 1 + Math.floor(hash(x * 3, y * 5) * 3);
+    for (let k = 0; k < m; k++) {
+      const a = hash(x + k * 7, y) * Math.PI * 2, d = 0.38 + hash(x, y + k * 3) * 0.12, sc = 0.07 + hash(x + k, y + k) * 0.09;
+      M4.compose(V3.set(wx(x) + Math.cos(a) * d, sc * 0.5, wz(y) + Math.sin(a) * d),
+        Q.setFromEuler(new THREE.Euler(a, a * 2, k)), S3.set(sc * 1.3, sc * 0.8, sc));
+      const i = rubCells.length;
+      rubble.setMatrixAt(i, M4);
+      const v = 0.5 + hash(k, x * y) * 0.3; COL.setRGB(v, v * 0.92, v * 0.85); rubble.setColorAt(i, COL);
+      rBase.push(v); rubCells.push(y * W + x);
+    }
+  });
+  rubble.count = rubCells.length;
+  root.add(rubble);
+  // 동굴 벽: 맵을 둘러싼 큰 바위와 종유석
+  const rocks = [], spikes = [];
+  const pad = 2.2, perim = (x0, z0, x1, z1, step) => { const pts = []; for (let x = x0; x <= x1; x += step) pts.push([x, z0], [x, z1]); for (let z = z0 + step; z < z1; z += step) pts.push([x0, z], [x1, z]); return pts; };
+  perim(-W / 2 - pad, -H / 2 - pad, W / 2 + pad, H / 2 + pad, 1.5).forEach(([x, z], i) => rocks.push([x, z, i, 0]));
+  perim(-W / 2 - pad - 2.5, -H / 2 - pad - 2.5, W / 2 + pad + 2.5, H / 2 + pad + 2.5, 2.2).forEach(([x, z], i) => rocks.push([x, z, i + 500, 1]));
+  const rockM = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), std(0xffffff, {roughness: 0.95, flatShading: true, map: brickTex()}), rocks.length);
+  rocks.forEach(([x, z, i, ring], k) => {
+    const h = hash(i, 3), sx = 1.1 + hash(i, 7) * 1.2, sy = (ring ? 2.6 : 1.2) + h * (ring ? 3.2 : 1.6);
+    M4.compose(V3.set(x + (hash(i, 9) - 0.5) * 0.8, sy * 0.35 - 0.3, z + (hash(i, 11) - 0.5) * 0.8), Q.setFromEuler(new THREE.Euler(h, i, h * 2)), S3.set(sx, sy, sx * (0.8 + h * 0.4)));
+    rockM.setMatrixAt(k, M4);
+    const v = 0.16 + hash(i, 13) * 0.1; COL.setRGB(v, v * 0.85, v * 0.7); rockM.setColorAt(k, COL);
+    if (hash(i, 17) < 0.35) spikes.push([x + (hash(i, 19) - 0.5) * 1.4, z + (hash(i, 23) - 0.5) * 1.4, i]);
+  });
+  rockM.castShadow = true; rockM.receiveShadow = true;
+  const spikeM = new THREE.InstancedMesh(new THREE.ConeGeometry(0.35, 1, 6), std(0x4a3a2a, {roughness: 0.9, flatShading: true}), Math.max(1, spikes.length));
+  spikes.forEach(([x, z, i], k) => { const h = 1.2 + hash(i, 29) * 2.4; M4.compose(V3.set(x, h / 2 - 0.1, z), Q.identity(), S3.set(0.6 + hash(i, 31) * 0.6, h, 0.6 + hash(i, 31) * 0.6)); spikeM.setMatrixAt(k, M4); });
+  spikeM.count = spikes.length;
+  root.add(rockM, spikeM);
+  // 바위 바닥 (맵 바깥)
+  mesh(root, new THREE.PlaneGeometry(W + 30, H + 30).rotateX(-Math.PI / 2), std(0x1c1610, {roughness: 1}), 0, -0.26, 0, false).receiveShadow = true;
+  // 횃불 빛: 화면 가운데에 가까운 탐험가 6명의 횃불이 주변을 밝힌다 (빛 수를 고정해 셰이더를 다시 만들지 않는다)
+  const torchL = [];
+  for (let i = 0; i < 6; i++) { const L = new THREE.PointLight(0xff9a40, 0, 4.2, 1.5); root.add(L); torchL.push(L); }
+  // 떠다니는 먼지
+  const DN = 420, dpos = new Float32Array(DN * 3), dseed = new Float32Array(DN);
+  for (let i = 0; i < DN; i++) { dpos.set([(hash(i, 41) - 0.5) * (W + 4), hash(i, 43) * 3.2, (hash(i, 47) - 0.5) * (H + 4)], i * 3); dseed[i] = hash(i, 53) * 100; }
+  const dgeo = new THREE.BufferGeometry(); dgeo.setAttribute('position', new THREE.BufferAttribute(dpos, 3));
+  const dust = new THREE.Points(dgeo, new THREE.PointsMaterial({size: 0.07, map: softTex(), color: 0xffd9a0, transparent: true, opacity: 0.45, depthWrite: false, blending: THREE.AdditiveBlending}));
+  dust.userData = {base: dpos.slice(), seed: dseed};
+  root.add(dust);
 
   // 금맥
   const oreMat = std(0xffc63a, {emissive: 0xd08a00, emissiveIntensity: 0.9, metalness: 0.8, roughness: 0.22, flatShading: true});
@@ -1263,7 +1384,7 @@ function build() {
   sel.position.y = 0.02;
   root.add(sel);
 
-  world = {revN: -1, root, ground, gBase, wall, cap, wallCells, wBase, cBase, braziers, ore, traps, bases, mind, paths, sel, units: new Map(), fogKey: '', mindKey: ''};
+  world = {revN: -1, root, ground, gBase, wall, cap, wallCells, wBase, cBase, braziers, rubble, rubCells, rBase, torchL, dust, ore, traps, bases, mind, paths, sel, units: new Map(), fogKey: '', mindKey: ''};
   scene.fog.near = s0 * 1.4; scene.fog.far = s0 * 3.6;
   const s = Math.max(W, H);
   sun.position.set(-s * 0.35, s * 1.1, s * 0.55);
@@ -1325,6 +1446,8 @@ function applyFog(fi, team, vis, seen) {
   });
   if (world.wall.instanceColor) world.wall.instanceColor.needsUpdate = true;
   if (world.cap.instanceColor) world.cap.instanceColor.needsUpdate = true;
+  world.rubCells.forEach((ci, j) => { const k = fac(ci), v = world.rBase[j] * k; COL.setRGB(v, v * 0.92, v * 0.85); world.rubble.setColorAt(j, COL); });
+  if (world.rubble.instanceColor) world.rubble.instanceColor.needsUpdate = true;
 }
 
 function updateStatic(fi, team, seen, now) {
@@ -1422,9 +1545,10 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.disc.visible = o.badge.visible = true;
     const src = moving && a < 0.5 && p ? p : u;
     o.pips.forEach((pp, i) => pp.visible = i < src[6]);
-    if (o.kind === 'E' && o._carry !== src[6]) { o._carry = src[6]; o.badge.material.map = badgeTex('E', o.team, src[6]); o.badge.material.needsUpdate = true; }
+    const hp10 = Math.max(0, Math.min(10, Math.ceil(src[5] / R.const.hp[u[2]] * 10))), bk = (o.kind === 'E' ? src[6] : 0) + ':' + hp10;
+    if (o._bk !== bk) { o._bk = bk; o.badge.material.map = badgeTex(o.kind, o.team, o.kind === 'E' ? src[6] : 0, hp10); o.badge.material.needsUpdate = true; }
     const mx = R.const.hp[u[2]];
-    o.hp.visible = src[5] < mx;
+    o.hp.visible = false;                         // 체력은 머리 위 표지의 고리로 보인다
     setHp(o.hp, src[5] / mx, TC[u[1]].c);
     billboard(o.hp, o.g);
     const hit = moving && ev.hit.get(id);
@@ -1661,6 +1785,25 @@ function effects(g, a, canSee) {
   }
 }
 
+const TP = new THREE.Vector3();
+function torches(now) {
+  const list = [];
+  for (const o of world.units.values()) if (o.g.visible && o.flames.length) { o.flames[0].getWorldPosition(TP); list.push([TP.distanceToSquared(controls.target), TP.clone(), o]); }
+  list.sort((p, q) => p[0] - q[0]);
+  world.torchL.forEach((L, i) => {
+    if (i < list.length) { L.position.copy(list[i][1]); L.intensity = 2.4 + Math.sin(now * 13 + i * 2) * 0.35 + Math.sin(now * 23 + i) * 0.2; }
+    else L.intensity = 0;
+  });
+  const d = world.dust, pos = d.geometry.attributes.position, b = d.userData.base, sd = d.userData.seed;
+  for (let i = 0; i < sd.length; i++) {
+    const t = now * 0.12 + sd[i];
+    pos.array[i * 3] = b[i * 3] + Math.sin(t * 1.3) * 0.6;
+    pos.array[i * 3 + 1] = (b[i * 3 + 1] + now * 0.05 + Math.sin(t) * 0.2) % 3.2;
+    pos.array[i * 3 + 2] = b[i * 3 + 2] + Math.cos(t * 1.1) * 0.6;
+  }
+  pos.needsUpdate = true;
+}
+
 // ---------------- 한 장면 그리기 ----------------
 function frame(f, g, a, fi, team, vis, seen) {
   if (!world) build();
@@ -1673,6 +1816,7 @@ function frame(f, g, a, fi, team, vis, seen) {
   updateBases(fi, g, a, moving, seen, vis, now);
   updateUnits(f, g, a, fi, team, vis, now);
   updateMind(fi, team);
+  torches(now);
   if (moving) effects(g, a, canSee);
   // 선택 고리
   let sx = null, sy = null;

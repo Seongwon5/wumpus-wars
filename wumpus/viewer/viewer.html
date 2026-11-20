@@ -54,8 +54,19 @@ header .vs{margin-left:auto;font-family:var(--kserif);font-weight:600}
 .st svg{width:30px;height:30px;flex:none;display:block}
 .st .lab{font-family:var(--kserif);font-size:11px;color:var(--dim);line-height:1;white-space:nowrap;letter-spacing:.05em}
 .st .val{font-family:var(--serif);font-size:27px;font-weight:800;line-height:1.08;font-variant-numeric:tabular-nums}
-.st.ore .val{color:#ffd978;text-shadow:0 0 12px rgba(232,182,74,.35)}
+.st.ore .val{color:#ffd978;text-shadow:0 0 14px rgba(232,182,74,.45)}
 .st.gold .val{color:#e9c27a}
+/* 바친 금 = 승패를 가르는 점수: 가장 크게 */
+.st.ore{padding:6px 16px 6px 12px;border-color:#a8813f;background:linear-gradient(#2a1d0e,#1a120b);
+  box-shadow:inset 0 1px 0 rgba(255,220,150,.12),0 0 18px -6px rgba(232,182,74,.55)}
+.st.ore svg{width:40px;height:40px}
+.st.ore .lab{font-size:12.5px;color:#d9b77a}
+.st.ore .val{font-size:40px;line-height:1}
+/* 금고 = 생산에 쓰는 돈: 작은 보조 칸 */
+.st.gold{padding:4px 9px;gap:6px;opacity:.9}
+.st.gold svg{width:20px;height:20px}
+.st.gold .val{font-size:19px}
+.st.gold .lab{font-size:10px}
 .st .dl{position:absolute;top:-9px;right:-4px;font-size:12px;font-weight:800;padding:0 5px;border-radius:4px;opacity:0;pointer-events:none}
 .st .dl.up{color:#14200d;background:#9fd88a}
 .st .dl.dn{color:#2a0b0b;background:#f08a7a}
@@ -451,7 +462,11 @@ function drawUnit(x,y,t,k,hp,carry,sc,al){
     for(let i=0;i<carry;i++){const ang=Math.PI*(1.15+i*0.175);const px=X+Math.cos(ang)*r*1.3,py=Y+Math.sin(ang)*r*1.3;
       ctx.fillStyle='#e8b64a';ctx.strokeStyle='#5a3a08';ctx.lineWidth=0.8;ctx.beginPath();ctx.arc(px,py,Math.max(1.6,S*0.07),0,7);ctx.fill();ctx.stroke();}}
   ctx.restore();
-  const mx=R.const.hp[k]; if(hp<mx&&al>0.2) hpBar(X-S*0.35,Y+S*0.4,S*0.7,hp/mx,T.c);
+  // 체력 고리: 12시부터 시계 방향으로 남은 체력만큼 팀 색 (30% 이하는 주황)
+  const mx=R.const.hp[k],fr=Math.max(0,Math.min(1,hp/mx));
+  if(al>0.2){ctx.save();ctx.globalAlpha=al;ctx.lineWidth=Math.max(2,S*0.09);ctx.lineCap='butt';
+    ctx.strokeStyle='rgba(20,12,6,0.85)';ctx.beginPath();ctx.arc(X,Y,r*1.28,0,7);ctx.stroke();
+    ctx.strokeStyle=fr<=0.3?'#ff6a3d':T.c;ctx.beginPath();ctx.arc(X,Y,r*1.28,-Math.PI/2,-Math.PI/2+Math.PI*2*fr);ctx.stroke();ctx.restore();}
 }
 function drawVib(x,y,now){
   // 바람: 몸 둘레를 도는 옅은 바람 줄기
