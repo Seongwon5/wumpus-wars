@@ -43,7 +43,7 @@ composer.addPass(new OutputPass());
 
 const TC = [{c: 0xff4a3a, d: 0x9a2216, l: 0xffc2b0, css: '#ff4a3a'}, {c: 0x2ec4ff, d: 0x125f86, l: 0xbfeaf5, css: '#2ec4ff'}];
 const MINDHEX = {green: 0x50dc78, red: 0xff4646, yellow: 0xffc83c, blue: 0x50a0ff, purple: 0xb46eff, white: 0xffffff};
-const CH = 1.25;                       // 캐릭터 크기
+const CH = 1.5;                       // 캐릭터 크기
 const std = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({color: c, roughness: 0.7, metalness: 0.05}, o));
 const wx = x => x - W / 2 + 0.5, wz = y => y - H / 2 + 0.5;
 const easeOut = t => 1 - Math.pow(1 - t, 3);
@@ -258,16 +258,21 @@ function makeChar(kind, team) {
   mesh(body, RB(G ? 0.3 : 0.28, 0.3, G ? 0.2 : 0.18, 0.05), G ? mLeather : mTeam, 0, 0.45, 0);
   if (G) mesh(body, RB(0.26, 0.2, 0.235, 0.03), mTeam, 0, 0.46, 0);          // 갑옷 위 팀 색 조끼
   mesh(body, RB(G ? 0.35 : 0.29, 0.04, G ? 0.23 : 0.19, 0.01), mBlack, 0, 0.31, 0);
-  mesh(body, new THREE.SphereGeometry(0.11, 18, 14), mSkin, 0, 0.7, 0);
-  mesh(body, new THREE.BoxGeometry(0.025, 0.035, 0.01), mBlack, -0.04, 0.72, 0.105, false);
-  mesh(body, new THREE.BoxGeometry(0.025, 0.035, 0.01), mBlack, 0.04, 0.72, 0.105, false);
+  mesh(body, new THREE.SphereGeometry(0.138, 22, 16), mSkin, 0, 0.72, 0);
+  const mEye = new THREE.MeshBasicMaterial({color: 0xffffff});
+  for (const sx of [-0.05, 0.05]) {                                   // 흰자와 눈동자
+    mesh(body, new THREE.SphereGeometry(0.032, 12, 10), mEye, sx, 0.735, 0.112, false);
+    mesh(body, new THREE.SphereGeometry(0.018, 10, 8), mBlack, sx, 0.735, 0.139, false);
+  }
+  mesh(body, new THREE.SphereGeometry(0.03, 10, 8), std(0xf8b9a0), -0.085, 0.69, 0.105, false).scale.set(1, 0.6, 0.4);   // 볼
+  mesh(body, new THREE.SphereGeometry(0.03, 10, 8), std(0xf8b9a0), 0.085, 0.69, 0.105, false).scale.set(1, 0.6, 0.4);
 
   const pips = [], flames = [];
   if (!G) {
     // 중절모
-    mesh(body, new THREE.CylinderGeometry(0.2, 0.2, 0.018, 22), mLeather, 0, 0.78, 0);
-    mesh(body, new THREE.CylinderGeometry(0.095, 0.118, 0.12, 18), mLeather, 0, 0.845, 0);
-    mesh(body, new THREE.CylinderGeometry(0.12, 0.12, 0.03, 18), mDark, 0, 0.8, 0);
+    mesh(body, new THREE.CylinderGeometry(0.23, 0.23, 0.02, 22), mLeather, 0, 0.82, 0);
+    mesh(body, new THREE.CylinderGeometry(0.11, 0.135, 0.13, 18), mLeather, 0, 0.89, 0);
+    mesh(body, new THREE.CylinderGeometry(0.137, 0.137, 0.03, 18), mDark, 0, 0.84, 0);
     mesh(body, RB(0.22, 0.24, 0.1), mWood, 0, 0.47, -0.14);                    // 배낭
     const pm = std(0xffc63a, {emissive: 0xc98a00, emissiveIntensity: 1.1, metalness: 0.6, roughness: 0.3, flatShading: true});
     for (let i = 0; i < 5; i++) {
@@ -276,8 +281,8 @@ function makeChar(kind, team) {
     }
   } else {
     // 두건과 망토
-    mesh(body, new THREE.SphereGeometry(0.135, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), mDark, 0, 0.71, -0.008);
-    const tip = mesh(body, new THREE.ConeGeometry(0.07, 0.16, 10), mDark, 0, 0.78, -0.12);
+    mesh(body, new THREE.SphereGeometry(0.162, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.6), mDark, 0, 0.725, -0.01);
+    const tip = mesh(body, new THREE.ConeGeometry(0.08, 0.18, 10), mDark, 0, 0.81, -0.14);
     tip.rotation.x = -1.1;
     const cape = mesh(body, new THREE.BoxGeometry(0.32, 0.42, 0.02), mDark, 0, 0.4, -0.13);
     cape.rotation.x = 0.12;
@@ -420,6 +425,24 @@ function makeBase(t) {
   g.add(pile);
   for (let i = 0; i < 6; i++) mesh(pile, new THREE.DodecahedronGeometry(0.05), gm, (i % 3 - 1) * 0.06, 0.04 + Math.floor(i / 3) * 0.06, (i % 2) * 0.05, false);
   mesh(g, new THREE.BoxGeometry(0.16, 0.14, 0.16), wood, -0.38, 0.15, -0.3);
+  // 나무 울타리 (앞쪽은 드나드는 문으로 비움)
+  for (let i = 0; i < 16; i++) {
+    const a = i / 16 * Math.PI * 2;
+    if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a)) - Math.PI / 2) < 0.45) continue;
+    const r = 0.56, h = 0.26 + (i % 3) * 0.04;
+    mesh(g, new THREE.CylinderGeometry(0.028, 0.032, h, 6), wood, Math.cos(a) * r, h / 2 + 0.06, Math.sin(a) * r);
+    mesh(g, new THREE.ConeGeometry(0.03, 0.07, 6), wood, Math.cos(a) * r, h + 0.095, Math.sin(a) * r);
+  }
+  // 문 양쪽의 횃대
+  for (const sx of [-0.2, 0.2]) {
+    mesh(g, new THREE.CylinderGeometry(0.02, 0.025, 0.5, 6), wood, sx, 0.31, 0.56);
+    mesh(g, new THREE.ConeGeometry(0.045, 0.13, 8), new THREE.MeshBasicMaterial({color: 0xff8a2a}), sx, 0.62, 0.56, false);
+  }
+  // 팀 깃발 두 개 더
+  for (const sx of [-0.45, 0.45]) {
+    mesh(g, new THREE.CylinderGeometry(0.012, 0.012, 0.7, 6), wood, sx, 0.41, -0.42);
+    mesh(g, new THREE.PlaneGeometry(0.16, 0.24), new THREE.MeshStandardMaterial({color: T.c, side: THREE.DoubleSide, emissive: T.c, emissiveIntensity: 0.25}), sx + 0.08, 0.64, -0.42);
+  }
   const hp = hpBar(1.0);
   hp.position.y = 1.55;
   g.add(hp);
@@ -613,6 +636,7 @@ function build() {
   const bases = R.map.bases.map(([x, y], t) => {
     const b = makeBase(t);
     b.g.position.set(wx(x), 0, wz(y));
+    b.g.scale.setScalar(1.25);
     b.g.rotation.y = Math.atan2(W / 2 - 0.5 - x, H / 2 - 0.5 - y);
     root.add(b.g);
     return b;
@@ -645,8 +669,8 @@ function build() {
 
 function resetCam() {
   const s = Math.max(W, H);
-  camera.position.set(0, s * 0.95, s * 0.78);
-  controls.target.set(0, 0, 0.6);
+  camera.position.set(0, s * 0.74, s * 0.74);
+  controls.target.set(0, 0, 1.2);
   controls.update();
 }
 
@@ -1072,6 +1096,15 @@ function frame(f, g, a, fi, team, vis, seen) {
     const bi = R.map.base_ids.indexOf(selId);
     if (bi >= 0) [sx, sy] = R.map.bases[bi];
     else { const o = world.units.get(selId); if (o && o.g.visible) { sx = o.x; sy = o.y; } }
+  }
+  if (fi === F.length - 1 && R.meta.winner >= 0) {          // 경기 끝: 이긴 야영지 위로 금빛 불꽃
+    const [vx, vy] = R.map.bases[R.meta.winner];
+    for (let k = 0; k < 3; k++) {
+      const q = ((now + k * 0.45) % 1.35) / 1.35, seed = Math.floor((now + k * 0.45) / 1.35) * 7 + k;
+      const ox = (hash(seed, 3) - 0.5) * 2.4, oz = (hash(seed, 5) - 0.5) * 2.4;
+      burst(wx(vx) + ox, wz(vy) + oz, 2.2 + hash(seed, 9) * 1.2, 26, k === 1 ? TC[R.meta.winner].l : 0xffd25a, q, 2.6, seed, 1.5, 1.4);
+      if (q < 0.25) ring(wx(vx) + ox, wz(vy) + oz, 2.4, 0.2 + q * 3, 0xffe8a0, 1 - q * 4);
+    }
   }
   world.sel.visible = sx !== null;
   if (sx !== null) {

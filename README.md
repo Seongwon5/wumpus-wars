@@ -53,7 +53,7 @@ PDF 문서 (인쇄용):
 
 | 문서 | 내용 |
 |---|---|
-| [게임 규칙서](docs/pdf/rulebook.pdf) | 규칙 전체, 설명 그림, 수치 일람, 용어 (24쪽) |
+| [게임 규칙서](docs/pdf/rulebook.pdf) | 규칙 전체, 설명 그림, 수치 일람, 용어 (25쪽) |
 | [봇 API 가이드북](docs/pdf/api_guidebook.pdf) | API 참조, 개발 도구, 리플레이 도구, 봇 작성 안내 (33쪽) |
 | [과제 제안서](docs/pdf/proposal.pdf) | 배틀코드형 과제 제안과 평가 방식 (23쪽) |
 
@@ -95,4 +95,4 @@ tests/             기본 점검 (python -m unittest discover tests)
 
 - 3D 뷰어: [three.js](https://threejs.org) 0.160 (MIT 라이선스). 인터넷 (jsDelivr CDN) 에서 불러온다. 인터넷이 없으면 2D 뷰로 저절로 바뀐다.
 - 글꼴: Cinzel, Noto Serif KR (SIL Open Font License, Google Fonts).
-- 캐릭터 · 지형 · 효과는 모두 코드로 만든 도형이다 (외부 모델 파일 없음).
+- 캐릭터 · 지형 · 질감 · 효과음은 모두 코드로 만들었다 (외부 모델 · 그림 · 소리 파일 없음).
