@@ -502,6 +502,16 @@ function wallTopTex() {                     // 벽 윗면: 밝은 덮개돌
 function rockPxTex() {
   return pxMemo('rock', () => pxTex(pxCanvas(32, 32, K => { K.noise(0, 0, 32, 32, [150, 136, 118], 26); for (let k = 0; k < 6; k++) { const x = Math.floor(K.rn() * 28), y = Math.floor(K.rn() * 28); K.L(x, y, x + 4, y + 3, [96, 86, 74]); } }, 17), true));
 }
+function cliffTex() {                      // 낭떠러지 벽: 바위 지층, 아래로 갈수록 어둠
+  return pxMemo('cliff', () => { const t = pxTex(pxCanvas(32, 64, K => {
+    for (let y = 0; y < 64; y++) for (let x = 0; x < 32; x++) {
+      const k = Math.max(0, 1 - y / 44), n = (K.rn() - 0.5) * 26, band = (y % 9 === 0 || (y + (x >> 3)) % 13 === 0) ? -30 : 0;
+      const v = Math.max(0, (118 + n + band) * k);
+      K.P(x, y, [v, v * 0.9, v * 0.76]);
+    }
+    for (let i = 0; i < 32; i++) { K.P(i, 0, [176, 160, 136]); K.P(i, 1, [140, 126, 106]); }
+  }, 47)); t.wrapS = THREE.RepeatWrapping; t.repeat.set(4, 1); return t; });
+}
 function pitTex() {                         // 구덩이: 무너진 돌 테두리와 끝없이 어두운 속
   return pxMemo('pit', () => pxTex(pxCanvas(32, 32, K => {
     K.noise(0, 0, 32, 32, [92, 82, 70], 10);
@@ -544,6 +554,14 @@ function campTex(team, dead, fr) {          // 야영지: 팀 색 천막 · 깃�
     }
     K.outline('#140c06');
   }, 29 + team)));
+}
+function clockTex(step, n) {               // 금맥이 다시 자라는 시계: 금빛 막대가 차오른다
+  return pxMemo('clk' + step + ':' + n, () => pxTex(pxCanvas(36, 7, K => {
+    K.R(0, 0, 36, 7, '#140c06'); K.R(1, 1, 34, 5, '#3a2e22');
+    const w = Math.round(34 * step / n);
+    if (w) { K.R(1, 1, w, 5, '#ffc63a'); K.R(1, 1, w, 1, '#fff0a0'); K.R(1, 5, w, 1, '#c08010'); }
+    for (let i = 1; i < 4; i++) K.R(1 + Math.round(34 * i / 4), 1, 1, 5, '#140c06');
+  })));
 }
 function lootTex(big) {                     // 떨어진 금: 자루 (작은 양) · 보물 상자 (큰 양)
   return pxMemo('loot' + big, () => pxTex(big ? pxCanvas(28, 24, K => {
@@ -1214,6 +1232,10 @@ function build() {
     cs.forEach(c => grp.remove(c));
     const osp = pxSprite(oreTex(7), 0.95, 0.95, 0.08);
     grp.add(osp);
+    const clk = pxSprite(clockTex(0, 12), 0.78, 0.15, 0.5);
+    clk.position.y = 1.0; clk.renderOrder = 13; clk.material.depthTest = false;
+    grp.add(clk);
+    grp.userData.clk = clk;
     grp.userData.spr = osp;
     grp.userData.cs = cs; grp.userData.glint = glint; grp.userData.glow = glow; grp.userData.lbl = lbl;
     root.add(grp);
@@ -1240,9 +1262,10 @@ function build() {
       const ch = mesh(rev, new THREE.DodecahedronGeometry(0.05 + h * 0.04), rimM, Math.sin(a + 0.6) * 0.5, 0.01, Math.cos(a + 0.6) * 0.5);
       ch.scale.y = 0.55; ch.rotation.set(i, h * 6, 0);
     }
-    rev.traverse(o => { if (o.isMesh) o.visible = false; });
-    const pm = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), std(0xffffff, {roughness: 1, map: pitTex()}));
-    pm.position.y = 0.004; pm.receiveShadow = true; rev.add(pm);
+    rev.traverse(o => { if (o.isMesh) o.visible = false; });         // 낭떠러지: 칸 크기 그대로 뚫린 네모 구멍
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(1, 2.1, 1), new THREE.MeshBasicMaterial({map: cliffTex(), side: THREE.BackSide}));
+    shaft.geometry.groups = shaft.geometry.groups.filter(gr => gr.materialIndex !== 2 && gr.materialIndex !== 3);   // 뚜껑 · 바닥은 없앤다 (바닥은 끝없는 어둠)
+    shaft.position.y = -1.05; rev.add(shaft);
     root.add(hidden, rev);
     traps.set(x + ',' + y, {hidden, rev, gi: y * W + x, gy: -0.12});
   }
@@ -1282,7 +1305,8 @@ function build() {
   sel.position.y = 0.02;
   root.add(sel);
 
-  world = {revN: -1, root, ground, gBase, wall, cap, wallCells, wBase, cBase, braziers, rubble, rubCells, rBase, torchL, dust, ore, traps, bases, wum, loot: new Map(), mind, paths, sel, units: new Map(), fogKey: '', mindKey: ''};
+  const oreMax = new Map(R.map.ore.map(o => [o[0] + ',' + o[1], o[2]]));
+  world = {oreMax, revN: -1, root, ground, gBase, wall, cap, wallCells, wBase, cBase, braziers, rubble, rubCells, rBase, torchL, dust, ore, traps, bases, wum, loot: new Map(), mind, paths, sel, units: new Map(), fogKey: '', mindKey: ''};
   scene.fog.near = s0 * 1.4; scene.fog.far = s0 * 3.6;
   const s = Math.max(W, H);
   sun.position.set(-s * 0.35, s * 1.1, s * 0.55);
@@ -1358,9 +1382,13 @@ function updateStatic(fi, team, seen, now) {
   for (const [k, grp] of world.ore) {
     const amt = om.get(k) || 0;
     const [x, y] = k.split(',').map(Number);
-    grp.visible = amt > 0 && (!seen || seen[y * W + x] === 1);
+    grp.visible = !seen || seen[y * W + x] === 1;        // 다 캐도 빈 바위와 시계는 남는다
     if (!grp.visible) continue;
-    const cs = grp.userData.cs, n = Math.max(1, Math.ceil(Math.min(1, amt / 16) * cs.length));
+    const cs = grp.userData.cs, n = amt > 0 ? Math.max(1, Math.ceil(Math.min(1, amt / 16) * cs.length)) : 0;
+    grp.userData.lbl.visible = amt > 0; grp.userData.glow.visible = amt > 0;
+    { const RG = R.const.regrow || 12, full = amt >= (world.oreMax.get(k) || 0), clk = grp.userData.clk, st = fi % RG;
+      clk.visible = !full;
+      if (!full && clk.userData.st !== st) { clk.userData.st = st; clk.material.map = clockTex(st, RG); clk.material.needsUpdate = true; } }
     if (grp.userData.amt !== amt) { grp.userData.amt = amt; grp.userData.lbl.material.map = numTex(amt); grp.userData.lbl.material.needsUpdate = true; }
     cs.forEach((c, i) => c.visible = i < n);
     if (grp.userData.n !== n) { grp.userData.n = n; grp.userData.spr.material.map = oreTex(n); grp.userData.spr.material.needsUpdate = true; }
@@ -1374,13 +1402,13 @@ function updateStatic(fi, team, seen, now) {
   world.revN = rev.size;
   for (const [k, t] of world.traps) {
     const [x, y] = k.split(',').map(Number);
-    const r = rev.has(k);
-    t.hidden.visible = !r && team < 0 && showTraps;
-    t.rev.visible = r && (!seen || seen[y * W + x] === 1);
-    if (changed) { M4.makeTranslation(wx(x), t.gy, wz(y)); if (r) M4.scale(S3.set(0.001, 0.001, 0.001)); world.ground.setMatrixAt(t.gi, M4); }
+    const r = true;                                // 구덩이는 처음부터 낭떠러지로 보인다 (봇은 바람으로만 안다)
+    t.hidden.visible = false;
+    t.rev.visible = !seen || seen[y * W + x] === 1;
+    if (!world.pitsCut) { M4.makeTranslation(wx(x), t.gy, wz(y)); M4.scale(S3.set(0.001, 0.001, 0.001)); world.ground.setMatrixAt(t.gi, M4); }
     if (t.rev.visible) pitWind(wx(x), wz(y), now, x * 31 + y);
   }
-  if (changed) world.ground.instanceMatrix.needsUpdate = true;
+  if (!world.pitsCut) { world.pitsCut = true; world.ground.instanceMatrix.needsUpdate = true; }
   // 떨어진 금: 자루 (10 이상은 보물 상자)
   const lm = lootAt[fi];
   for (const [k, o] of world.loot) if (!lm.has(k)) o.g.visible = false;
@@ -1496,7 +1524,7 @@ function updateBases(fi, g, a, moving, seen, vis, now) {
 
 function updateUnits(f, g, a, fi, team, vis, now) {
   const moving = g !== f, ev = evOf(g);
-  for (const o of world.units.values()) o.g.visible = false;
+  for (const o of world.units.values()) { o.g.visible = false; if (o.tile) o.tile.visible = false; }
   const A = umap[f], B = umap[g];
   const show = (o, x, y, own) => {
     if (vis && !own && !vis[Math.round(y) * W + Math.round(x)]) return false;
@@ -1510,6 +1538,8 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     if (!o) {
       o = makeChar(u[2], u[1]);
       world.root.add(o.g);
+      o.tile = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({color: TC[u[1]].c, transparent: true, opacity: 0.3, depthWrite: false}));
+      o.tile.renderOrder = 2; world.root.add(o.tile);
       world.units.set(u[0], o);
       o.g.rotation.y = Math.atan2(W / 2 - u[3], H / 2 - u[4]);
     }
@@ -1542,7 +1572,9 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     for (const fl of o.flames) fl.scale.set(1, 1 + Math.sin(now * 17 + id) * 0.18, 1);
     const sc = moving && !p ? elastic(Math.min(1, a * 1.3)) : 1;
     o.g.scale.setScalar(Math.max(0.001, sc) * CH * (o.kind === 'G' ? 1.12 : 1));
-    o.disc.visible = true; o.badge.visible = false; o._fade = 1;
+    o.disc.visible = false; o.badge.visible = false; o._fade = 1;
+    o.tile.visible = true; o.tile.position.set(wx(Math.round(x)), 0.012, wz(Math.round(y)));
+    o.tile.material.opacity = 0.24 + 0.08 * Math.sin(now * 2.4 + id);
     const fr = st === 'walk' ? 1 + (Math.floor(a * 4) % 2) : 0;
     if (o._fr !== fr) { o._fr = fr; o.pix.material.map = bodyTex(o.kind, o.team, fr); o.pix.material.needsUpdate = true; }
     const sx = Math.sin(o.g.rotation.y);
@@ -1881,10 +1913,11 @@ function effects(g, a, canSee) {
       } else if (cause === 'atk' && a > 0.5) {
         burst(wx(x), wz(y), 0.3, 12, 0xd8dce6, (a - 0.5) * 2, 1.4, id * 13 + g, 3, 1);
       }
-    } else if (k === 'mine') {
-      const [, id, x, y] = e;
-      if (!canSee(x, y) || a < 0.5) continue;
-      burst(wx(x), wz(y), 0.15, 7, 0xffd84a, (a - 0.5) * 2, 1.6, id * 7 + g, 5, 0.8);
+    } else if (k === 'mine') {                    // 금맥 공격: 멀면 금빛 줄이 날아가고, 금맥에서 금 부스러기가 튄다
+      const [, id, ux, uy, tx0, ty0] = e, x = tx0 ?? ux, y = ty0 ?? uy;
+      if (!canSee(x, y)) continue;
+      if (Math.abs(x - ux) + Math.abs(y - uy) > 1 && a > 0.1 && a < 0.6) lane(wx(ux), wz(uy), wx(x), wz(y), 0xffd84a, 0.5 * (1 - (a - 0.1) / 0.5));
+      if (a >= 0.4) burst(wx(x), wz(y), 0.2, 9, 0xffd84a, (a - 0.4) / 0.6, 1.6, id * 7 + g, 5, 0.8);
     } else if (k === 'dlv') {
       const [, id, amt, x, y] = e;
       if (!canSee(x, y)) continue;

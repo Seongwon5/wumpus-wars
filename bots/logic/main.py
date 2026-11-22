@@ -568,6 +568,12 @@ def range_goals(target, occupied, r=BOW_RANGE, lo=2):
     return out
 
 
+def ore_in_range(p, r):
+    """p 에서 칠 수 있는 (맨해튼 r 안, 시선 트임, 서 있는 칸 포함) 가장 가까운 금맥."""
+    cs = [c for c, t in K.tile.items() if t == GOLD and abs(c[0] - p[0]) + abs(c[1] - p[1]) <= r and los(p, c)]
+    return min(cs, key=lambda c: (abs(c[0] - p[0]) + abs(c[1] - p[1]), c)) if cs else None
+
+
 def free_step(n, occupied):
     return n not in occupied and K.cost(n) is not None and K.cost(n) <= 8
 
@@ -617,12 +623,16 @@ def miner_turn(me, view, memory):
     # 5. 캐고 나르기 (이동한 칸이 금이면 같은 턴에 캔다)
     if me.carry >= cap or (me.carry > 0 and me.round > MAX_ROUNDS - 30):
         goals, label = home, '귀환 (짐 %d)' % me.carry
-    elif (K.loot.get(pos) or K.tile.get(pos) == GOLD) and me.carry < cap:
-        show_mind(None, '줍기' if K.loot.get(pos) else '채굴')
-        return Mine()
+    elif ore_in_range(pos, MELEE_RANGE) and me.carry < cap:
+        c = ore_in_range(pos, MELEE_RANGE)
+        show_mind(None, '금맥 공격 (%d,%d)' % c)
+        return Attack(*c)
     else:
         loot = {c for c in K.loot if K.cost(c) is not None} - occupied
-        ores = {c for c, t in K.tile.items() if t == GOLD} - occupied
+        ores = set()
+        for c, t in K.tile.items():
+            if t == GOLD:
+                ores |= {n for n in list(K.nb4(c)) + [c] if K.cost(n) is not None} - occupied
         if loot:
             goals, label = loot, '떨어진 금'
         elif ores:
@@ -643,8 +653,9 @@ def miner_turn(me, view, memory):
     mv = step_along(me, path, occupied)
     if mv and len(path) >= 2:
         nxt = path[1]
-        if me.carry < cap and (K.loot.get(nxt) or K.tile.get(nxt) == GOLD):
-            return mv, Mine()
+        c = ore_in_range(nxt, MELEE_RANGE)
+        if me.carry + (K.loot.get(nxt) or 0) < cap and c:
+            return mv, Attack(*c)
         t = pick_target(nxt, enemies, MELEE_RANGE)
         if t and (t.kind != CAMP or me.carry == 0):
             return mv, Attack(t.x, t.y)
@@ -686,10 +697,11 @@ def archer_turn(me, view, memory):
         if path:
             show_mind(path, '사격 자리로 (적 #%d)' % e.id)
             return step_along(me, path, occupied)
-    # 5. 서 있는 칸의 금 · 떨어진 금
-    if (K.loot.get(pos) or K.tile.get(pos) == GOLD) and me.carry < cap:
-        show_mind(None, '줍기' if K.loot.get(pos) else '채굴')
-        return Mine()
+    # 5. 사거리 안의 금맥을 쏘아 캔다
+    c = ore_in_range(pos, BOW_RANGE)
+    if c and me.carry < cap:
+        show_mind(None, '금맥 사격 (%d,%d)' % c)
+        return Attack(*c)
     rally = memory[3] < RALLY and me.round < 150
     # 6. 집결하는 동안: 가까운 웜퍼스 사냥, 아니면 가까운 금을 캔다
     if rally:
@@ -701,7 +713,10 @@ def archer_turn(me, view, memory):
             if path and len(path) <= 12:
                 show_mind(path, '웜퍼스 사냥 자리로')
                 return step_along(me, path, occupied)
-        gold = {c for c, t in K.tile.items() if t == GOLD} | {c for c in K.loot if K.cost(c) is not None}
+        gold = {c for c in K.loot if K.cost(c) is not None}
+        for c, t in K.tile.items():
+            if t == GOLD:
+                gold |= range_goals(c, occupied, lo=0)
         path = K.find_path(pos, gold - occupied, occupied)
         if path and len(path) <= 10:
             show_mind(path, '집결 중 채굴 → (%d,%d)' % path[-1])

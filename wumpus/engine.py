@@ -123,6 +123,7 @@ class Game:
         if rules:
             self.rules.update(rules)
         self.rules.setdefault('unified', False)
+        self.rules.setdefault('hidden_pits', False)
         if self.rules['unified']:
             self.rules['line_shot'] = self.rules['arrows'] = False
         self.HPT = HP_UNIFIED if self.rules['unified'] else HP
@@ -185,7 +186,7 @@ class Game:
         v = self.at.get(c)
         if v is not None and v.kind == CAMP:
             return CAMP_TILE
-        if c in self.revealed:
+        if c in self.revealed and not self.rules['hidden_pits']:
             return PIT
         if self.ore.get(c, 0) > 0:
             return GOLD
@@ -326,6 +327,14 @@ class Game:
         elif self.wumpus.get(n, 0) > 0:
             self.events.append(['eaten', u.id, n[0], n[1]])
             self._kill(u, 'wumpus')
+        elif self.rules['unified'] and u.kind in CARRY and self.loot.get(n, 0) > 0 and u.carry < CARRY[u.kind]:
+            take = min(self.loot[n], CARRY[u.kind] - u.carry)     # 시안 2: 떨어진 금은 들어서는 순간 줍는다
+            self.loot[n] -= take
+            u.carry += take
+            if self.loot[n] == 0:
+                del self.loot[n]
+            self.loot_changed = True
+            self.events.append(['pick', u.id, n[0], n[1], take])
 
     def _land(self, c, n=1):
         self.ground_arrows[c] = self.ground_arrows.get(c, 0) + n
@@ -383,12 +392,28 @@ class Game:
     def _hit(self, u, tx, ty):
         """시안 2 공격: 광부는 바로 옆, 궁수는 맨해튼 3 안 (벽이 가리면 안 됨). 야영지는 바로 옆에서만."""
         d = abs(tx - u.x) + abs(ty - u.y)
-        if d < 1 or d > (BOW_RANGE if u.kind == ARCHER else MELEE_RANGE):
+        if d > (BOW_RANGE if u.kind == ARCHER else MELEE_RANGE):
             return
         if any(c in self.walls for c in sight_cells(u.x, u.y, tx, ty)):
             return
         c = (tx, ty)
-        if self.wumpus.get(c, 0) > 0:
+        t = self.at.get(c) if d else None
+        if d and t is not None and t.team != u.team and not (t.kind == CAMP and d > 1):
+            t.hp -= ATTACK_DAMAGE
+            self.events.append(['atk', u.id, u.x, u.y, tx, ty, t.id])
+            if t.hp <= 0:
+                self._kill(t, 'atk')
+            return
+        if self.ore.get(c, 0) > 0:              # 금맥 공격 = 캐기: 금 1 (들 자리가 있을 때)
+            if u.carry < CARRY[u.kind]:
+                self.ore[c] -= 1
+                u.carry += 1
+                self.ore_changed.add(c)
+                self.events.append(['mine', u.id, u.x, u.y, tx, ty])
+                if self.ore[c] == 0:
+                    del self.ore[c]
+            return
+        if d and self.wumpus.get(c, 0) > 0:
             self.wumpus[c] = max(0, self.wumpus[c] - ATTACK_DAMAGE)
             self.events.append(['atk', u.id, u.x, u.y, tx, ty, -1])
             if self.wumpus[c] == 0:
@@ -434,6 +459,8 @@ class Game:
             u.x, u.y = n
             self.at[n] = u
             self._landed(u)
+        elif isinstance(act, Mine) and u.kind in (EXPLORER, ARCHER) and self.rules['unified']:
+            self._hit(u, u.x, u.y)              # 시안 2: Mine() = 서 있는 칸의 금맥 공격
         elif isinstance(act, Mine) and u.kind in (EXPLORER, ARCHER):
             c = (u.x, u.y)
             cap = CARRY[u.kind] if self.rules['unified'] else CARRY_MAX if u.kind == EXPLORER else (ARCHER_CARRY if self.rules['loot'] else 0)
@@ -596,7 +623,7 @@ class Game:
             },
             'const': {
                 'hp': {'E': self.HPT[EXPLORER], 'G': self.HPT[ARCHER], 'B': self.HPT[CAMP]},
-                'bow_range': BOW_RANGE, 'carry': {'E': CARRY[EXPLORER], 'G': CARRY[ARCHER]},
+                'bow_range': BOW_RANGE, 'regrow': REGROW_EVERY, 'carry': {'E': CARRY[EXPLORER], 'G': CARRY[ARCHER]},
                 'carry': CARRY_MAX, 'max_rounds': MAX_ROUNDS,
                 'cost': {'E': COST[EXPLORER], 'G': COST[ARCHER]},
                 'vision': {'E': VISION_R2[EXPLORER], 'G': VISION_R2[ARCHER], 'B': VISION_R2[CAMP]},

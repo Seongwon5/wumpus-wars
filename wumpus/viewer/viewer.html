@@ -387,8 +387,7 @@ function draw(){
     if(team<0||(hp<=0&&seen&&seen[y*W+x]))drawWumpus(x,y,hp,now,team<0);});
   // 구덩이
   const rev=revAt[fi];
-  if(team<0&&showTraps) for(const [x,y] of R.map.traps){ if(!rev.has(x+','+y)) drawHiddenTrap(x,y);}
-  for(const k of rev){const [x,y]=k.split(',').map(Number); if(seen&&!seen[y*W+x])continue; drawTrap(x,y);}
+  for(const [x,y] of R.map.traps){ if(seen&&!seen[y*W+x])continue; drawTrap(x,y);}   // 구덩이는 처음부터 낭떠러지 (봇은 바람으로만 안다)
   // 안개
   if(vis){
     for(let y=0;y<H;y++)for(let x=0;x<W;x++){const k=y*W+x; if(vis[k])continue;
@@ -618,7 +617,7 @@ function drawEffects(g,a,canSee){
     else if(k==='die'){const [,id,x,y,cause]=e; if(!canSee(x,y)||cause==='trap')continue; if(a<0.3)continue; const q=(a-0.3)/0.7,X=cx(x),Y=cy(y);
       ctx.save();for(let i=0;i<10;i++){const t=i/10*Math.PI*2+id,d=S*(0.2+q*0.9);ctx.fillStyle=`rgba(220,205,180,${1-q})`;
         ctx.beginPath();ctx.arc(X+Math.cos(t)*d,Y+Math.sin(t)*d,S*0.07*(1-q*0.5),0,7);ctx.fill();}ctx.restore();}
-    else if(k==='mine'){const [,id,x,y]=e; if(!canSee(x,y))continue; const X=cx(x),Y=cy(y);
+    else if(k==='mine'){const [,id,ux,uy,tx,ty]=e,x=tx??ux,y=ty??uy; if(!canSee(x,y))continue; const X=cx(x),Y=cy(y);
       ctx.save();ctx.fillStyle=`rgba(255,220,120,${1-a})`;for(let i=0;i<4;i++){const t=i*1.57+a*2,d=S*(0.15+a*0.35);ctx.beginPath();ctx.arc(X+Math.cos(t)*d,Y-S*0.1+Math.sin(t)*d*0.6,S*0.05,0,7);ctx.fill();}ctx.restore();}
     else if(k==='dlv'){const [,id,amt,x,y,t]=e; if(!canSee(x,y))continue;
       ctx.save();ctx.globalAlpha=1-a;ctx.fillStyle='#ffd978';ctx.strokeStyle='#1a0f06';ctx.lineWidth=3;ctx.font=`800 ${Math.round(S*0.6)}px Cinzel,serif`;ctx.textAlign='center';
@@ -947,7 +946,7 @@ function hoverCell(x,y){
   if(!R||x<0||y<0||x>=W||y>=H)return;
   const fi=Math.round(P),k=x+','+y;let s=`(${x}, ${y}) `;
   const wi=(R.map.wumpus||[]).findIndex(([a,b])=>a===x&&b===y);
-  if(R.map.rows[y][x]==='#')s+='벽';else if(wi>=0)s+=wumAt[fi][wi]>0?`웜퍼스 굴 (체력 ${wumAt[fi][wi]})`:'쓰러진 웜퍼스';else if(oreAt[fi].has(k))s+='금 '+oreAt[fi].get(k);else if(revAt[fi].has(k))s+='드러난 구덩이';else s+='빈 칸';
+  if(R.map.rows[y][x]==='#')s+='벽';else if(wi>=0)s+=wumAt[fi][wi]>0?`웜퍼스 굴 (체력 ${wumAt[fi][wi]})`:'쓰러진 웜퍼스';else if(oreAt[fi].has(k))s+='금 '+oreAt[fi].get(k);else if(R.map.traps.some(([a,b])=>a===x&&b===y))s+='구덩이 (봇은 바람으로만 안다)';else s+='빈 칸';
   if(lootAt[fi].has(k))s+=` · 떨어진 금 ${lootAt[fi].get(k)}`;
   if(arrAt[fi].has(k))s+=` · 떨어진 화살 ${arrAt[fi].get(k)}`;
   $('hover').textContent=s;
