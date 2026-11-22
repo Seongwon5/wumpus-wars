@@ -66,11 +66,18 @@ def _winner_text(rep):
     return f"{m['teams'][m['winner']]} ({m['names'][m['winner']]}) 승리"
 
 
+def _ops_txt(m, t):
+    o = (m.get('ops') or [None, None])[t]
+    if not o:
+        return ''
+    return f" | 연산 (줄/차례) 평균 {o['avg']:,}, 최대 {o['max']:,}" + (f", 한도 초과 {o['over']}번" if o['over'] else '')
+
+
 # ---------------- run ----------------
 def cmd_run(a):
     gmap = load_map(a.map)
     t0 = time.time()
-    rep = run_match(gmap, [a.red, a.blue], seed=a.seed, time_limit_ms=a.time_limit)
+    rep = run_match(gmap, [a.red, a.blue], seed=a.seed, time_limit_ms=a.time_limit, ops_limit=not a.no_ops_limit)
     dt = time.time() - t0
     m = rep['meta']
     os.makedirs(a.out, exist_ok=True)
@@ -81,7 +88,7 @@ def cmd_run(a):
     for t in (0, 1):
         tm = m['time_ms'][t]
         _say(f"  {m['teams'][t]} {m['names'][t]}: 차례당 평균 {tm['avg']:.2f} ms, 최대 {tm['max']:.1f} ms" +
-             (f", 시간 초과 {tm['over']}번" if tm['over'] else ''))
+             (f", 시간 초과 {tm['over']}번" if tm['over'] else '') + _ops_txt(m, t))
     for t, (n, msgs) in enumerate(_team_errors(rep)):
         if n:
             _say(f"  {m['teams'][t]} 오류 {n}번. 예: {msgs[0]}")
@@ -96,15 +103,15 @@ def cmd_run(a):
 # ---------------- scrim ----------------
 def _play(task):
     """프로세스 하나에서 경기 하나. 결과 요약 (와 리플레이 저장) 을 돌려준다."""
-    bots, map_name, seed, seat, limit, save_dir = task
+    bots, map_name, seed, seat, limit, save_dir, ops = task
     gmap = load_map(map_name)
     t0 = time.time()
-    rep = run_match(gmap, bots, seed=seed, time_limit_ms=limit)
+    rep = run_match(gmap, bots, seed=seed, time_limit_ms=limit, ops_limit=ops)
     m = rep['meta']
     errs = _team_errors(rep)
     out = {'map': gmap.name, 'seed': seed, 'seat': seat, 'winner': m['winner'], 'reason': m['reason'],
            'rounds': m['rounds'], 'score': m['score'], 'camp_hp': m.get('camp_hp'), 'time': m['time_ms'],
-           'errors': [e[0] for e in errs], 'err_msg': [e[1][:1] for e in errs], 'sec': time.time() - t0}
+           'ops': m.get('ops'), 'errors': [e[0] for e in errs], 'err_msg': [e[1][:1] for e in errs], 'sec': time.time() - t0}
     if save_dir:
         base = os.path.join(save_dir, f'{gmap.name}-s{seed}-{"AB"[seat]}')
         save_json(rep, base + '.json')
@@ -147,7 +154,7 @@ def cmd_scrim(a):
     for mp in maps:
         for sd in seeds:
             for seat in seats:     # seat 0: A 가 붉은 원정대, seat 1: 진영을 바꿔 A 가 푸른 원정대
-                tasks.append(([pa, pb] if seat == 0 else [pb, pa], mp, sd, seat, a.time_limit, save_dir))
+                tasks.append(([pa, pb] if seat == 0 else [pb, pa], mp, sd, seat, a.time_limit, save_dir, not a.no_ops_limit))
     _say(f'스크림: {na} vs {nb} | 맵 {len(maps)}개 x 시드 {len(seeds)}개 x 진영 {len(seats)} = {len(tasks)}판 | 동시에 {a.jobs}판')
     t0 = time.time()
     results = []
@@ -165,7 +172,7 @@ def cmd_scrim(a):
 
     # A 쪽에서 본 결과로 바꾸기
     wins = [0, 0]; draws = 0; rows = []
-    gold = [0, 0]; rounds = 0; kills = 0; err = [0, 0]; tmax = [0.0, 0.0]; tavg = [0.0, 0.0]
+    gold = [0, 0]; rounds = 0; kills = 0; err = [0, 0]; tmax = [0.0, 0.0]; tavg = [0.0, 0.0]; omax = [0, 0]; oover = [0, 0]
     for r in results:
         ia, ib = (0, 1) if r['seat'] == 0 else (1, 0)        # A 와 B 의 팀 번호
         if r['winner'] < 0:
@@ -179,6 +186,9 @@ def cmd_scrim(a):
         err[0] += r['errors'][ia]; err[1] += r['errors'][ib]
         tmax[0] = max(tmax[0], r['time'][ia]['max']); tmax[1] = max(tmax[1], r['time'][ib]['max'])
         tavg[0] += r['time'][ia]['avg']; tavg[1] += r['time'][ib]['avg']
+        if r.get('ops'):
+            omax[0] = max(omax[0], r['ops'][ia]['max']); omax[1] = max(omax[1], r['ops'][ib]['max'])
+            oover[0] += r['ops'][ia]['over']; oover[1] += r['ops'][ib]['over']
         rows.append([r['map'], r['seed'], f"{na} {'붉은' if ia == 0 else '푸른'}", res, r['reason'], r['rounds'],
                      r['score'][ia], r['score'][ib]])
     if not a.quiet:
@@ -196,6 +206,8 @@ def cmd_scrim(a):
     _say(f'평균 바친 금  {na} {gold[0] / n:.1f}  :  {nb} {gold[1] / n:.1f}')
     _say(f'평균 라운드 {rounds / n:.0f} | 야영지 파괴로 끝난 판 {kills}/{n}')
     _say(f'차례 시간 (ms) 평균/최대  {na} {tavg[0] / n:.2f}/{tmax[0]:.1f}  {nb} {tavg[1] / n:.2f}/{tmax[1]:.1f}')
+    if omax[0] or omax[1]:
+        _say(f'연산 (줄/차례) 최대  {na} {omax[0]:,}  {nb} {omax[1]:,} | 한도 초과 차례  {na} {oover[0]}번  {nb} {oover[1]}번')
     if err[0] or err[1]:
         _say(f'오류 사건  {na} {err[0]}번  {nb} {err[1]}번  (wumpus check 로 원인을 본다)')
     if save_dir:
@@ -272,13 +284,13 @@ def cmd_check(a):
     _say('  불러오기 OK, turn 함수 있음')
     for seat in (0, 1):
         bots = [a.bot, a.opponent] if seat == 0 else [a.opponent, a.bot]
-        rep = run_match(load_map(a.map), bots, seed=1, time_limit_ms=a.time_limit)
+        rep = run_match(load_map(a.map), bots, seed=1, time_limit_ms=a.time_limit, ops_limit=not a.no_ops_limit)
         m = rep['meta']; me = seat
         n, msgs = _team_errors(rep)[me]
         tm = m['time_ms'][me]
         res = '무승부' if m['winner'] < 0 else ('승' if m['winner'] == me else '패')
         _say(f"  {m['teams'][me]} 진영 vs {a.opponent}: {res} ({m['reason']}, {m['rounds']}라운드, 금 {m['score'][me]}:{m['score'][1 - me]})")
-        _say(f"    차례 시간 평균 {tm['avg']:.2f} ms, 최대 {tm['max']:.1f} ms | 오류 {n}번")
+        _say(f"    차례 시간 평균 {tm['avg']:.2f} ms, 최대 {tm['max']:.1f} ms" + _ops_txt(m, me) + f" | 오류 {n}번")
         for s in msgs:
             _say('     -', s)
 
@@ -301,6 +313,7 @@ def main(argv=None):
     p.add_argument('--open', action='store_true', help='끝나면 뷰어를 브라우저로 연다')
     p.add_argument('--no-html', action='store_true', help='.json 만 쓰고 .html 은 안 쓴다')
     p.add_argument('--time-limit', type=float, default=None, help='차례당 시간 한도 ms (넘기면 그 차례 행동을 버린다)')
+    p.add_argument('--no-ops-limit', action='store_true', help='연산 한도를 끈다 (빠르지만 공식 규칙이 아니다)')
     p.set_defaults(fn=cmd_run)
 
     p = sub.add_parser('scrim', help='여러 맵에서 두 봇을 겨루고 승패를 센다')
@@ -313,6 +326,7 @@ def main(argv=None):
     p.add_argument('--out', default='replays', help='--save 때 리플레이 폴더')
     p.add_argument('--csv', help='판마다 결과를 CSV 로 저장')
     p.add_argument('--time-limit', type=float, default=None)
+    p.add_argument('--no-ops-limit', action='store_true', help='연산 한도를 끈다 (빠르지만 공식 규칙이 아니다)')
     p.add_argument('--quiet', action='store_true', help='판마다 줄을 찍지 않고 요약만')
     p.set_defaults(fn=cmd_scrim)
 
@@ -339,6 +353,7 @@ def main(argv=None):
     p = sub.add_parser('check', help='봇을 점검한다 (불러오기 · 오류 · 차례 시간)')
     p.add_argument('bot'); p.add_argument('--opponent', default='random'); p.add_argument('--map', default=DEFAULT_MAP)
     p.add_argument('--time-limit', type=float, default=None)
+    p.add_argument('--no-ops-limit', action='store_true', help='연산 한도를 끈다 (빠르지만 공식 규칙이 아니다)')
     p.set_defaults(fn=cmd_check)
 
     a = ap.parse_args(argv)

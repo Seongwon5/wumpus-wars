@@ -18,6 +18,11 @@ EMPTY, WALL, GOLD, PIT, CAMP_TILE = '.', '#', 'G', 'P', 'C'
 # ---- 규칙 상수 ----
 MAX_ROUNDS = 1000
 MEMORY_SIZE = 16
+# ---- 연산 한도 (봇 코드가 실행한 줄 수. 엔진 함수 · 내장 함수 안은 세지 않는다) ----
+OPS_PER_ROUND = 50_000      # 팀 연산 예산에 라운드마다 더해지는 줄 수
+OPS_BANK_MAX = 1_000_000   # 팀 연산 예산의 처음 값이자 상한 (남은 것은 쌓아 둘 수 있다)
+OPS_TURN_MAX = 100_000      # 한 차례 (또는 봇 파일 첫 실행) 에 쓸 수 있는 최대 줄 수
+OPS_TURN_MIN = 200          # 예산이 바닥나도 한 차례에 늘 쓸 수 있는 줄 수
 MAX_UNITS = 10          # 팀당 살아 있는 유닛 수 한도 (야영지 제외)
 START_BANK = 20
 INCOME_EVERY = 3        # 3라운드마다 금고 +1
@@ -215,6 +220,15 @@ debug = Debug()
 
 
 # ---- 도우미 ----
+from . import ops as _ops  # noqa: E402
+
+
+def ops_left():
+    """이번 차례에 더 쓸 수 있는 연산 (줄 수). 연산 한도를 끈 경기면 아주 큰 값."""
+    m = _ops.meter()
+    return m.limit - m.count if m.active else 0
+
+
 def mirror(sym, x, y, w, h):
     """대칭 sym ('H' 좌우, 'V' 상하, 'R' 180도 회전) 으로 옮긴 칸."""
     if sym == 'H':

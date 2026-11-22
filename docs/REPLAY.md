@@ -92,7 +92,8 @@ python -m wumpus viewer                          # 빈 뷰어 (viewer.html). .js
 {
   "format": "wumpus-replay-1",
   "meta":  { "w", "h", "sym", "map", "names", "teams", "winner", "reason", "rounds", "score",
-             "time_ms": [{"avg", "max", "turns", "over"}, ...] },
+             "time_ms": [{"avg", "max", "turns", "over"}, ...],
+             "ops": [{"avg", "max", "turns", "over"}, ...] },   // 차례당 연산 (줄 수). 연산 한도를 끈 경기면 null
   "const": { "hp", "cost", "carry", "max_rounds", "rules", "wumpus_hp", ... },
   "map":   { "rows", "ore": [[x, y, 양]], "traps": [[x, y]], "bases": [[x, y], [x, y]], "base_ids": [1, 2],
              "wumpus": [[x, y], ...] },
@@ -120,4 +121,4 @@ python -m wumpus viewer                          # 빈 뷰어 (viewer.html). .js
 | 바침 | `["dlv", id, 양, x, y, team]` |
 | 생산 | `["spawn", id, team, 종류, x, y]` |
 | 웜퍼스 | `["roar", 굴 x, y, [맞은 id]]` (깨어나 친 것) · `["scream", 처치한 id, x, y, team]` · `["eaten", id, x, y]` · `["wrespawn", x, y]` |
-| 오류 | `["err", id, 메시지]` |
+| 오류 | `["err", id, 메시지]` (연산 한도 초과도 여기: `연산 한도 초과: ...`) |

@@ -47,6 +47,7 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 | `carry` | 든 금 |
 | `round` | 지금 라운드 (1 ~ 1000) |
 | `bank` | 우리 금고 |
+| `ops_bank` | 이 차례를 시작할 때 팀 연산 예산 (줄 수) |
 
 `me` 는 복사본이다. 바꿔도 게임에 영향이 없다.
 
@@ -132,11 +133,26 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 | `cheb(ax, ay, bx, by)` | 체비셰프 거리 (대각선도 1칸) |
 | `direction_to(ax, ay, bx, by)` | 맞닿은 두 칸 사이의 방향 글자. 안 맞닿았으면 `None` |
 | `DIRS` | `{'N': (0,-1), 'E': (1,0), 'S': (0,1), 'W': (-1,0)}` |
+| `ops_left()` | 이번 차례에 더 쓸 수 있는 줄 수 (연산 한도, 규칙 11절) |
 
-## 9. 오류 · 시간 · 재현성
+## 9. 연산 한도 · 오류 · 시간 · 재현성
 
+- **연산 한도:** 봇 코드가 실행한 줄 수를 센다. 팀 예산 1,000,000 줄에서 시작해 라운드마다 50,000 줄이 더해지고, 한 차례에는 최대 100,000 줄까지 쓴다. 넘으면 그 줄에서 차례가 끊기고 행동이 버려진다. 자세히는 [규칙 11절](RULES.md).
+- 남은 양은 `ops_left()` (이번 차례) 와 `me.ops_bank` (팀 예산) 로 본다. 무거운 계산 (맵 전체 BFS 등) 은 모든 모험가가 매 차례 하지 말고, 결과를 전역 변수에 두고 다시 쓴다.
+
+```python
+from wumpus.api import ops_left
+
+def turn(me, view, memory):
+    plan = cheap_answer(me, view)          # 먼저 싼 답을 정해 둔다
+    if ops_left() > 20000:                 # 여유가 있을 때만 깊게 본다
+        plan = deeper_search(me, view) or plan
+    return plan
+```
+
+- `run` · `scrim` · `check` 는 팀마다 차례당 연산 (평균 · 최대) 과 한도 초과 수를 보여 준다. 개발 중 빠르게 돌리고 싶으면 `--no-ops-limit` 로 셈을 끌 수 있다 (한도 안의 봇은 결과가 같다. 공식 규칙은 아니다).
 - `turn` 에서 예외가 나면 그 모험가는 그 차례만 쉰다. 리플레이 사건 목록과 `run` · `scrim` 결과에 오류로 나온다.
-- 차례마다 걸린 시간을 잰다. `--time-limit 밀리초` 를 주면 한도를 넘긴 차례의 행동을 버린다.
+- 차례마다 걸린 시간도 잰다. `--time-limit 밀리초` 를 주면 시간 한도도 쓴다 (시간은 컴퓨터마다 달라 공식 규칙은 아니다).
 - `random` 모듈은 차례마다 (경기 시드, 라운드, 번호) 로 다시 맞춰진다. 같은 봇 · 맵 · 시드면 결과가 같다.
 
 ## 10. 가장 작은 봇

@@ -4,9 +4,11 @@ import random
 import time
 
 from . import api
+from .ops import meter, OpsExceeded
 from .api import (DIRS, EXPLORER, ARCHER, CAMP, EMPTY, WALL, GOLD, PIT, CAMP_TILE,
                   MAX_ROUNDS, MEMORY_SIZE, MAX_UNITS, START_BANK, INCOME_EVERY, COST, HP,
                   VISION_R2, ATTACK_DAMAGE, CAMP_ATTACK, CARRY_MAX, REGROW_EVERY, cheb, Move, Mine, Attack, Spawn,
+                  OPS_PER_ROUND, OPS_BANK_MAX, OPS_TURN_MAX, OPS_TURN_MIN,
                   Shoot, Push, AGENT_HP, AGENT_CARRY, WUMPUS_HP_A, WUMPUS_STRIKE_A, WUMPUS_WAKE_A, WUMPUS_HOARD_A, WUMPUS_HP_U, WUMPUS_ROAR, WUMPUS_ROAR_DMG, WUMPUS_REGEN, WUMPUS_HOARD_U, WUMPUS_RESPAWN, HP_UNIFIED, CARRY, MELEE_RANGE, BOW_RANGE, sight_cells, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
 
 TEAM_NAMES = ('붉은 원정대', '푸른 원정대')
@@ -44,6 +46,7 @@ class Me:
         self.arrows = u.arrows
         self.round = g.round
         self.bank = g.bank[u.team]
+        self.ops_bank = g.ops_bank[u.team]          # 팀 연산 예산 (이 차례를 시작할 때)
 
 
 class UnitInfo:
@@ -127,7 +130,7 @@ class View:
 
 
 class Game:
-    def __init__(self, gmap, bot_sources, bot_names, seed=0, time_limit_ms=None, rules=None):
+    def __init__(self, gmap, bot_sources, bot_names, seed=0, time_limit_ms=None, rules=None, ops_limit=True):
         self.rules = dict(RULES)
         if rules:
             self.rules.update(rules)
@@ -168,6 +171,16 @@ class Game:
         self.sources = bot_sources
         self.names = bot_names
         self.codes = [compile(src, f'<bot {i}: {bot_names[i]}>', 'exec') for i, src in enumerate(bot_sources)]
+        # 연산 한도: 팀마다 예산 (줄 수). 차례마다 min(OPS_TURN_MAX, 예산) 까지 (늘 OPS_TURN_MIN 은 허락), 쓴 만큼 뺀다
+        self.ops_on = bool(ops_limit)
+        self.ops_bank = [OPS_BANK_MAX, OPS_BANK_MAX]
+        self.ostat = [[0, 0, 0, 0], [0, 0, 0, 0]]   # 팀마다 [합 줄, 최대 줄, 차례 수, 한도 초과 수]
+        self.meter = meter()
+        if self.ops_on:
+            for c in self.codes:
+                self.meter.watch(c)
+            self.meter.watch_host(Me, View, UnitInfo, *[v for k, v in vars(api).items()
+                                                        if not k.startswith('_') and (isinstance(v, type) or callable(v)) and getattr(v, '__module__', '') == api.__name__])
         self.bank = [START_BANK, START_BANK]
         self.score = [0, 0]
         self.memory = [[0] * MEMORY_SIZE, [0] * MEMORY_SIZE]
@@ -253,13 +266,32 @@ class Game:
         self.at[(x, y)] = u
         ns = {'__name__': f'bot_{team}_{u.id}'}
         try:
-            exec(self.codes[team], ns)
+            self._ops_run(team, lambda: exec(self.codes[team], ns))
             if not callable(ns.get('turn')):
                 raise AttributeError('turn 함수가 없다')
             u.ns = ns
-        except Exception as e:  # 봇 파일 자체가 깨졌으면 그 유닛은 아무것도 안 한다
-            self.events.append(['err', u.id, f'불러오기 실패: {type(e).__name__}: {e}'[:160]])
+        except (Exception, OpsExceeded) as e:  # 봇 파일 자체가 깨졌으면 그 유닛은 아무것도 안 한다
+            msg = f'연산 한도 초과 (봇 파일 첫 실행)' if isinstance(e, OpsExceeded) else f'{type(e).__name__}: {e}'
+            self.events.append(['err', u.id, f'불러오기 실패: {msg}'[:160]])
         return u
+
+    # ---------- 연산 한도 ----------
+    def _ops_run(self, team, fn):
+        """봇 코드를 연산 한도 안에서 실행한다. 한도를 넘으면 OpsExceeded 를 던진다 (쓴 줄은 예산에서 뺀다)."""
+        if not self.ops_on:
+            return fn()
+        limit = max(OPS_TURN_MIN, min(OPS_TURN_MAX, self.ops_bank[team]))
+        self.meter.start(limit)
+        try:
+            r = fn()
+        finally:
+            n = self.meter.stop()
+            self.ops_bank[team] -= min(n, limit)
+            st = self.ostat[team]
+            st[0] += n; st[1] = max(st[1], n); st[2] += 1
+        if n > limit:                       # 봇이 OpsExceeded 를 잡아 삼켰어도 넘긴 차례는 넘긴 것
+            raise OpsExceeded()
+        return r
 
     def _kill(self, u, cause):
         u.alive = False
@@ -289,7 +321,11 @@ class Game:
             random.seed(self.seed * 1000003 + self.round * 1009 + u.id)
             t0 = time.perf_counter()
             try:
-                act = u.ns['turn'](me, view, self.memory[u.team])
+                act = self._ops_run(u.team, lambda: u.ns['turn'](me, view, self.memory[u.team]))
+            except OpsExceeded:
+                act = None
+                self.ostat[u.team][3] += 1
+                self.events.append(['err', u.id, f'연산 한도 초과: 이번 차례 {self.meter.limit} 줄 (팀 예산 {max(0, self.ops_bank[u.team])})'])
             except Exception as e:
                 act = None
                 self.events.append(['err', u.id, f'{type(e).__name__}: {e}'[:160]])
@@ -648,6 +684,9 @@ class Game:
     def play(self):
         for r in range(1, MAX_ROUNDS + 1):
             self.round = r
+            if self.ops_on:
+                for t in (0, 1):
+                    self.ops_bank[t] = min(OPS_BANK_MAX, max(0, self.ops_bank[t]) + OPS_PER_ROUND)
             if r % INCOME_EVERY == 0:
                 self.bank[0] += 1
                 self.bank[1] += 1
@@ -693,6 +732,7 @@ class Game:
                 'score': list(self.score), 'map': getattr(m, 'name', ''),
                 'time_ms': [{'avg': round(t[0] / max(1, t[2]), 3), 'max': round(t[1], 3), 'turns': t[2], 'over': t[3]} for t in self.tstat],
                 'time_limit_ms': self.time_limit_ms,
+                'ops': [{'avg': round(o[0] / max(1, o[2])), 'max': o[1], 'turns': o[2], 'over': o[3]} for o in self.ostat] if self.ops_on else None,
             },
             'const': {
                 'hp': {'E': self.HPT[EXPLORER], 'G': self.HPT[ARCHER], 'B': self.HPT[CAMP]},
@@ -760,11 +800,11 @@ def resolve_bot(spec, bots_dir='bots'):
     raise FileNotFoundError(f'봇을 찾을 수 없다: {spec} (bots/<이름>/main.py 또는 .py 파일 경로)')
 
 
-def run_match(gmap, bot_paths, seed=0, names=None, time_limit_ms=None, rules=None):
+def run_match(gmap, bot_paths, seed=0, names=None, time_limit_ms=None, rules=None, ops_limit=True):
     sources, auto = [], []
     for p in bot_paths:
         path, name = resolve_bot(p)
         with open(path, encoding='utf-8') as f:
             sources.append(f.read())
         auto.append(name)
-    return Game(gmap, sources, names or auto, seed, time_limit_ms, rules).play()
+    return Game(gmap, sources, names or auto, seed, time_limit_ms, rules, ops_limit).play()

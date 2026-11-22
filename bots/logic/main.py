@@ -7,6 +7,8 @@
 - 대칭 추론: 관측과 모순되는 대칭 후보를 지워 적 야영지 위치를 찾는다.
 - A*: 안전한 칸은 비용 1, 모르는 칸은 비싸게, 의심 칸은 더 비싸게. 휴리스틱은 맨해튼 거리 (허용 가능).
 
+연산 한도 (팀마다 라운드당 50,000 줄) 에 맞추려고: 추론은 새로 바뀐 사실 주변만 다시 보고 (증분), 이웃 칸은 표로,
+길 찾기는 칸 비용을 기억하고 지난 길을 다시 쓰며, 한 번에 펼칠 칸 수에 상한 (SEARCH_CAP) 을 둔다.
 유닛마다 이 파일이 따로 실행되므로 전역 변수 K 는 그 유닛만의 지식 베이스다.
 팀 공유 memory (16칸) 쓰임: [0] 지운 대칭 비트, [1],[2] 적 야영지 x+1, y+1, [3] 만든 궁수 수, [4..15] 모험가 위치 (한 명당 한 칸: 자리 · 라운드 · 번호를 묶음).
 """
@@ -20,6 +22,7 @@ SYMS = ('H', 'V', 'R')
 BIT = {'H': 1, 'V': 2, 'R': 4}
 SYM_KO = {'H': '좌우', 'V': '상하', 'R': '회전'}
 RALLY = 3            # 궁수가 이만큼 모이면 출발
+SEARCH_CAP = 600     # 길 찾기 한 번에 펼칠 칸 수 상한 (연산 한도 안에 들도록)
 
 K = None             # 이 유닛의 지식 베이스
 plan_i = 0           # 야영지의 생산 순서 위치
@@ -41,6 +44,17 @@ class Knowledge:
         self.garrows = {}       # 본 떨어진 화살
         self.ruled_out = 0
         self.enemy_base = None
+        # 연산 아끼기: 이웃 칸 표를 한 번만 만든다
+        self.N = {(x, y): tuple(n for n in ((x, y - 1), (x + 1, y), (x, y + 1), (x - 1, y)) if 0 <= n[0] < w and 0 <= n[1] < h)
+                  for x in range(w) for y in range(h)}
+        # 증분 추론: 지난번 추론 때까지 본 사실 (집합 차이는 내장 연산이라 싸다)
+        self._ps, self._pt, self._pn, self._pw, self._pwall = set(), set(), set(), set(), set()
+        self._pv, self._pm = set(), set()
+        self._cw, self._ct = set(), set()          # 대칭 검사에 이미 쓴 벽 · 칸
+        self._sym = None
+        self._cv, self._cc, self._fail = None, {}, {}   # 길 찾기 캐시 (칸 비용 · 실패한 탐색)
+        self.now = 0
+        self._last = None                       # 지난번에 찾은 길
         self._add_safe_zone(base)
         # 규칙: 웜퍼스 굴은 야영지에서 체비셰프 WUMPUS_CLEAR 밖에 있다
         for x in range(base[0] - WUMPUS_CLEAR, base[0] + WUMPUS_CLEAR + 1):
@@ -52,10 +66,7 @@ class Knowledge:
         return 0 <= c[0] < self.w and 0 <= c[1] < self.h
 
     def nb4(self, c):
-        for dx, dy in DIRS.values():
-            n = (c[0] + dx, c[1] + dy)
-            if self.inb(n):
-                yield n
+        return self.N[c]
 
     def _add_safe_zone(self, b):
         r = SAFE_RADIUS
@@ -69,10 +80,12 @@ class Knowledge:
 
     # --- 관측 ---
     def observe(self, me, view, memory):
+        self.now = me.round
         if view.screams > self.screams:          # 비명: 웜퍼스가 쓰러졌다. 오래된 악취 기억은 버린다
             self.screams = view.screams
             self.smell = {c: v for c, v in self.smell.items() if not v}
             self.wump.clear()
+            self._pw, self._pm = set(), set()
         for c in view.visible_cells():
             t = view.tile(*c)
             self.tile[c] = t
@@ -122,61 +135,87 @@ class Knowledge:
 
     # --- 대칭 추론: 모순되는 후보를 지운다 ---
     def check_symmetry(self):
+        new_walls = self.walls - self._cw
+        new_tiles = self.tile.keys() - self._ct
+        if new_walls:
+            self._cw |= new_walls
+        if new_tiles:
+            self._ct |= new_tiles
         for s in self.alive_syms():
             m = mirror(s, *self.base, self.w, self.h)
             t = self.tile.get(m)
             if t is not None and t != CAMP_TILE:
                 self.ruled_out |= BIT[s]
                 continue
-            for c in self.walls:
+            for c in new_walls:                     # 새 벽의 거울 칸이 벽이 아닌 칸으로 알려져 있으면 모순
                 tm = self.tile.get(mirror(s, *c, self.w, self.h))
                 if tm is not None and tm != WALL:
                     self.ruled_out |= BIT[s]
                     break
+            else:
+                for c in new_tiles:                 # 새로 본 벽 아닌 칸의 거울 칸이 벽이면 모순
+                    if self.tile[c] != WALL and mirror(s, *c, self.w, self.h) in self.walls:
+                        self.ruled_out |= BIT[s]
+                        break
         alive = self.alive_syms()
         if len(alive) == 1 and self.enemy_base is None:
             self._found_enemy(mirror(alive[0], *self.base, self.w, self.h))
 
     # --- 명제논리 추론 (고정점까지 반복) ---
     def infer(self):
-        changed = True
-        while changed:
-            changed = False
-            for c, v in self.vib.items():
-                ns = [n for n in self.nb4(c) if n not in self.walls]
-                if not v:
-                    for n in ns:
-                        if n not in self.safe:
-                            self.safe.add(n)
-                            changed = True
-                else:
-                    unknown = [n for n in ns if n not in self.safe]
-                    if len(unknown) == 1 and unknown[0] not in self.trap:
-                        self.trap.add(unknown[0])
-                        changed = True
-            for c, v in self.smell.items():         # 웜퍼스: 바람과 같은 규칙
-                ns = [n for n in self.nb4(c) if n not in self.walls]
-                if not v:
-                    for n in ns:
-                        if n not in self.nw:
-                            self.nw.add(n)
-                            changed = True
-                else:
-                    unknown = [n for n in ns if n not in self.nw and n not in self.trap]
-                    if len(unknown) == 1 and unknown[0] not in self.wump:
-                        self.wump.add(unknown[0])
-                        changed = True
-            # 대칭이 하나로 정해지면 안전 · 구덩이 · 굴 사실을 거울 칸에도 적용한다
-            alive = self.alive_syms()
-            if len(alive) == 1:
-                s = alive[0]
-                for src, dst, bad in ((self.safe, self.safe, self.trap), (self.trap, self.trap, None),
-                                      (self.nw, self.nw, self.wump), (self.wump, self.wump, None)):
-                    for c in list(src):
-                        m = mirror(s, *c, self.w, self.h)
-                        if m not in dst and (bad is None or m not in bad):
-                            dst.add(m)
-                            changed = True
+        """증분 추론: 지난번 뒤로 새로 생긴 사실 주변만 다시 본다 (결과는 처음부터 고정점까지 도는 것과 같다)."""
+        alive = self.alive_syms()
+        sym = alive[0] if len(alive) == 1 else None
+        if sym is not None and sym != self._sym:   # 대칭이 처음 정해짐: 지금까지의 사실을 모두 거울 칸에 옮긴다
+            self._sym = sym
+            self._ps, self._pt, self._pn, self._pw = set(), set(), set(), set()
+        W1, H1 = self.w - 1, self.h - 1
+        N, vib, smell, walls = self.N, self.vib, self.smell, self.walls
+        safe, trap, nw, wump = self.safe, self.trap, self.nw, self.wump
+        while True:
+            ds, dt, dn, dw = safe - self._ps, trap - self._pt, nw - self._pn, wump - self._pw
+            dwall = walls - self._pwall
+            dv, dm = vib.keys() - self._pv, smell.keys() - self._pm
+            if not (ds or dt or dn or dw or dwall or dv or dm):
+                break
+            self._ps |= ds; self._pt |= dt; self._pn |= dn; self._pw |= dw
+            self._pwall |= dwall; self._pv |= dv; self._pm |= dm
+            if sym is not None:                     # 1차 술어 논리: 사실을 거울 칸에도
+                for c in ds:
+                    m = (W1 - c[0], c[1]) if sym == 'H' else (c[0], H1 - c[1]) if sym == 'V' else (W1 - c[0], H1 - c[1])
+                    if m not in trap:
+                        safe.add(m)
+                for c in dt:
+                    trap.add((W1 - c[0], c[1]) if sym == 'H' else (c[0], H1 - c[1]) if sym == 'V' else (W1 - c[0], H1 - c[1]))
+                for c in dn:
+                    m = (W1 - c[0], c[1]) if sym == 'H' else (c[0], H1 - c[1]) if sym == 'V' else (W1 - c[0], H1 - c[1])
+                    if m not in wump:
+                        nw.add(m)
+                for c in dw:
+                    wump.add((W1 - c[0], c[1]) if sym == 'H' else (c[0], H1 - c[1]) if sym == 'V' else (W1 - c[0], H1 - c[1]))
+            # 다시 볼 칸: 새로 서 본 칸, 그리고 사실이 바뀐 칸의 이웃 가운데 서 본 칸
+            todo = dv | dm
+            for c in ds | dt | dn | dwall:
+                todo.update(N.get(c, ()))
+            for c in todo:
+                v = vib.get(c)
+                if v is not None:
+                    ns = [n for n in N[c] if n not in walls]
+                    if not v:
+                        safe.update(ns)            # 명제논리: 바람이 없으면 이웃은 모두 안전
+                    else:
+                        unknown = [n for n in ns if n not in safe]
+                        if len(unknown) == 1:
+                            trap.add(unknown[0])    # 바람 칸의 모르는 이웃이 하나뿐이면 그 칸이 구덩이
+                v = smell.get(c)
+                if v is not None:
+                    ns = [n for n in N[c] if n not in walls]
+                    if not v:
+                        nw.update(ns)
+                    else:
+                        unknown = [n for n in ns if n not in nw and n not in trap]
+                        if len(unknown) == 1:
+                            wump.add(unknown[0])
 
     def suspect(self, c):
         """바람한 칸에 붙어 있고 안전이 증명되지 않은 칸."""
@@ -199,6 +238,29 @@ class Knowledge:
         goals = set(goals)
         if not goals:
             return None
+        # 연산 아끼기: 칸 비용은 지식이 바뀔 때까지 기억하고, 실패한 탐색은 지식이 바뀌거나 5 라운드가 지날 때까지 다시 하지 않는다
+        ver = (len(self.safe), len(self.trap), len(self.walls), len(self.wump), len(self.nw), len(self.vib), len(self.smell))
+        if ver != self._cv:
+            self._cv, self._cc, self._fail = ver, {}, {}
+        fkey = (start, frozenset(goals))
+        if self.now - self._fail.get(fkey, -99) < 5:
+            return None
+        cc, cost = self._cc, self.cost
+        lp = self._last                         # 지난 길이 아직 쓸 만하면 그대로 (다시 찾지 않는다)
+        if lp and len(lp) > 1 and lp[1] == start:
+            lp = lp[1:]
+        if lp and lp[0] == start and lp[-1] in goals and len(lp) > 1:
+            ok = True
+            for c in lp[1:]:
+                st = cc.get(c)
+                if st is None:
+                    st = cc[c] = cost(c) or 0
+                if not st or c in occupied:
+                    ok = False
+                    break
+            if ok:
+                self._last = lp
+                return lp
         few = len(goals) <= 8
 
         def h(c):
@@ -209,27 +271,33 @@ class Knowledge:
         g = {start: 0}
         came = {start: None}
         pq = [(h(start), 0, start)]
+        work = 0                                    # 일의 양 상한: 칸을 SEARCH_CAP 개 넘게 펼치면 멈춘다 (연산 한도)
         while pq:
             f, gc, c = heapq.heappop(pq)
             if gc > g[c]:
                 continue
+            work += 1
+            if work > SEARCH_CAP:
+                break
             if c in goals:
                 path = []
                 while c is not None:
                     path.append(c)
                     c = came[c]
-                return path[::-1]
-            for n in self.nb4(c):
-                step = self.cost(n)
+                self._last = path[::-1]
+                return self._last
+            for n in self.N[c]:
+                step = cc.get(n)
                 if step is None:
-                    continue
-                if n in occupied:
+                    step = cc[n] = cost(n) or 0      # 0 = 지나갈 수 없는 칸
+                if not step or n in occupied:
                     continue                        # 다른 유닛이 선 칸은 지나지 않는다
                 ng = gc + step
                 if ng < g.get(n, 1 << 30):
                     g[n] = ng
                     came[n] = c
                     heapq.heappush(pq, (ng + h(n), ng, n))
+        self._fail[fkey] = self.now
         return None
 
     # --- 화살 줄 ---
@@ -252,31 +320,9 @@ class Knowledge:
 
 # ---------------- 머릿속 그리기 ----------------
 def show_mind(path, label):
-    alive = K.alive_syms()
-    debug.say('대칭 후보: ' + (', '.join(SYM_KO[s] for s in alive) or '없음'))
     debug.say('목표: ' + label)
     for c in K.trap:
         debug.mark(*c, 'red')
-    shown = 0
-    for c in K.safe:
-        if c not in K.vib and K.tile.get(c) != WALL and shown < 150:
-            debug.mark(*c, 'green')
-            shown += 1
-    for c in K.vib:
-        if K.vib[c]:
-            for n in K.nb4(c):
-                if K.suspect(n) and n not in K.trap:
-                    debug.mark(*n, 'yellow')
-    for c in K.smell:
-        if K.smell[c]:
-            for n in K.nb4(c):
-                if K.wsuspect(n):
-                    debug.mark(*n, 'blue')
-    for c in K.wump:
-        debug.mark(*c, 'purple')
-    if K.enemy_base is None:
-        for s in alive:
-            debug.mark(*mirror(s, *K.base, K.w, K.h), 'white')
     if path:
         debug.path(path, 'white')
 

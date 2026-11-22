@@ -9,6 +9,7 @@
   지각: view.breeze 바람 · view.stench 악취 · view.glitter 반짝임 · view.bump 부딪힘
         view.footsteps 발소리 · view.hurt 아픔 · view.screams 비명
 - 한 턴에 행동 하나: Move(d) · Mine() · Attack(x, y) (상하좌우 옆 칸) · None (쉬기)
+- 연산 한도: 팀마다 라운드당 50,000 줄 (봇 코드 실행 줄 수). 넘은 차례는 행동이 버려진다 (ops_left() 로 남은 양을 본다).
 - 팀끼리 나눌 정보는 memory (32비트 정수 16칸, 맵 전체는 못 담는다) 에 적는다.
 
 이 봇이 하는 일 (기본 동작은 다 한다)
