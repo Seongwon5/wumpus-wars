@@ -160,6 +160,7 @@ input[type=checkbox]{accent-color:#c79a55}
   22%{transform:translate(-50%,-50%) scale(1) rotate(-1deg)}30%{transform:translate(-50%,-50%) rotate(1deg)}38%{transform:translate(-50%,-50%) rotate(0)}
   80%{opacity:1}100%{opacity:0;transform:translate(-50%,-56%) scale(1.04)}}
 .face{width:22px;height:22px;image-rendering:pixelated;vertical-align:middle;margin:-5px 1px -3px 0;filter:drop-shadow(0 1px 0 #000)}
+.vfaces .face{width:56px;height:56px;margin:0 4px}
 #rulesTag{position:absolute;right:12px;bottom:10px;z-index:2;font-size:11.5px;color:#d8ffb0;background:rgba(14,10,6,.8);padding:3px 9px;border-radius:3px;border:1px solid #4a6a2a}
 #victory{position:absolute;inset:0;z-index:3;display:none;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(10,7,4,.35),rgba(10,7,4,.78));animation:vin .6s ease-out}
 @keyframes vin{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
@@ -739,7 +740,7 @@ function face(k,t){
   let f=FACE[nm];
   if(!f){f=FACE[nm]={url:null};const im=new Image();
     im.onload=()=>{const m=SPRITES.meta.sheets[nm],C=SPRITES.meta.cell,r=m.idle.row+2,c=document.createElement('canvas');c.width=c.height=32;
-      const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(im,32+16,r*C+32+4,32,32,0,0,32,32);f.url=c.toDataURL();hudLast=-1;};
+      const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(im,32+16,r*C+32+4,32,32,0,0,32,32);f.url=c.toDataURL();hudLast=-1;lastSide=-1;};
     im.src=SPRITES.img[nm];}
   return f.url?`<img class="face" src="${f.url}" alt="${nmK}" title="${nmK}">`:nmK;
 }
@@ -804,7 +805,7 @@ function updateVictory(fi){
   const m=R.meta,fr=F[N-1];
   const cnt=t=>fr.u.filter(u=>u[1]===t).length;
   const head=m.winner<0?'<div class="crown">⚖</div><div class="who">무승부</div>'
-    :`<div class="crown">♛</div><div class="who" style="color:${TEAM[m.winner].c}">${TEAM[m.winner].name} 승리</div>`;
+    :`<div class="crown">♛</div><div class="vfaces">${[face('E',m.winner),face('G',m.winner)].filter(x=>x.startsWith('<img')).join('')}</div><div class="who" style="color:${TEAM[m.winner].c}">${TEAM[m.winner].name} 승리</div>`;
   el.innerHTML=`<div class="box">${head}<div class="why">${esc(m.reason)} · ${m.rounds}라운드</div>
     <table><tr><th></th><th>바친 금</th><th>야영지 체력</th><th>유닛</th></tr>
     ${[0,1].map(t=>`<tr><td style="color:${TEAM[t].c};font-weight:700">${TEAM[t].name}<br><span style="color:var(--dim);font-size:11px;font-weight:400">${esc(m.names[t])}</span></td><td class="n">${fr.sc[t]}</td><td class="n">${Math.max(0,fr.bh[t])}</td><td class="n">${cnt(t)}</td></tr>`).join('')}</table>
