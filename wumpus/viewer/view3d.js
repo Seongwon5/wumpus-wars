@@ -665,6 +665,30 @@ const shadowG = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
 function makeShadow(w, d) {                       // 발밑의 부드러운 그림자 (Cambridge 처럼)
   const m = new THREE.Mesh(shadowG, shadowMat); m.scale.set(w, 1, d); m.position.y = 0.006; m.renderOrder = 3; return m;
 }
+function decoTex(v) {                            // 바닥 장식: 작은 돌 · 이끼 · 뼈 조각 (아주 옅게)
+  return pxMemo('deco' + v, () => pxTex(pxCanvas(32, 32, K => {
+    if (v === 0) { for (const [x, y, r] of [[9, 20, 2.2], [14, 23, 1.5], [22, 12, 1.8]]) { K.E(x, y, r + 0.6, r, '#5e5a54'); K.P(x - 1, y - 1, '#8c887e'); K.P(x, y + Math.ceil(r), '#2e2c28'); } }
+    else if (v === 1) { for (let k = 0; k < 26; k++) { const x = 6 + Math.floor(K.rn() * 20), y = 8 + Math.floor(K.rn() * 16); K.P(x, y, K.rn() < 0.5 ? '#3a5a2a' : '#4e7036'); if (K.rn() < 0.4) K.P(x + 1, y, '#2c4420'); } }
+    else { K.L(10, 18, 20, 14, '#d8d0b6', 2); K.E(9, 18, 1.6, 1.6, '#e4dcc2'); K.E(21, 14, 1.6, 1.6, '#e4dcc2'); K.outline('#2a2418'); }
+  }, 61 + v), true));
+}
+function coinTex() {                              // 도트 금화
+  return pxMemo('coin', () => pxTex(pxCanvas(10, 10, K => {
+    K.E(5, 5, 4.2, 4.2, '#e8a820'); K.E(4.6, 4.6, 3, 3, '#ffd24a'); K.P(3, 3, '#fff6c0'); K.P(4, 3, '#fff6c0'); K.R(5, 4, 1, 3, '#b07810');
+    K.outline('#3a2000');
+  })));
+}
+function beamTex() {                              // 도트 빛기둥 (위로 갈수록 성기게 사라짐)
+  return pxMemo('beam', () => pxTex(pxCanvas(12, 48, K => {
+    for (let y = 0; y < 48; y++) for (let x = 0; x < 12; x++) {
+      const c = Math.abs(x - 5.5) / 6, f = y / 48;
+      if (c > 0.85) continue;
+      if ((x + y) % 2 && f < 0.35) continue;      // 위쪽은 체크무늬로 성기게
+      const v = c < 0.3 ? 255 : c < 0.6 ? 200 : 150;
+      K.P(x, y, [v, v, v]);
+    }
+  })));
+}
 function slashTex() {                             // 근접 공격의 도트 베기 호
   return pxMemo('slash', () => pxTex(pxCanvas(32, 32, K => {
     for (let a = -1.25; a <= 1.25; a += 0.02) {
@@ -1322,6 +1346,17 @@ function build() {
   dust.userData = {base: dpos.slice(), seed: dseed};
   root.add(dust);
 
+  // 바닥 장식: 빈 칸 몇 곳에 작은 돌 · 이끼 · 뼈 조각 (게임 물체와 헷갈리지 않게 작고 옅게)
+  if (SHEETS.floor) {
+    const occ = new Set([...R.map.ore, ...R.map.traps, ...R.map.bases, ...(R.map.wumpus || [])].map(c => c[0] + ',' + c[1]));
+    const dg = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const dm = [0, 1, 2].map(v => new THREE.MeshStandardMaterial({map: decoTex(v), transparent: true, alphaTest: 0.5, roughness: 1, opacity: 0.85}));
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (rows[y][x] === '#' || occ.has(x + ',' + y) || hash(x * 7 + 3, y * 11 + 5) > 0.16) continue;
+      const v = hash(x, y * 3) < 0.45 ? 0 : hash(x, y * 3) < 0.85 ? 1 : 2;
+      const m = new THREE.Mesh(dg, dm[v]); m.position.set(wx(x), 0.004, wz(y)); m.renderOrder = 1; root.add(m);
+    }
+  }
   // 금맥
   const oreMat = std(0xffc63a, {emissive: 0xd08a00, emissiveIntensity: 0.9, metalness: 0.8, roughness: 0.22, flatShading: true});
   const veinMat = new THREE.MeshBasicMaterial({color: 0xffd25a});
@@ -2138,6 +2173,16 @@ function effects(g, a, canSee) {
       if (!canSee(x, y)) continue;
       const s = textSprite('+' + amt, '#ffd978');
       s.position.set(wx(x), 1.1 + a * 0.9, wz(y)); s.scale.set(0.9, 0.45, 1); s.material.opacity = 1 - a * a;
+      if (SHEETS.floor && e[5] != null) {         // 금화가 포물선을 그리며 야영지로 날아든다
+        const [bx, by] = R.map.bases[e[5]];
+        for (let i = 0; i < Math.min(amt, 6); i++) {
+          const q = Math.min(1, Math.max(0, (a - i * 0.07) / 0.55)); if (q <= 0 || q >= 1) continue;
+          const c = fx('coin', () => new THREE.Sprite(new THREE.SpriteMaterial({map: coinTex(), transparent: true, alphaTest: 0.4})));
+          const jx = (hash(i, id) - 0.5) * 0.3;
+          c.position.set(wx(x) + (wx(bx) - wx(x)) * q + jx * (1 - q), 0.7 + Math.sin(Math.PI * q) * 0.9, wz(y) + (wz(by) - wz(y)) * q);
+          c.scale.setScalar(0.24); c.material.rotation = 0; c.renderOrder = 17;
+        }
+      }
     } else if (k === 'push') {
       const [, id, px, py, tid, fx0, fy0, tx, ty] = e;
       if (!canSee(fx0, fy0)) continue;
@@ -2199,10 +2244,18 @@ function effects(g, a, canSee) {
     } else if (k === 'spawn') {
       const [, id, t, kd, x, y] = e;
       if (!canSee(x, y)) continue;
+      if (SHEETS.floor) {                          // 도트 빛기둥과 위로 튀는 팀 색 알갱이
+        const b = fx('beam', () => new THREE.Sprite(new THREE.SpriteMaterial({map: beamTex(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending})));
+        b.center.set(0.5, 0); b.position.set(wx(x), 0, wz(y)); b.scale.set(0.7 * (1 - a * 0.5), 2.6 * (0.6 + a * 0.4), 1);
+        b.material.color.setHex(TC[t].l); b.material.opacity = 1 - a; b.renderOrder = 17;
+        burst(wx(x), wz(y), 0.1, 14, TC[t].l, a, 1.4, id * 11 + g, -1.5, 1.2);
+        ring(wx(x), wz(y), 0.03, 0.3 + a * 0.5, TC[t].c, 1 - a);
+      } else {
       const m = fx('pillar', () => new THREE.Mesh(pillarG, addMat(0xffffff)));
       m.position.set(wx(x), 1.1, wz(y)); m.material.color.setHex(TC[t].c); m.material.opacity = 0.7 * (1 - a);
       m.scale.set(1 - a * 0.6, 1, 1 - a * 0.6);
       ring(wx(x), wz(y), 0.03, 0.3 + a * 0.4, TC[t].l, 1 - a);
+      }
     }
   }
 }
