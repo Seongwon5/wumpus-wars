@@ -145,6 +145,11 @@ CC-BY 3.0 / GPL 3.0 / GPL 2.0 / OGA-BY 3.0
 https://opengameart.org/content/lpc-dungeon-elements
 ```
 
+## 웜퍼스: LPC Golem
+
+https://opengameart.org/content/lpc-golem — CC-BY 3.0 / CC-BY 4.0 / GPL 2.0 / GPL 3.0 / OGA-BY 3.0.
+Attribute Stephen "Redshrike" Challener as graphic artist and William.Thompsonj as contributor. (이끼 낀 초록색으로 다시 칠함)
+
 ## 동굴 바닥 · 벽 · 금맥: LPC Cavern and Ruin Tiles (Tuomo Untinen 외)
 
 https://opengameart.org/content/lpc-cavern-and-ruin-tiles — CC-BY-SA 3.0, GPL 2.0, GPL 3.0. 원본 credits.txt 전문:

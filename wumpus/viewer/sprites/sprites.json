@@ -99,7 +99,7 @@
    }
   },
   "wumpus": {
-   "cols": 8,
+   "cols": 7,
    "rows": 13,
    "idle": {
     "row": 0,
@@ -108,17 +108,17 @@
    },
    "walk": {
     "row": 4,
-    "n": 8,
+    "n": 7,
     "dirs": 4
    },
    "attack": {
     "row": 8,
-    "n": 6,
+    "n": 7,
     "dirs": 4
    },
    "hurt": {
     "row": 12,
-    "n": 6,
+    "n": 7,
     "dirs": 1
    }
   },
@@ -159,13 +159,19 @@
   "wall_side": {
    "cols": 1,
    "rows": 1,
-   "cell": 64,
+   "cell": 32,
    "tile": true
   },
   "wall_top": {
    "cols": 1,
    "rows": 1,
-   "cell": 64,
+   "cell": 32,
+   "tile": true
+  },
+  "pit": {
+   "cols": 1,
+   "rows": 1,
+   "cell": 32,
    "tile": true
   },
   "ore": {

@@ -1131,7 +1131,7 @@ function makeWumpus() {
   for (const ch of g.children) if (ch.isGroup && ch !== live && ch !== dead && ch !== hp) ch.visible = false;
   dead.traverse(o => { if (o.isMesh) o.visible = false; });
   const dsp = makeBody('W', -1, 0.75);
-  if (dsp.userData.lpc) lpcFrame(dsp, 'hurt', 0, 5); else dsp.material.map = bodyTex('W', -1, 9);
+  if (dsp.userData.lpc) lpcFrame(dsp, 'hurt', 0, 99); else dsp.material.map = bodyTex('W', -1, 9);
   dead.add(dsp);
   return {g, token, pix, live, dead, body, head, jaw, eyes, eyeL, arms, hp, aura, flash: [fur, fur2, belly]};
 }
@@ -1370,6 +1370,12 @@ function build() {
     const shaft = new THREE.Mesh(new THREE.BoxGeometry(1, 2.1, 1), new THREE.MeshBasicMaterial({map: cliffTex(), side: THREE.BackSide}));
     shaft.geometry.groups = shaft.geometry.groups.filter(gr => gr.materialIndex !== 2 && gr.materialIndex !== 3);   // 뚜껑 · 바닥은 없앤다 (바닥은 끝없는 어둠)
     shaft.position.y = -1.05; rev.add(shaft);
+    const pt = tileTex('pit');
+    if (pt) {                                      // LPC 낭떠러지 타일 (위에서 본 깊은 구멍)
+      shaft.visible = false;
+      const pm = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), std(0xffffff, {roughness: 1, map: pt}));
+      pm.position.y = 0.003; pm.receiveShadow = true; rev.add(pm);
+    }
     root.add(hidden, rev);
     traps.set(x + ',' + y, {hidden, rev, gi: y * W + x, gy: -0.12});
   }
@@ -1550,9 +1556,9 @@ function updateStatic(fi, team, seen, now) {
     const hp = wh[i], alive = hp > 0;
     w.g.visible = team < 0 || (!alive && seen && seen[w.y * W + w.x] === 1);
     if (!w.g.visible) return;
-    w.dead.visible = !alive; w.live.visible = alive; w.hp.visible = alive; w.aura.visible = alive;
+    w.dead.visible = !alive; w.live.visible = alive; w.hp.visible = alive; w.aura.visible = alive; if (w.bar) w.bar.visible = alive;
     if (!alive) return;
-    w.aura.material.opacity = 0.35 + 0.2 * Math.sin(now * 2.2 + i);
+    w.aura.material.opacity = 0.12 + 0.06 * Math.sin(now * 2.2 + i);
     lpcFrame(w.pix, 'idle', 2, 0);
     const br = Math.sin(now * 1.7 + i * 2);
     w.body.scale.set(1 + br * 0.03, 1 - br * 0.025, 1 + br * 0.03);
@@ -1564,6 +1570,11 @@ function updateStatic(fi, team, seen, now) {
     w.eyeL.intensity = 2.6 + Math.sin(now * 3 + i) * 0.6;
     setHp(w.hp, hp / (R.const.wumpus_hp || 9), 0x9adf3a);
     billboard(w.hp, w.g);
+    w.hp.visible = false;                          // 머리 위 도트 체력바로
+    if (!w.bar) { w.bar = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true, depthTest: false})); w.bar.scale.set(0.42, 0.074, 1); w.bar.renderOrder = 14; w.g.add(w.bar); }
+    { const k10 = Math.max(0, Math.min(10, Math.ceil(hp / (R.const.wumpus_hp || 9) * 10)));
+      if (w._hk !== k10) { w._hk = k10; w.bar.material.map = hpTex(k10, -1); w.bar.material.needsUpdate = true; }
+      w.bar.position.set(w.pix.position.x, 1.06, w.pix.position.z); w.bar.visible = true; }
     // 악취: 굴과 상하좌우 이웃에서 초록 안개가 피어오른다
     for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const qx = w.x + dx, qy = w.y + dy;

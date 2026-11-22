@@ -35,6 +35,7 @@ RAMPS = {
     'pants': ['#1a1410', '#2e241a', '#463626', '#5e4a34'],
     'leather': ['#1a0e06', '#2e1c10', '#4a3020', '#6a4830'],
     'green': ['#10200a', '#264216', '#3e6a22', '#5e8e30', '#94c454'],
+    'moss': ['#0c160e', '#1e3222', '#34503a', '#4e7048', '#76965c', '#a8c47c', '#d4e8a0'],
     'gold': ['#3a2000', '#6a4004', '#a86c10', '#d89a20', '#f0c040', '#ffe080'],
 }
 
@@ -165,6 +166,32 @@ def build_camp(deco, t):
     return {'cols': 10, 'rows': 1, 'cell': C, 'foot': 152, 'alive': [0, 5], 'dead': [5, 5]}
 
 
+def build_golem(mon):
+    """웜퍼스: LPC 골렘 (Redshrike · William.Thompsonj, CC-BY 3.0 등) 을 이끼 낀 초록 돌로. 64 칸 그림을 128 칸 가운데에."""
+    walk = recolor(Image.open(os.path.join(mon, 'golem-walk.png')), 'moss')
+    atk = recolor(Image.open(os.path.join(mon, 'golem-atk.png')), 'moss')
+    die = recolor(Image.open(os.path.join(mon, 'golem-die.png')), 'moss')
+    def cell(sh, c, r):
+        f = Image.new('RGBA', (CELL, CELL))
+        f.alpha_composite(frame(sh, c, r), (OFF, OFF))
+        return f
+    rows, meta = [], {}
+    def add(key, fr):
+        meta[key] = {'row': len(rows), 'n': len(fr[0]), 'dirs': len(fr)}
+        rows.extend(fr)
+    add('idle', [[cell(walk, 0, d)] for d in range(4)])
+    add('walk', [[cell(walk, c, d) for c in range(7)] for d in range(4)])
+    add('attack', [[cell(atk, c, d) for c in range(7)] for d in range(4)])
+    add('hurt', [[cell(die, c, 0) for c in range(7)]])
+    cols = max(len(r) for r in rows)
+    sheet = Image.new('RGBA', (cols * CELL, len(rows) * CELL))
+    for y, r in enumerate(rows):
+        for x, im in enumerate(r):
+            sheet.alpha_composite(im, (x * CELL, y * CELL))
+    sheet.save(os.path.join(OUT, 'wumpus.png'), optimize=True)
+    return {'cols': cols, 'rows': len(rows), **meta}
+
+
 def build_cave(cav):
     """동굴 타일 (LPC Cavern and Ruin Tiles, CC-BY-SA 3.0 / GPL): 바닥 · 벽 옆면 · 벽 윗면 · 금맥 (파란 수정을 금색으로)."""
     im = Image.open(os.path.join(cav, 'cavern_ruins.png')).convert('RGBA')
@@ -180,12 +207,14 @@ def build_cave(cav):
             fp[x, y] = (min(255, int(r * k)), min(255, int(g * k)), min(255, int(b_ * k)), a_)
     floor.save(os.path.join(OUT, 'floor.png'))
     out['floor'] = {'cols': 1, 'rows': 1, 'cell': T, 'tile': True}
-    side = tile(12, 0, 2, 2)                             # 갈색 암벽
+    side = tile(2, 8)                                    # 회색 석벽 (벽돌)
     side.save(os.path.join(OUT, 'wall_side.png'))
-    out['wall_side'] = {'cols': 1, 'rows': 1, 'cell': 64, 'tile': True}
-    top = Image.eval(side.convert('RGB'), lambda v: min(255, int(v * 1.15))).convert('RGBA')
+    out['wall_side'] = {'cols': 1, 'rows': 1, 'cell': 32, 'tile': True}
+    top = Image.eval(tile(11, 9).convert('RGB'), lambda v: min(255, int(v * 1.1))).convert('RGBA')   # 회색 판석 덮개
     top.save(os.path.join(OUT, 'wall_top.png'))
-    out['wall_top'] = {'cols': 1, 'rows': 1, 'cell': 64, 'tile': True}
+    out['wall_top'] = {'cols': 1, 'rows': 1, 'cell': 32, 'tile': True}
+    tile(13, 3).save(os.path.join(OUT, 'pit.png'))      # 칸 하나짜리 낭떠러지 (금빛 테두리 · 갈색 절벽 · 검은 구멍)
+    out['pit'] = {'cols': 1, 'rows': 1, 'cell': T, 'tile': True}
     rock = tile(12, 9)
     small, cluster, tall = tile(9, 10), tile(9, 11), tile(10, 10, 1, 2)
     gold = lambda p: recolor(p, 'gold')
@@ -269,6 +298,9 @@ def main():
     cav = sys.argv[3] if len(sys.argv) > 3 else None
     if cav:
         meta['sheets'].update(build_cave(cav))
+    mon = sys.argv[4] if len(sys.argv) > 4 else None
+    if mon:
+        meta['sheets']['wumpus'] = build_golem(mon)
     json.dump(meta, open(os.path.join(OUT, 'sprites.json'), 'w', encoding='utf-8'), indent=1)
 
     # 만든 사람 표기
@@ -289,6 +321,10 @@ def main():
         lines += ['', '## 야영지: [LPC] Medieval Village Decorations (bluecarrot16 외)', '',
                   'https://opengameart.org/content/lpc-medieval-village-decorations — CC-BY-SA 3.0+. 원본 CREDITS 파일 전문:', '', '```',
                   open(os.path.join(deco, 'CREDITS-decorations-medieval.txt'), encoding='utf-8', errors='replace').read().strip(), '```']
+    if mon:
+        lines += ['', '## 웜퍼스: LPC Golem', '',
+                  'https://opengameart.org/content/lpc-golem — CC-BY 3.0 / CC-BY 4.0 / GPL 2.0 / GPL 3.0 / OGA-BY 3.0.',
+                  'Attribute Stephen "Redshrike" Challener as graphic artist and William.Thompsonj as contributor. (이끼 낀 초록색으로 다시 칠함)']
     if cav:
         lines += ['', '## 동굴 바닥 · 벽 · 금맥: LPC Cavern and Ruin Tiles (Tuomo Untinen 외)', '',
                   'https://opengameart.org/content/lpc-cavern-and-ruin-tiles — CC-BY-SA 3.0, GPL 2.0, GPL 3.0. 원본 credits.txt 전문:', '', '```',
