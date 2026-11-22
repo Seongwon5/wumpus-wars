@@ -82,12 +82,13 @@ python -m wumpus scrim mybot starter            # 맵 10개에서 양쪽 진영�
 | [리플레이 도구](docs/REPLAY.md) | 리플레이 파일, 뷰어 화면, 머리 위 지각 아이콘, 팀 시야, .json 형식 |
 | [맵](docs/MAPS.md) | 맵 목록 · 그림 보기 · 새 맵 만들기 · 맵 파일 형식 |
 
-PDF 문서 (인쇄용, 학위논문 양식). `python -X utf8 tools/md2thesis.py all` 로 위 마크다운에서 다시 만든다.
+PDF 문서 (인쇄용, 학위논문 양식). 규칙서 · 가이드북은 `python -X utf8 tools/md2thesis.py all` 로 위 마크다운에서, 제안서는 `python -X utf8 tools/proposal.py` 로 다시 만든다.
 
 | 문서 | 내용 |
 |---|---|
 | [게임 규칙서](docs/pdf/rulebook.pdf) | 게임 규칙 전체, 그림, 수치 일람 (21쪽) |
 | [봇 API 가이드북](docs/pdf/api_guidebook.pdf) | 시작하기 · 봇 API · 스크림 · 리플레이 · 맵 (27쪽) |
+| [과제 제안서](docs/pdf/proposal.pdf) | 배틀코드형 과제 제안: 왜 배틀코드인가, 게임 소개, 개발 환경, 평가 방식 두 안 (25쪽) |
 
 ## 명령 한눈에
 
@@ -115,7 +116,7 @@ bots/              starter · random · logic
 maps/              맵 10개 (*.json)
 demo/              미리 만든 리플레이
 docs/              설명서, 그림 (images/), PDF (pdf/)
-tools/             PDF 조판 (md2thesis.py · thesis.py), LPC 그림 합성 (lpc_build.py), 재미 지표 (funstats.py)
+tools/             PDF 조판 (md2thesis.py · proposal.py · thesis.py), LPC 그림 합성 (lpc_build.py), 재미 지표 (funstats.py)
 tests/             기본 점검 (python -m unittest discover tests)
 ```
 
