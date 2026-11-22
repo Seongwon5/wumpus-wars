@@ -660,6 +660,13 @@ if (SP) await Promise.all(Object.entries(SP.img).map(([name, url]) => new Promis
   img.onerror = () => res();
   img.src = url;
 })));
+function frameSprite(name, col, w, h, cy) {     // 한 줄짜리 LPC 시트의 한 칸 (떨어진 금 · 횃불 기둥 등)
+  const S = SHEETS[name]; if (!S) return null;
+  const t = S.tex.clone(); t.repeat.set(1 / S.m.cols, 1); t.offset.set(col / S.m.cols, 0); t.needsUpdate = true;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: t, transparent: true, alphaTest: 0.5}));
+  sp.center.set(0.5, cy); sp.scale.set(w, h, 1); sp.renderOrder = 5; sp.userData.cols = S.m.cols;
+  return sp;
+}
 function sheetName(kind, team) { return kind === 'E' ? 'explorer_' + team : kind === 'G' ? 'archer_' + team : kind === 'W' ? 'wumpus' : null; }
 function lpcFrame(sp, anim, dir, col) {        // 시트의 한 칸 (동작 · 방향 · 칸 번호) 을 보이게
   const L = sp.userData.lpc; if (!L) return;
@@ -1161,8 +1168,10 @@ function makeLoot() {
   lbl.position.set(0, 0.75, 0); lbl.scale.set(0.045, 0.0235, 1); lbl.renderOrder = 14;
   g.add(lbl);
   g.traverse(o => { if (o.isMesh && o !== glow) o.visible = false; });
-  sack.add(pxSprite(lootTex(false), 0.5, 0.5, 0.05));
-  chest.add(pxSprite(lootTex(true), 0.62, 0.53, 0.05));
+  const ss = frameSprite('loot', 0, 0.62, 0.62, 2 / 32), cs2 = frameSprite('loot', 2, 0.72, 0.72, 2 / 32);
+  sack.add(ss || pxSprite(lootTex(false), 0.5, 0.5, 0.05));
+  chest.add(cs2 || pxSprite(lootTex(true), 0.62, 0.53, 0.05));
+  sack.userData.spr = ss;
   return {g, sack, chest, glow, coins, lbl, amt: -1};
 }
 
@@ -1215,7 +1224,7 @@ function build() {
     L.position.y = 2.3;
     b.add(L);
     b.traverse(o => { if (o.isMesh) o.visible = false; });
-    const bs = pxSprite(brazierTex(0), 0.9, 2.25, 0.02);
+    const bs = frameSprite('brazier', 0, 0.62, 2.3, 2 / 120) || pxSprite(brazierTex(0), 0.9, 2.25, 0.02);
     b.add(bs);
     root.add(b);
     braziers.push({fl, L, spr: bs});
@@ -1283,6 +1292,7 @@ function build() {
   spikes.forEach(([x, z, i], k) => { const h = 1.2 + hash(i, 29) * 2.4; M4.compose(V3.set(x, h / 2 - 0.1, z), Q.identity(), S3.set(0.6 + hash(i, 31) * 0.6, h, 0.6 + hash(i, 31) * 0.6)); spikeM.setMatrixAt(k, M4); });
   spikeM.count = spikes.length;
   root.add(rockM, spikeM);
+  if (SHEETS.floor) rockM.visible = spikeM.visible = false;     // LPC 화풍: 지도 바깥은 어둠 (Cambridge 처럼 판만 뜬다)
   // 바위 바닥 (맵 바깥)
   mesh(root, new THREE.PlaneGeometry(W + 30, H + 30).rotateX(-Math.PI / 2), std(0x1c1610, {roughness: 1}), 0, -0.26, 0, false).receiveShadow = true;
   // 횃불 빛: 화면 가운데에 가까운 탐험가 6명의 횃불이 주변을 밝힌다 (빛 수를 고정해 셰이더를 다시 만들지 않는다)
@@ -1534,6 +1544,7 @@ function updateStatic(fi, team, seen, now) {
     o.g.position.set(wx(x) + (onDen ? 0.22 : 0), 0, wz(y) + (onDen ? 0.22 : 0));
     if (o.amt !== amt) { o.amt = amt; o.lbl.material.map = numTex(amt); o.lbl.material.needsUpdate = true; }
     o.chest.visible = amt >= 10; o.sack.visible = amt < 10;
+    if (o.sack.userData.spr) o.sack.userData.spr.material.map.offset.set((amt >= 5 ? 1 : 0) / 3, 0);   // 적으면 주머니, 5 이상이면 주머니 더미
     o.g.scale.setScalar(amt >= 10 ? 1.25 : 0.85 + Math.min(1, amt / 6) * 0.35);
     o.sack.position.y = Math.abs(Math.sin(now * 2 + x + y)) * 0.03;
     o.glow.material.opacity = 0.4 + 0.2 * Math.sin(now * 2.4 + x * 3);
@@ -1636,7 +1647,8 @@ function updateBases(fi, g, a, moving, seen, vis, now) {
       if (b.spr.userData.camp) { const cm = b.spr.userData.camp, k5 = Math.floor(now * 9 + t * 2) % 5; b.spr.material.map.offset.set(((dead ? cm.dead[0] : cm.alive[0]) + k5) / cm.cols, 0); }
       else if (b._k !== key) { b._k = key; b.spr.material.map = campTex(t, dead, dead ? 0 : fr); b.spr.material.needsUpdate = true; }
       const kk = Math.min(1, shake * 14); b.spr.material.color.setRGB(1, 1 - kk * 0.6, 1 - kk * 0.6); }
-    if (t === 0) for (const [k, br] of world.braziers.entries()) { const f2 = 1 + Math.sin(now * 11 + k * 2) * 0.1 + Math.sin(now * 19 + k) * 0.06; br.fl.scale.set(1, f2, 1); br.L.intensity = 9 * f2; const bf = Math.floor(now * 6 + k) % 2; if (br._f !== bf) { br._f = bf; br.spr.material.map = brazierTex(bf); br.spr.material.needsUpdate = true; } }
+    if (t === 0) for (const [k, br] of world.braziers.entries()) { const f2 = 1 + Math.sin(now * 11 + k * 2) * 0.1 + Math.sin(now * 19 + k) * 0.06; br.fl.scale.set(1, f2, 1); br.L.intensity = 9 * f2; if (br.spr.userData.cols) br.spr.material.map.offset.set((Math.floor(now * 8 + k) % 3) / 3, 0);
+      else { const bf = Math.floor(now * 6 + k) % 2; if (br._f !== bf) { br._f = bf; br.spr.material.map = brazierTex(bf); br.spr.material.needsUpdate = true; } } }
     setHp(b.hp, hp / R.const.hp.B, TC[t].c);
     billboard(b.hp, b.g);
   });

@@ -192,6 +192,29 @@ def build_golem(mon):
     return {'cols': cols, 'rows': len(rows), **meta}
 
 
+def build_props(con, deco):
+    """떨어진 금 (LPC Containers, CC-BY-SA 4.0): 주머니 · 주머니 더미 · 금 상자. 모서리 횃불 기둥 (Medieval Decorations): 불꽃 3장."""
+    out = {}
+    im = Image.open(os.path.join(con, 'container-contents-demo_0.png')).convert('RGBA')
+    T = 32
+    loot = Image.new('RGBA', (T * 3, T))
+    for k, (c, r) in enumerate([(11, 26), (13, 27), (14, 10)]):
+        loot.alpha_composite(im.crop((c * T, r * T, c * T + T, r * T + T)), (k * T, 0))
+    loot.save(os.path.join(OUT, 'loot.png'))
+    out['loot'] = {'cols': 3, 'rows': 1, 'cell': T, 'foot': 30}
+    dm = Image.open(os.path.join(deco, 'decorations-medieval.png')).convert('RGBA')
+    post = dm.crop((11 * T, 6 * T, 12 * T, 9 * T))
+    br = Image.new('RGBA', (T * 3, 120))
+    for k in range(3):
+        f = Image.new('RGBA', (T, 120))
+        f.alpha_composite(post, (0, 24))
+        f.alpha_composite(dm.crop(((13 + k) * T, 5 * T, (14 + k) * T, 6 * T)), (0, 4))
+        br.alpha_composite(f, (k * T, 0))
+    br.save(os.path.join(OUT, 'brazier.png'))
+    out['brazier'] = {'cols': 3, 'rows': 1, 'cell': T, 'foot': 118}
+    return out
+
+
 def build_cave(cav):
     """동굴 타일 (LPC Cavern and Ruin Tiles, CC-BY-SA 3.0 / GPL): 바닥 · 벽 옆면 · 벽 윗면 · 금맥 (파란 수정을 금색으로)."""
     im = Image.open(os.path.join(cav, 'cavern_ruins.png')).convert('RGBA')
@@ -301,6 +324,9 @@ def main():
     mon = sys.argv[4] if len(sys.argv) > 4 else None
     if mon:
         meta['sheets']['wumpus'] = build_golem(mon)
+    con = sys.argv[5] if len(sys.argv) > 5 else None
+    if con and deco:
+        meta['sheets'].update(build_props(con, deco))
     json.dump(meta, open(os.path.join(OUT, 'sprites.json'), 'w', encoding='utf-8'), indent=1)
 
     # 만든 사람 표기
@@ -321,6 +347,10 @@ def main():
         lines += ['', '## 야영지: [LPC] Medieval Village Decorations (bluecarrot16 외)', '',
                   'https://opengameart.org/content/lpc-medieval-village-decorations — CC-BY-SA 3.0+. 원본 CREDITS 파일 전문:', '', '```',
                   open(os.path.join(deco, 'CREDITS-decorations-medieval.txt'), encoding='utf-8', errors='replace').read().strip(), '```']
+    if con:
+        lines += ['', '## 떨어진 금: [LPC] Containers (bluecarrot16 외)', '',
+                  'https://opengameart.org/content/lpc-containers — CC-BY-SA 4.0. 원본 CREDITS 파일 전문:', '', '```',
+                  open(os.path.join(con, 'container-v4_2', 'CREDITS-container.txt'), encoding='utf-8', errors='replace').read().strip(), '```']
     if mon:
         lines += ['', '## 웜퍼스: LPC Golem', '',
                   'https://opengameart.org/content/lpc-golem — CC-BY 3.0 / CC-BY 4.0 / GPL 2.0 / GPL 3.0 / OGA-BY 3.0.',

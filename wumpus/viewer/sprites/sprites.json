@@ -179,6 +179,18 @@
    "rows": 1,
    "cell": 64,
    "foot": 62
+  },
+  "loot": {
+   "cols": 3,
+   "rows": 1,
+   "cell": 32,
+   "foot": 30
+  },
+  "brazier": {
+   "cols": 3,
+   "rows": 1,
+   "cell": 32,
+   "foot": 118
   }
  }
 }
