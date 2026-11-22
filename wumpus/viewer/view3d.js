@@ -1736,6 +1736,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
       const an = st === 'walk' ? 'walk' : act ? 'attack' : 'idle', n = o.pix.userData.lpc.m[an].n;
       const col = st === 'walk' ? Math.floor(a * 8) % 8 : act ? Math.floor(Math.min(0.999, a / 0.8) * n) : 0;
       lpcFrame(o.pix, an, dir, col); lpcFrame(o.glow, an, dir, col);
+      o.pix.position.y = o.glow.position.y = an === 'idle' && Math.sin(now * 2.4 + id * 1.7) > 0.6 ? 0.012 : 0;   // 숨쉬기: 가끔 한 도트 들썩
       o.pix.material.rotation = 0;
     } else {
     const sx = Math.sin(o.g.rotation.y);

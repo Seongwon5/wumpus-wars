@@ -159,6 +159,7 @@ input[type=checkbox]{accent-color:#c79a55}
 @keyframes scr{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.12)}
   22%{transform:translate(-50%,-50%) scale(1) rotate(-1deg)}30%{transform:translate(-50%,-50%) rotate(1deg)}38%{transform:translate(-50%,-50%) rotate(0)}
   80%{opacity:1}100%{opacity:0;transform:translate(-50%,-56%) scale(1.04)}}
+.face{width:22px;height:22px;image-rendering:pixelated;vertical-align:middle;margin:-5px 1px -3px 0;filter:drop-shadow(0 1px 0 #000)}
 #rulesTag{position:absolute;right:12px;bottom:10px;z-index:2;font-size:11.5px;color:#d8ffb0;background:rgba(14,10,6,.8);padding:3px 9px;border-radius:3px;border:1px solid #4a6a2a}
 #victory{position:absolute;inset:0;z-index:3;display:none;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(10,7,4,.35),rgba(10,7,4,.78));animation:vin .6s ease-out}
 @keyframes vin{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
@@ -728,6 +729,20 @@ const ICON={
   gold:'<svg viewBox="0 0 32 32"><circle cx="16" cy="16" r="12.5" fill="#d9a441" stroke="#6b4710" stroke-width="1.6"/><circle cx="16" cy="16" r="9" fill="none" stroke="#fff0b8" stroke-width="1" opacity=".6"/><path d="M16 9.5l2 4.2 4.6.6-3.4 3.2.9 4.6L16 19.9l-4.1 2.2.9-4.6-3.4-3.2 4.6-.6Z" fill="#8a5d14" opacity=".85"/></svg>',
   base:'<svg viewBox="0 0 24 24" style="width:13px;height:13px;display:inline;vertical-align:-2px"><path d="M12 3 2 20h20Z" fill="currentColor"/><path d="M12 11l-3.2 9h6.4Z" fill="#0d0906"/><path d="M12 3v-2" stroke="currentColor" stroke-width="1.5"/></svg>'};
 let hudBuilt=false,hudLast=-1;
+// LPC 얼굴 아이콘 (점수판 · 정보판)
+const FACE={};
+function face(k,t){
+  const nmK=k==='E'?'탐험가':'궁수';
+  if(!window.SPRITES)return nmK;
+  const nm=(k==='E'?'explorer_':'archer_')+t;
+  if(!SPRITES.img[nm])return nmK;
+  let f=FACE[nm];
+  if(!f){f=FACE[nm]={url:null};const im=new Image();
+    im.onload=()=>{const m=SPRITES.meta.sheets[nm],C=SPRITES.meta.cell,r=m.idle.row+2,c=document.createElement('canvas');c.width=c.height=32;
+      const g=c.getContext('2d');g.imageSmoothingEnabled=false;g.drawImage(im,32+16,r*C+32+4,32,32,0,0,32,32);f.url=c.toDataURL();hudLast=-1;};
+    im.src=SPRITES.img[nm];}
+  return f.url?`<img class="face" src="${f.url}" alt="${nmK}" title="${nmK}">`:nmK;
+}
 function hudCost(){return (R.const&&R.const.cost)||{E:10,G:15};}
 function buildHud(){
   const cost=hudCost();
@@ -756,7 +771,8 @@ function updateHud(fi){
   const cost=hudCost(),mx=R.const.hp.B;
   for(let t=0;t<2;t++){
     let ne=0,ng=0;for(const u of fr.u)if(u[1]===t){if(u[2]==='E')ne++;else ng++;}
-    $('uc'+t).textContent=`탐험가 ${ne} · 궁수 ${ng} (${ne+ng}/10)`;
+    $('uc'+t).innerHTML=`${face('E',t)} ${ne} · ${face('G',t)} ${ng} (${ne+ng}/10)`;
+    $('afE'+t).innerHTML=`${face('E',t)} ${cost.E}`;$('afG'+t).innerHTML=`${face('G',t)} ${cost.G}`;
     $('sc'+t).textContent=fr.sc[t];
     $('bk'+t).textContent=fr.bk[t];
     $('afE'+t).className=fr.bk[t]>=cost.E?'ok':'';
@@ -884,7 +900,7 @@ function updateSide(fi){
     let ne=0,ng=0;for(const u of fr.u)if(u[1]===t){if(u[2]==='E')ne++;else ng++;}
     const hp=fr.bh[t],mx=R.const.hp.B;
     $('team'+t).innerHTML=`<div class="top"><span class="nm ${'rb'[t]}">${TEAM[t].name}</span><span class="bot">${esc(R.meta.names[t])}</span></div>
-      <div class="stat"><span>바친 금 <b>${fr.sc[t]}</b></span><span>금고 <b>${fr.bk[t]}</b></span><span>탐험가 <b>${ne}</b></span><span>궁수 <b>${ng}</b></span></div>
+      <div class="stat"><span>바친 금 <b>${fr.sc[t]}</b></span><span>금고 <b>${fr.bk[t]}</b></span><span>${face('E',t)} <b>${ne}</b></span><span>${face('G',t)} <b>${ng}</b></span></div>
       <div class="bar"><i style="width:${100*hp/mx}%;background:${TEAM[t].c}"></i></div>
       <div class="bot">야영지 체력 ${hp} / ${mx}</div>`;
   }
