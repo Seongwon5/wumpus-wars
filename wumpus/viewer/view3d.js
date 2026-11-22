@@ -280,7 +280,9 @@ function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 �
   disc(60, gr);
   g.save(); g.beginPath(); g.arc(80, 80, 60, 0, 7); g.clip();
   const nmT = sheetName(kind, team), ST = nmT && SHEETS[nmT];
-  if (ST) { const C = SP.meta.cell, r = ST.m.idle.row + 2; g.drawImage(ST.img, 32 + 16, r * C + 32 + 4, 32, 32, 20, 18, 120, 120); }   // LPC 얼굴
+  if (ST) { const C = SP.meta.cell, r = ST.m.idle.row + 2;                  // LPC 얼굴: 머리만 바짝 잘라 원을 꽉 채운다
+    if (kind === 'W') g.drawImage(ST.img, 32 + 14, r * C + 32 + 2, 36, 36, 12, 14, 136, 136);
+    else g.drawImage(ST.img, 32 + 20, r * C + 32 + 8, 24, 24, 14, 16, 132, 132); }
   else { const bc = bodyCanvas(kind, team, 0);          // 서 있는 도트 캐릭터의 얼굴 부분을 크게
     if (kind === 'W') g.drawImage(bc, 2, 0, 36, 36, 20, 22, 120, 120); else g.drawImage(bc, 8, 2, 17, 17, 20, 22, 120, 120); }
   g.restore();
