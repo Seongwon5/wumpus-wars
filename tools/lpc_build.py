@@ -1,0 +1,210 @@
+"""LPC (Liberated Pixel Cup) 레이어를 합성해 뷰어용 캐릭터 시트를 만든다.
+
+python -X utf8 tools/lpc_build.py <LPC 저장소 폴더>
+
+LPC 저장소: https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator
+(spritesheets/, sheet_definitions/ 만 있으면 된다). 그림 라이선스는 레이어마다 다르며 (CC-BY-SA 3.0, GPL 3.0, OGA-BY 3.0, CC0 등),
+모두 상업적 이용이 되고 만든 사람 표기가 필요하다. 쓴 레이어의 표기는 wumpus/viewer/sprites/CREDITS.md 에 자동으로 적는다.
+
+결과 (wumpus/viewer/sprites/):
+- explorer_0.png, explorer_1.png, archer_0.png, archer_1.png, wumpus.png : 128×128 칸 시트
+- sprites.json : 동작별 줄 · 칸 수
+줄 순서: 동작마다 방향 4줄 (위, 왼쪽, 아래, 오른쪽). 쓰러짐 (hurt) 은 1줄.
+"""
+import glob
+import json
+import os
+import sys
+
+from PIL import Image
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.path.join(ROOT, 'wumpus', 'viewer', 'sprites')
+CELL = 128          # 칸 크기 (곡괭이 휘두르기가 64 칸 밖으로 나간다)
+OFF = 32            # 64 칸 그림을 128 칸 가운데에 놓는 자리
+
+RAMPS = {
+    'team0': ['#3a0e0e', '#7a1c18', '#b8322a', '#e8584a', '#ffa08a'],
+    'team1': ['#0e1c3a', '#1a3f7a', '#2a6cc0', '#4aa0f0', '#a8dcff'],
+    'brown_hair': ['#22120a', '#3e2412', '#5e3a1e', '#7e5230'],
+    'blonde': ['#6a4818', '#a87228', '#e0b050', '#f4d07a', '#fff0c0'],
+    'cream': ['#5a4c36', '#9a8a6c', '#cfc2a4', '#ece2cc'],
+    'pants': ['#1a1410', '#2e241a', '#463626', '#5e4a34'],
+    'leather': ['#1a0e06', '#2e1c10', '#4a3020', '#6a4830'],
+    'green': ['#10200a', '#264216', '#3e6a22', '#5e8e30', '#94c454'],
+}
+
+
+def hexrgb(h):
+    n = int(h[1:], 16)
+    return (n >> 16 & 255, n >> 8 & 255, n & 255)
+
+
+def recolor(img, ramp):
+    """불투명 색을 밝기 순위대로 ramp 에 옮긴다 (가장 어두운 테두리는 가장 어두운 색으로)."""
+    img = img.convert('RGBA')
+    px = img.load()
+    cols = {px[x, y][:3] for x in range(img.width) for y in range(img.height) if px[x, y][3] > 0}
+    lum = sorted(cols, key=lambda c: 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2])
+    rr = [hexrgb(h) for h in RAMPS[ramp]]
+    m = {c: rr[min(len(rr) - 1, i * len(rr) // max(1, len(lum)))] for i, c in enumerate(lum)}
+    for y in range(img.height):
+        for x in range(img.width):
+            r, g, b, a = px[x, y]
+            if a:
+                px[x, y] = m[(r, g, b)] + (a,)
+    return img
+
+
+class Layer:
+    def __init__(self, src, path, z, variant=None, ramp=None, credit=None):
+        self.src, self.path, self.z, self.variant, self.ramp, self.credit = src, path, z, variant, ramp, credit
+        self._cache = {}
+
+    def sheet(self, anim):
+        if anim in self._cache:
+            return self._cache[anim]
+        base = os.path.join(self.src, 'spritesheets', self.path)
+        cands = [os.path.join(base, anim + '.png')]
+        if self.variant:
+            cands.insert(0, os.path.join(base, anim, self.variant + '.png'))
+        im = None
+        for c in cands:
+            if os.path.isfile(c):
+                im = Image.open(c).convert('RGBA')
+                break
+        if im is not None and self.ramp:
+            im = recolor(im, self.ramp)
+        self._cache[anim] = im
+        return im
+
+
+def frame(sheet, col, row, size=64):
+    return sheet.crop((col * size, row * size, col * size + size, row * size + size))
+
+
+def compose(layers, anim, col, row):
+    """64 칸 동작의 한 칸을 128 칸 가운데에 합성."""
+    out = Image.new('RGBA', (CELL, CELL))
+    for L in sorted(layers, key=lambda l: l.z):
+        sh = L.sheet(anim)
+        if sh is None:
+            continue
+        r = row if sh.height > 64 else 0
+        if (col + 1) * 64 > sh.width or (r + 1) * 64 > sh.height:
+            continue
+        out.alpha_composite(frame(sh, col, r), (OFF, OFF))
+    return out
+
+
+def tool_swing(layers, tool_bg, tool_fg, col, row):
+    """곡괭이 휘두르기: 몸은 slash (64 칸), 곡괭이는 128 칸 앞 · 뒤 그림."""
+    out = Image.new('RGBA', (CELL, CELL))
+    out.alpha_composite(frame(tool_bg, col, row, 128))
+    out.alpha_composite(compose(layers, 'slash', col, row))
+    out.alpha_composite(frame(tool_fg, col, row, 128))
+    return out
+
+
+def build(name, layers, attack, extra=None):
+    """시트 하나: idle (걷기 첫 칸), walk 8, attack n, hurt 6 (1줄)."""
+    rows, meta = [], {}
+    def add(key, frames_by_dir):
+        meta[key] = {'row': len(rows), 'n': len(frames_by_dir[0]), 'dirs': len(frames_by_dir)}
+        rows.extend(frames_by_dir)
+    add('idle', [[compose(layers, 'walk', 0, d)] for d in range(4)])
+    add('walk', [[compose(layers, 'walk', c, d) for c in range(1, 9)] for d in range(4)])
+    if attack == 'tool':
+        add('attack', [[tool_swing(layers, extra[0], extra[1], c, d) for c in range(6)] for d in range(4)])
+    else:
+        n = {'shoot': 13, 'slash': 6, 'thrust': 8}[attack]
+        add('attack', [[compose(layers, attack, c, d) for c in range(n)] for d in range(4)])
+    add('hurt', [[compose(layers, 'hurt', c, 0) for c in range(6)]])
+    cols = max(len(r) for r in rows)
+    sheet = Image.new('RGBA', (cols * CELL, len(rows) * CELL))
+    for y, r in enumerate(rows):
+        for x, im in enumerate(r):
+            sheet.alpha_composite(im, (x * CELL, y * CELL))
+    sheet.save(os.path.join(OUT, name + '.png'), optimize=True)
+    return {'cols': cols, 'rows': len(rows), **meta}
+
+
+def defs(src):
+    out = {}
+    for f in glob.glob(os.path.join(src, 'sheet_definitions', '**', '*.json'), recursive=True):
+        out[os.path.basename(f)] = json.load(open(f, encoding='utf-8'))
+    return out
+
+
+def main():
+    src = sys.argv[1]
+    os.makedirs(OUT, exist_ok=True)
+    D = defs(src)
+    used = []
+
+    def L(defname, path, z, variant=None, ramp=None):
+        used.append(defname)
+        return Layer(src, path, z, variant, ramp)
+
+    meta = {'cell': CELL, 'foot': OFF + 62, 'sheets': {}}
+    for t in (0, 1):
+        team = 'team%d' % t
+        explorer = [
+            L('body.json', 'body/bodies/male', 10),
+            L('legs_pants.json', 'legs/pants/male', 20, ramp='pants'),
+            L('feet_boots_basic.json', 'feet/boots/basic/male', 25, ramp='leather'),
+            L('torso_clothes_longsleeve.json', 'torso/clothes/longsleeve/longsleeve/male', 35, ramp='cream'),
+            L('torso_clothes_vest.json', 'torso/clothes/vest/male', 55, variant='brown'),
+            L('heads_human_male.json', 'head/heads/human/male', 100),
+            L('eyes_human.json', 'eyes/human/adult/default', 105),
+            L('hair_plain.json', 'hair/plain/adult', 120, ramp='brown_hair'),
+            L('hat_bandana2.json', 'hat/cloth/bandana2/adult', 130, ramp=team),
+            L('tool_pickaxe.json', 'tools/pickaxe/male', 140),
+        ]
+        tb = Image.open(os.path.join(src, 'spritesheets/tools/pickaxe/bg.png')).convert('RGBA')
+        tf = Image.open(os.path.join(src, 'spritesheets/tools/pickaxe/fg.png')).convert('RGBA')
+        meta['sheets']['explorer_%d' % t] = build('explorer_%d' % t, explorer, 'tool', (tb, tf))
+        archer = [
+            L('weapon_ranged_bow_normal.json', 'weapon/ranged/bow/normal/universal/background', 1, variant='light'),
+            L('cape_solid.json', 'cape/solid/bg', 5, ramp=team),
+            L('quiver.json', 'quiver', 8, variant='quiver'),
+            L('hair_ponytail.json', 'hair/ponytail/adult/bg', 9, ramp='blonde'),
+            L('body.json', 'body/bodies/female', 10),
+            L('legs_skirts_plain.json', 'legs/skirts/plain/thin', 20, ramp=team),
+            L('feet_boots_basic.json', 'feet/boots/basic/thin', 25, ramp='leather'),
+            L('torso_clothes_blouse_longsleeve.json', 'torso/clothes/blouse_longsleeve/female', 35, variant='white'),
+            L('torso_clothes_corset.json', 'torso/clothes/corset/female', 45, variant='leather'),
+            L('cape_solid.json', 'cape/solid/fg', 85, ramp=team),
+            L('heads_human_female.json', 'head/heads/human/female', 100),
+            L('eyes_human.json', 'eyes/human/adult/default', 105),
+            L('hair_ponytail.json', 'hair/ponytail/adult/fg', 120, ramp='blonde'),
+            L('weapon_ranged_bow_normal.json', 'weapon/ranged/bow/normal/universal/foreground', 140, variant='light'),
+        ]
+        meta['sheets']['archer_%d' % t] = build('archer_%d' % t, archer, 'shoot')
+    wumpus = [
+        L('body.json', 'body/bodies/muscular', 10, ramp='green'),
+        L('heads_troll.json', 'head/heads/troll/adult', 100, ramp='green'),
+    ]
+    meta['sheets']['wumpus'] = build('wumpus', wumpus, 'slash')
+    json.dump(meta, open(os.path.join(OUT, 'sprites.json'), 'w', encoding='utf-8'), indent=1)
+
+    # 만든 사람 표기
+    lines = ['# 스프라이트 출처 (LPC)', '',
+             '캐릭터 그림은 Liberated Pixel Cup (LPC) 그림을 합성 · 색칠한 것이다.',
+             '원본: https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator', '',
+             '레이어마다 아래 라이선스 가운데 하나를 고를 수 있다 (모두 상업적 이용 가능, 만든 사람 표기 필요; CC-BY-SA · GPL 은 같은 조건으로 나눔).', '']
+    seen = set()
+    for n in dict.fromkeys(used):
+        for c in D.get(n, {}).get('credits', []):
+            key = (c.get('file'), tuple(c.get('authors', [])))
+            if key in seen:
+                continue
+            seen.add(key)
+            lines.append('- `%s` — %s. 라이선스: %s. %s %s' % (c.get('file'), ', '.join(c.get('authors', [])), ', '.join(c.get('licenses', [])),
+                                                       ' '.join(c.get('urls', [])), ('(' + c['notes'] + ')') if c.get('notes') else ''))
+    open(os.path.join(OUT, 'CREDITS.md'), 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
+    print('ok', {k: (v['cols'], v['rows']) for k, v in meta['sheets'].items()}, 'credits', len(seen))
+
+
+if __name__ == '__main__':
+    main()

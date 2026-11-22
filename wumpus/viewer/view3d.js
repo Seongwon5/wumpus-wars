@@ -279,7 +279,9 @@ function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 �
   gr.addColorStop(0, '#5c4a36'); gr.addColorStop(1, '#1c140c');
   disc(60, gr);
   g.save(); g.beginPath(); g.arc(80, 80, 60, 0, 7); g.clip();
-  { const bc = bodyCanvas(kind, team, 0);          // 서 있는 도트 캐릭터의 얼굴 부분을 크게
+  const nmT = sheetName(kind, team), ST = nmT && SHEETS[nmT];
+  if (ST) { const C = SP.meta.cell, r = ST.m.idle.row + 2; g.drawImage(ST.img, 32 + 16, r * C + 32 + 4, 32, 32, 20, 18, 120, 120); }   // LPC 얼굴
+  else { const bc = bodyCanvas(kind, team, 0);          // 서 있는 도트 캐릭터의 얼굴 부분을 크게
     if (kind === 'W') g.drawImage(bc, 2, 0, 36, 36, 20, 22, 120, 120); else g.drawImage(bc, 8, 2, 17, 17, 20, 22, 120, 120); }
   g.restore();
   const chip = (cx, cy, fill, txt, ink) => {
@@ -621,7 +623,55 @@ function hpTex(k10, team) {                  // 머리 위 체력바: 둥근 끝
   })));
 }
 let hoverC = null;
+// ---------------- LPC 캐릭터 시트 (있으면 도트 그림 대신 쓴다) ----------------
+const SP = window.SPRITES || null, SHEETS = {};
+if (SP) await Promise.all(Object.entries(SP.img).map(([name, url]) => new Promise(res => {
+  const img = new Image();
+  img.onload = () => {
+    const m = SP.meta.sheets[name], t = new THREE.Texture(img);
+    t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true;
+    // 마우스를 올렸을 때 쓸 테두리 시트: 그림 바깥 한 칸을 팀 색으로
+    const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+    const sd = g.getImageData(0, 0, c.width, c.height), a = sd.data, W2 = c.width, H2 = c.height;
+    const od = g.createImageData(W2, H2), o = od.data;
+    const tc = name.endsWith('_0') ? TC[0].l : name.endsWith('_1') ? TC[1].l : 0xc8ff70, cr = tc >> 16 & 255, cg = tc >> 8 & 255, cb = tc & 255;
+    for (let y = 0; y < H2; y++) for (let x = 0; x < W2; x++) {
+      const i = (y * W2 + x) * 4;
+      if (a[i + 3]) continue;
+      let n = 0;
+      for (let dy = -1; dy <= 1 && !n; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < W2 && yy < H2 && a[(yy * W2 + xx) * 4 + 3]) { n = 1; break; } }
+      if (n) { o[i] = cr; o[i + 1] = cg; o[i + 2] = cb; o[i + 3] = 255; }
+    }
+    g.putImageData(od, 0, 0);
+    const gt = new THREE.CanvasTexture(c); gt.colorSpace = THREE.SRGBColorSpace; gt.magFilter = gt.minFilter = THREE.NearestFilter; gt.generateMipmaps = false;
+    SHEETS[name] = {img, m, tex: t, glow: gt};
+    res();
+  };
+  img.onerror = () => res();
+  img.src = url;
+})));
+function sheetName(kind, team) { return kind === 'E' ? 'explorer_' + team : kind === 'G' ? 'archer_' + team : kind === 'W' ? 'wumpus' : null; }
+function lpcFrame(sp, anim, dir, col) {        // 시트의 한 칸 (동작 · 방향 · 칸 번호) 을 보이게
+  const L = sp.userData.lpc; if (!L) return;
+  const A = L.m[anim], row = A.row + (A.dirs > 1 ? dir : 0), c = Math.max(0, Math.min(A.n - 1, col));
+  sp.material.map.offset.set(c / L.m.cols, 1 - (row + 1) / L.m.rows);
+}
+function lpcDir(th) { const k = ((Math.round(th / (Math.PI / 2)) % 4) + 4) % 4; return [2, 3, 0, 1][k]; }   // 남 · 동 · 북 · 서 → 시트 줄 (위 0, 왼 1, 아래 2, 오른 3)
+function lpcSprite(name, h, glow) {
+  const S = SHEETS[name], t = (glow ? S.glow : S.tex).clone();
+  t.repeat.set(1 / S.m.cols, 1 / S.m.rows); t.needsUpdate = true;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial(glow ? {map: t, transparent: true, depthTest: false, blending: THREE.AdditiveBlending} : {map: t, transparent: true, alphaTest: 0.5}));
+  sp.center.set(0.5, (SP.meta.cell - SP.meta.foot) / SP.meta.cell);
+  sp.scale.set(h, h, 1);
+  sp.userData.w = h; sp.userData.lpc = {m: S.m};
+  sp.renderOrder = glow ? 12 : 6;
+  lpcFrame(sp, 'idle', 2, 0);
+  return sp;
+}
 function makeBody(kind, team, h) {
+  const nm = sheetName(kind, team);
+  if (nm && SHEETS[nm]) return lpcSprite(nm, h * (kind === 'W' ? 2.1 : 2.6));
   const w = kind === 'W' ? h : h * 16 / 24;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: bodyTex(kind, team, 0), transparent: true, alphaTest: 0.5}));
   sp.center.set(0.5, 0.02);
@@ -850,7 +900,8 @@ function makeChar(kind, team) {
   body.add(token);
   const pix = makeBody(kind, team, 0.6);
   body.add(pix);
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTex(kind, team, 0), transparent: true, depthTest: false, blending: THREE.AdditiveBlending}));
+  const glow = pix.userData.lpc ? lpcSprite(sheetName(kind, team), pix.userData.w, true)
+    : new THREE.Sprite(new THREE.SpriteMaterial({map: glowTex(kind, team, 0), transparent: true, depthTest: false, blending: THREE.AdditiveBlending}));
   glow.center.copy(pix.center); glow.scale.copy(pix.scale); glow.renderOrder = 12; glow.visible = false; body.add(glow);
   const bar = new THREE.Sprite(new THREE.SpriteMaterial({map: hpTex(10, team), transparent: true, depthTest: false}));
   bar.scale.set(0.36, 0.063, 1); bar.renderOrder = 14; body.add(bar);
@@ -1063,7 +1114,9 @@ function makeWumpus() {
   body.add(pix);
   for (const ch of g.children) if (ch.isGroup && ch !== live && ch !== dead && ch !== hp) ch.visible = false;
   dead.traverse(o => { if (o.isMesh) o.visible = false; });
-  const dsp = makeBody('W', -1, 0.75); dsp.material.map = bodyTex('W', -1, 9); dead.add(dsp);
+  const dsp = makeBody('W', -1, 0.75);
+  if (dsp.userData.lpc) lpcFrame(dsp, 'hurt', 0, 5); else dsp.material.map = bodyTex('W', -1, 9);
+  dead.add(dsp);
   return {g, token, pix, live, dead, body, head, jaw, eyes, eyeL, arms, hp, aura, flash: [fur, fur2, belly]};
 }
 
@@ -1475,6 +1528,7 @@ function updateStatic(fi, team, seen, now) {
     w.dead.visible = !alive; w.live.visible = alive; w.hp.visible = alive; w.aura.visible = alive;
     if (!alive) return;
     w.aura.material.opacity = 0.35 + 0.2 * Math.sin(now * 2.2 + i);
+    lpcFrame(w.pix, 'idle', 2, 0);
     const br = Math.sin(now * 1.7 + i * 2);
     w.body.scale.set(1 + br * 0.03, 1 - br * 0.025, 1 + br * 0.03);
     w.head.rotation.set(Math.sin(now * 0.9 + i) * 0.08, Math.sin(now * 0.6 + i) * 0.35, 0);
@@ -1512,6 +1566,7 @@ function updateWumpus(g, a, moving, now) {
     else w.body.rotation.x = 0;
     if (eat) {                                     // 덥석: 앞으로 달려들며 입을 크게 벌렸다 닫는다
       const [, , ex, ey] = eat, q = Math.sin(Math.PI * Math.min(1, a / 0.7));
+      lpcFrame(w.pix, 'attack', 2, Math.floor(Math.min(0.999, a) * 6));
       w.body.position.z = q * 0.25; w.jaw.rotation.x = a < 0.45 ? 0.9 * (a / 0.45) : 0.9 * Math.max(0, 1 - (a - 0.45) / 0.2);
       w.arms.forEach(m => m.rotation.x = -1.4 * q);
     } else w.body.position.z = 0;
@@ -1604,15 +1659,23 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.tile.visible = true; o.tile.position.set(wx(Math.round(x)), 0.012, wz(Math.round(y)));
     o.tile.material.opacity = 0.15 + 0.05 * Math.sin(now * 2.4 + id);
     const fr = st === 'walk' ? 1 + (Math.floor(a * 4) % 2) : 0;
-    if (o._fr !== fr) { o._fr = fr; o.pix.material.map = bodyTex(o.kind, o.team, fr); o.pix.material.needsUpdate = true; o.glow.material.map = glowTex(o.kind, o.team, fr); o.glow.material.needsUpdate = true; }
+    if (!o.pix.userData.lpc && o._fr !== fr) { o._fr = fr; o.pix.material.map = bodyTex(o.kind, o.team, fr); o.pix.material.needsUpdate = true; o.glow.material.map = glowTex(o.kind, o.team, fr); o.glow.material.needsUpdate = true; }
     { const hov = (hoverC && hoverC[0] === Math.round(x) && hoverC[1] === Math.round(y)) || selId === id;
       o.glow.visible = hov && NEAR > 0.3; o.glow.material.opacity = 0.75 + 0.25 * Math.sin(now * 6);
       o.glow.scale.copy(o.pix.scale); o.glow.material.rotation = o.pix.material.rotation; o.glow.position.copy(o.pix.position);
       o.tile.material.color.setHex(hov ? TC[o.team].l : TC[o.team].c); }
+    if (o.pix.userData.lpc) {                    // LPC 시트: 방향 줄과 동작 칸
+      const dir = lpcDir(o.g.rotation.y), act = st === 'mine' || st === 'attack' || st === 'push';
+      const an = st === 'walk' ? 'walk' : act ? 'attack' : 'idle', n = o.pix.userData.lpc.m[an].n;
+      const col = st === 'walk' ? Math.floor(a * 8) % 8 : act ? Math.floor(Math.min(0.999, a / 0.8) * n) : 0;
+      lpcFrame(o.pix, an, dir, col); lpcFrame(o.glow, an, dir, col);
+      o.pix.material.rotation = 0;
+    } else {
     const sx = Math.sin(o.g.rotation.y);
     if (Math.abs(sx) > 0.3) o._left = sx < 0;
     o.pix.scale.x = o.pix.userData.w * (o._left ? -1 : 1);
     o.pix.material.rotation = st === 'mine' || st === 'attack' || st === 'push' ? Math.sin(Math.PI * Math.min(1, a / 0.6)) * 0.35 * (o._left ? 1 : -1) : 0;
+    }
     lod(o);
     const src = moving && a < 0.5 && p ? p : u;
     o.pips.forEach((pp, i) => pp.visible = i < src[6]);
@@ -1651,7 +1714,8 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.hp.visible = false; o.disc.visible = o.badge.visible = false; o.bar.visible = false; o.glow.visible = false;
     o._fade = Math.max(0, 1 - Math.max(0, a - 0.55) / 0.45);
     lod(o);
-    o.pix.material.rotation = Math.min(1, a * 1.6) * Math.PI / 2 * (o._left ? -1 : 1);   // 옆으로 쓰러진다
+    if (o.pix.userData.lpc) lpcFrame(o.pix, 'hurt', 0, Math.floor(Math.min(0.999, a * 1.4) * 6));   // 쓰러지는 동작
+    else o.pix.material.rotation = Math.min(1, a * 1.6) * Math.PI / 2 * (o._left ? -1 : 1);   // 옆으로 쓰러진다
     setFlash(o, 0);
     if (eaten) {                                   // 웜퍼스 입속으로 들려 올라가 사라진다
       const q = Math.max(0, (a - 0.35) / 0.65);

@@ -15,7 +15,15 @@ def _template():
     with open(os.path.join(VIEWER_DIR, 'viewer.html'), encoding='utf-8') as f:
         tpl = f.read()
     with open(os.path.join(VIEWER_DIR, 'view3d.js'), encoding='utf-8') as f:
-        return tpl.replace('/*VIEW3D_JS*/', f.read(), 1)
+        js = f.read()
+    sp = os.path.join(VIEWER_DIR, 'sprites')
+    if os.path.isfile(os.path.join(sp, 'sprites.json')):          # LPC 캐릭터 시트를 html 안에 넣는다
+        import base64
+        meta = json.load(open(os.path.join(sp, 'sprites.json'), encoding='utf-8'))
+        img = {n: 'data:image/png;base64,' + base64.b64encode(open(os.path.join(sp, n + '.png'), 'rb').read()).decode()
+               for n in meta['sheets']}
+        js = 'window.SPRITES = ' + json.dumps({'meta': meta, 'img': img}) + ';' + chr(10) + js
+    return tpl.replace('/*VIEW3D_JS*/', js, 1)
 
 
 def save_json(replay, path):
