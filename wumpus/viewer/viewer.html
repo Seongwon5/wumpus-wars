@@ -150,6 +150,16 @@ input[type=checkbox]{accent-color:#c79a55}
   color:#e9dcc0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #feed .it .rd{font-family:var(--serif);color:var(--dim);font-size:11px;margin-right:6px}
 #feed .it.pit{border-left-color:#9fd3ff} #feed .it.kill{border-left-color:#e5533f} #feed .it.camp{border-left-color:#ffb347}
+#feed .it.push{border-left-color:#f4e04d} #feed .it.wump{border-left-color:#9adf3a} #feed .it.loot{border-left-color:#ffd25a}
+#scream{position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);z-index:3;pointer-events:none;display:none;text-align:center;
+  font-family:var(--kserif);font-weight:900;font-size:54px;letter-spacing:.08em;color:#d8ff6a;
+  text-shadow:0 0 18px rgba(150,255,60,.85),0 0 46px rgba(120,220,40,.6),0 4px 0 #0b1a02,0 0 2px #000}
+#scream small{display:block;font-size:17px;letter-spacing:.04em;color:#f3ffd8;text-shadow:0 2px 0 #000,0 0 10px rgba(0,0,0,.9);margin-top:4px}
+#scream.go{display:block;animation:scr 2.2s ease-out forwards}
+@keyframes scr{0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}12%{opacity:1;transform:translate(-50%,-50%) scale(1.12)}
+  22%{transform:translate(-50%,-50%) scale(1) rotate(-1deg)}30%{transform:translate(-50%,-50%) rotate(1deg)}38%{transform:translate(-50%,-50%) rotate(0)}
+  80%{opacity:1}100%{opacity:0;transform:translate(-50%,-56%) scale(1.04)}}
+#rulesTag{position:absolute;right:12px;bottom:10px;z-index:2;font-size:11.5px;color:#d8ffb0;background:rgba(14,10,6,.8);padding:3px 9px;border-radius:3px;border:1px solid #4a6a2a}
 #victory{position:absolute;inset:0;z-index:3;display:none;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(10,7,4,.35),rgba(10,7,4,.78));animation:vin .6s ease-out}
 @keyframes vin{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
 #victory .box{min-width:420px;max-width:80%;padding:26px 34px 22px;text-align:center;background:linear-gradient(#2a1d10,#140e08);border:1px solid var(--bronze2);border-radius:6px;
@@ -187,6 +197,8 @@ input[type=checkbox]{accent-color:#c79a55}
       <div id="banner"></div>
       <div id="hover"></div>
       <div id="feed"></div>
+      <div id="scream"></div>
+      <div id="rulesTag" style="display:none"></div>
       <div id="victory"></div>
       <div id="drop">리플레이가 없습니다.<br><code>python -m wumpus run logic random</code> 으로 만든<br>replays/*.json 파일을 이 창에 끌어다 놓으세요.</div>
     </div>
@@ -203,6 +215,9 @@ input[type=checkbox]{accent-color:#c79a55}
           <span class="sw" style="background:rgba(180,110,255,.6)"></span><span>적 야영지 후보 (남은 대칭)</span>
           <span class="sw" style="border:2px solid #bfe9ff;border-radius:50%;border-left-color:transparent"></span><span>바람을 느끼는 유닛 (구덩이 옆)</span>
           <span class="sw" style="border:2px dashed rgba(229,83,63,.85);border-radius:50%;background:#000"></span><span>숨은 구덩이 (전체 보기에서만)</span>
+          <span class="sw" style="background:rgba(80,160,255,.6)"></span><span>웜퍼스 의심 칸 (악취 옆)</span>
+          <span class="sw" style="background:radial-gradient(circle,#c8ff5a,#3a5a10)"></span><span>웜퍼스 굴 · 초록 안개는 악취</span>
+          <span class="sw" style="background:radial-gradient(circle,#ffe27a,#7a4a10);border-radius:40%"></span><span>떨어진 금 (누구나 주움)</span>
         </div>
       </div>
       <div class="card"><h3>이번 라운드 사건</h3><div id="log"></div></div>
@@ -246,17 +261,21 @@ let R=null,F=[],N=0,W=0,H=0,S=24,DPR=1;
 let P=0,playing=false,speed=3,lastT=0;
 let mode3d=true,viewMode='all',mindMode='sel',showTraps=true,selId=null;
 let oreAt=[],revAt=[],visAt=[[],[]],seenAt=[[],[]],umap=[],dieAt=[],staticLayer=null,baseIds=[1,2];
+let lootAt=[],wumAt=[];   // 칸마다 떨어진 금, 웜퍼스 체력 (굴 순서)
 
 // ---------- 불러오기 ----------
 function load(data){
   R=data;F=R.frames;N=F.length;W=R.meta.w;H=R.meta.h;baseIds=R.map.base_ids||[1,2];
   const ore=new Map(R.map.ore.map(o=>[o[0]+','+o[1],o[2]]));
-  const rev=new Set();oreAt=[];revAt=[];umap=[];dieAt=[];
+  const rev=new Set();oreAt=[];revAt=[];umap=[];dieAt=[];lootAt=[];wumAt=[];
+  let loot=new Map(),wh=(R.map.wumpus||[]).map(()=>(R.const.wumpus_hp||9));
   const seen=[new Uint8Array(W*H),new Uint8Array(W*H)];
   for(let i=0;i<N;i++){
     const fr=F[i];
     for(const [x,y,a] of fr.o||[]){const k=x+','+y; if(a>0)ore.set(k,a); else ore.delete(k);}
     oreAt.push(new Map(ore));
+    if(fr.l)loot=new Map(fr.l.map(o=>[o[0]+','+o[1],o[2]])); lootAt.push(loot);
+    if(fr.w)wh=fr.w; wumAt.push(wh);
     const dmap=new Map();
     for(const e of fr.e||[]){ if(e[0]==='trap')rev.add(e[2]+','+e[3]); if(e[0]==='die')dmap.set(e[1],e);}
     revAt.push(new Set(rev)); dieAt.push(dmap);
@@ -272,6 +291,9 @@ function load(data){
   const m=R.meta,symKo={H:'좌우',V:'상하',R:'180° 회전'};
   $('metaline').textContent=`맵 ${W}×${H} · 맵 시드 ${m.map_seed} · 대칭(정답) ${symKo[m.sym]} · ${m.rounds}라운드`;
   $('vsline').innerHTML=`<span class="r">${esc(m.names[0])}</span> &nbsp;vs&nbsp; <span class="b">${esc(m.names[1])}</span>`;
+  const rl=R.const.rules;
+  if(rl&&Object.values(rl).some(v=>v)){const on=[['line_shot','직선 화살'],['arrows','화살 '+(R.const.arrows||3)+'발'],['push','밀치기'],['loot','떨어진 금'],['wumpus','웜퍼스']].filter(([k])=>rl[k]).map(([,n])=>n);
+    $('rulesTag').style.display='block';$('rulesTag').textContent='시안 규칙: '+on.join(' · ');} else $('rulesTag').style.display='none';
   P=0;selId=null;layout();
   if(window.View3D)View3D.build();
 }
@@ -353,6 +375,11 @@ function draw(){
   const now=performance.now();
   // 금
   for(const [k,amt] of oreAt[fi]){const [x,y]=k.split(',').map(Number); if(seen&&!seen[y*W+x])continue; drawOre(x,y,amt,now);}
+  // 떨어진 금
+  for(const [k,amt] of lootAt[fi]){const [x,y]=k.split(',').map(Number); if(seen&&!seen[y*W+x])continue; drawLoot(x,y,amt,now);}
+  // 웜퍼스 굴 (전체 보기에서는 늘, 팀 시야에서는 쓰러진 뒤 본 칸만)
+  (R.map.wumpus||[]).forEach(([x,y],i)=>{const hp=wumAt[fi][i];
+    if(team<0||(hp<=0&&seen&&seen[y*W+x]))drawWumpus(x,y,hp,now,team<0);});
   // 구덩이
   const rev=revAt[fi];
   if(team<0&&showTraps) for(const [x,y] of R.map.traps){ if(!rev.has(x+','+y)) drawHiddenTrap(x,y);}
@@ -375,8 +402,9 @@ function draw(){
     if(moving){ if(p){const e=ease(a);x=p[3]+(u[3]-p[3])*e;y=p[4]+(u[4]-p[4])*e;} else {sc=Math.min(1,a*1.6);} }
     if(!canSee(Math.round(x),Math.round(y)) && u[1]!==team) continue;
     const show=(moving&&a<0.5&&p)?p:u;
-    drawUnit(x,y,u[1],u[2],show[5],show[6],sc,al);
+    drawUnit(x,y,u[1],u[2],show[5],show[6],sc,al,show[8]);
     if(show[7]&&(team<0||u[1]===team)) drawVib(x,y,now);
+    if(show[9]&&(team<0||u[1]===team)) drawStink(x,y,now);
   }
   if(moving){ // 이번 라운드에 죽은 유닛
     for(const u of F[f].u){ if(B.has(u[0]))continue;
@@ -419,6 +447,56 @@ function drawOre(x,y,amt,now){
     ctx.strokeStyle=`rgba(255,250,220,${k})`;ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(X3-L,Y3);ctx.lineTo(X3+L,Y3);ctx.moveTo(X3,Y3-L);ctx.lineTo(X3,Y3+L);ctx.stroke();}
   ctx.restore();
 }
+function drawLoot(x,y,amt,now){
+  // 떨어진 금: 가죽 자루 (많으면 보물 상자) 와 흩어진 금화
+  const X=cx(x),Y=cy(y),big=amt>=10;ctx.save();
+  const gl=ctx.createRadialGradient(X,Y,S*0.05,X,Y,S*0.6);gl.addColorStop(0,`rgba(255,210,80,${0.45+0.15*Math.sin(now/300+x)})`);gl.addColorStop(1,'rgba(255,200,60,0)');
+  ctx.fillStyle=gl;ctx.fillRect(X-S*0.6,Y-S*0.6,S*1.2,S*1.2);
+  for(let i=0;i<5;i++){const t=hash(x+i,y)*7,d=S*(0.18+hash(x,y+i)*0.16);ctx.fillStyle='#f2b52e';ctx.strokeStyle='#5a3a08';ctx.lineWidth=0.8;
+    ctx.beginPath();ctx.ellipse(X+Math.cos(t)*d,Y+S*0.18+Math.sin(t)*d*0.4,S*0.07,S*0.045,0,0,7);ctx.fill();ctx.stroke();}
+  if(big){ctx.fillStyle='#6b3f17';ctx.strokeStyle='#2a1406';ctx.lineWidth=1.2;rr(ctx,X-S*0.3,Y-S*0.12,S*0.6,S*0.34,S*0.05);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#f2c23e';ctx.beginPath();ctx.ellipse(X,Y-S*0.12,S*0.3,S*0.12,0,Math.PI,0);ctx.fill();ctx.strokeStyle='#ffe9a0';ctx.stroke();
+    ctx.fillStyle='#c8902a';ctx.fillRect(X-S*0.05,Y-S*0.08,S*0.1,S*0.14);}
+  else{ctx.fillStyle='#8a5a2a';ctx.strokeStyle='#2a1406';ctx.lineWidth=1.2;ctx.beginPath();ctx.ellipse(X,Y+S*0.02,S*0.22,S*0.2,0,0,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#6b4420';ctx.beginPath();ctx.moveTo(X-S*0.1,Y-S*0.16);ctx.lineTo(X+S*0.1,Y-S*0.16);ctx.lineTo(X+S*0.05,Y-S*0.26);ctx.lineTo(X-S*0.05,Y-S*0.26);ctx.fill();
+    ctx.strokeStyle='#e8b64a';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(X-S*0.1,Y-S*0.15);ctx.lineTo(X+S*0.1,Y-S*0.15);ctx.stroke();}
+  const fs=Math.max(9,Math.round(S*0.34));ctx.font=`800 ${fs}px Cinzel,serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.lineWidth=3;ctx.strokeStyle='#1a0f06';ctx.strokeText(amt,X,Y-S*0.42);ctx.fillStyle='#ffe27a';ctx.fillText(amt,X,Y-S*0.42);ctx.restore();
+}
+function drawWumpus(x,y,hp,now,full){
+  // 웜퍼스: 굴 둘레의 뼈와 초록 악취, 털북숭이 몸과 빛나는 눈. 쓰러지면 해골만 남는다
+  const X=cx(x),Y=cy(y),mx=R.const.wumpus_hp||9,alive=hp>0;ctx.save();
+  ctx.fillStyle='rgba(10,14,4,0.55)';ctx.beginPath();ctx.arc(X,Y,S*0.46,0,7);ctx.fill();
+  for(let i=0;i<5;i++){const t=i*1.3+hash(x,y)*6,d=S*0.36;ctx.strokeStyle='#d9d2bc';ctx.lineWidth=Math.max(1.2,S*0.05);ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(X+Math.cos(t)*d,Y+Math.sin(t)*d);ctx.lineTo(X+Math.cos(t+0.35)*d*1.1,Y+Math.sin(t+0.35)*d*1.1);ctx.stroke();}
+  if(alive){
+    if(full)for(const [dx,dy] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]]){const qx=X+dx*S,qy=Y+dy*S;   // 악취 안개
+      for(let k=0;k<3;k++){const ph=(now/1400+k/3+hash(x+dx,y+dy))%1,r=S*(0.2+ph*0.35);
+        const g=ctx.createRadialGradient(qx,qy-ph*S*0.4,0,qx,qy-ph*S*0.4,r);g.addColorStop(0,`rgba(150,230,60,${0.22*Math.sin(Math.PI*ph)})`);g.addColorStop(1,'rgba(150,230,60,0)');
+        ctx.fillStyle=g;ctx.beginPath();ctx.arc(qx,qy-ph*S*0.4,r,0,7);ctx.fill();}}
+    const br=1+0.05*Math.sin(now/380);
+    ctx.fillStyle='#3d4a22';ctx.strokeStyle='#121806';ctx.lineWidth=1.5;ctx.beginPath();ctx.ellipse(X,Y+S*0.04,S*0.4*br,S*0.34*br,0,0,7);ctx.fill();ctx.stroke();
+    for(let i=0;i<9;i++){const t=i/9*Math.PI*2;ctx.strokeStyle='#26300f';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(X+Math.cos(t)*S*0.3,Y+S*0.04+Math.sin(t)*S*0.26);ctx.lineTo(X+Math.cos(t)*S*0.44,Y+S*0.04+Math.sin(t)*S*0.38);ctx.stroke();}
+    ctx.fillStyle='#e9e2c6';for(const s2 of [-1,1]){ctx.beginPath();ctx.moveTo(X+s2*S*0.18,Y-S*0.22);ctx.quadraticCurveTo(X+s2*S*0.42,Y-S*0.42,X+s2*S*0.3,Y-S*0.5);ctx.lineTo(X+s2*S*0.12,Y-S*0.26);ctx.fill();}
+    const ey=0.7+0.3*Math.abs(Math.sin(now/900));ctx.shadowColor='#d8ff40';ctx.shadowBlur=S*0.4;ctx.fillStyle=`rgba(225,255,90,${ey})`;
+    for(const s2 of [-1,1]){ctx.beginPath();ctx.ellipse(X+s2*S*0.11,Y-S*0.08,S*0.065,S*0.04,s2*0.3,0,7);ctx.fill();}
+    ctx.shadowBlur=0;ctx.fillStyle='#120804';ctx.beginPath();ctx.ellipse(X,Y+S*0.13,S*0.16,S*0.07,0,0,7);ctx.fill();
+    ctx.fillStyle='#fff';for(let i=0;i<4;i++){const tx=X-S*0.11+i*S*0.073;ctx.beginPath();ctx.moveTo(tx,Y+S*0.07);ctx.lineTo(tx+S*0.035,Y+S*0.07);ctx.lineTo(tx+S*0.017,Y+S*0.14);ctx.fill();}
+    hpBar(X-S*0.4,Y-S*0.66,S*0.8,hp/mx,'#9adf3a');
+  } else {
+    ctx.fillStyle='#e6dfc8';ctx.strokeStyle='#4a4232';ctx.lineWidth=1;ctx.beginPath();ctx.ellipse(X,Y,S*0.2,S*0.17,0,0,7);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#1a140c';for(const s2 of [-1,1]){ctx.beginPath();ctx.arc(X+s2*S*0.07,Y-S*0.02,S*0.045,0,7);ctx.fill();}
+    ctx.fillStyle='#e9e2c6';for(const s2 of [-1,1]){ctx.beginPath();ctx.moveTo(X+s2*S*0.12,Y-S*0.12);ctx.quadraticCurveTo(X+s2*S*0.34,Y-S*0.3,X+s2*S*0.24,Y-S*0.38);ctx.lineTo(X+s2*S*0.08,Y-S*0.14);ctx.fill();}
+  }
+  ctx.restore();
+}
+function drawStink(x,y,now){
+  // 악취를 맡는 유닛: 초록 김이 머리 위로 피어오른다
+  const X=cx(x),Y=cy(y);ctx.save();
+  for(let i=0;i<3;i++){const ph=(now/900+i/3)%1;ctx.strokeStyle=`rgba(170,240,70,${0.8*Math.sin(Math.PI*ph)})`;ctx.lineWidth=Math.max(1.2,S*0.05);ctx.lineCap='round';
+    const bx=X+(i-1)*S*0.16,by=Y-S*0.3-ph*S*0.45;ctx.beginPath();ctx.moveTo(bx,by+S*0.12);ctx.quadraticCurveTo(bx+S*0.08,by+S*0.06,bx,by);ctx.quadraticCurveTo(bx-S*0.08,by-S*0.06,bx,by-S*0.12);ctx.stroke();}
+  ctx.restore();
+}
 function drawHiddenTrap(x,y){
   const X=cx(x),Y=cy(y);ctx.save();
   const gr=ctx.createRadialGradient(X,Y,0,X,Y,S*0.32);gr.addColorStop(0,'rgba(0,0,0,0.55)');gr.addColorStop(1,'rgba(0,0,0,0)');
@@ -458,22 +536,31 @@ function hpBar(x,y,w,frac,col){
   ctx.fillStyle=frac>0.5?col:frac>0.25?'#e8a03a':'#d8432f';ctx.fillRect(x,y,w*frac,h);
   ctx.fillStyle='rgba(255,255,255,0.25)';ctx.fillRect(x,y,w*frac,h*0.4);
 }
-function drawUnit(x,y,t,k,hp,carry,sc,al){
+function drawUnit(x,y,t,k,hp,carry,sc,al,arrows){
   const T=TEAM[t],X=cx(x),Y=cy(y),r=S*0.32*sc;
   ctx.save();ctx.globalAlpha=al;
   ctx.fillStyle='rgba(0,0,0,0.45)';ctx.beginPath();ctx.ellipse(X,Y+r*0.85,r*0.9,r*0.3,0,0,7);ctx.fill();
   const gr=ctx.createRadialGradient(X-r*0.35,Y-r*0.4,r*0.1,X,Y,r);gr.addColorStop(0,T.l);gr.addColorStop(0.35,T.c);gr.addColorStop(1,T.d);
   ctx.fillStyle=gr;ctx.strokeStyle='#fff3d8';ctx.lineWidth=1.5;ctx.beginPath();if(k==='G'){const R2=r*1.12;for(let i=0;i<6;i++){const t=i/6*Math.PI*2+Math.PI/6;ctx.lineTo(X+Math.cos(t)*R2,Y+Math.sin(t)*R2);}ctx.closePath();}else ctx.arc(X,Y,r,0,7);ctx.fill();ctx.stroke();
   ctx.strokeStyle='#fff6e0';ctx.lineWidth=Math.max(1.2,S*0.06);ctx.lineCap='round';
-  if(k==='E'){ // 곡괭이
-    ctx.beginPath();ctx.moveTo(X-r*0.45,Y+r*0.45);ctx.lineTo(X+r*0.3,Y-r*0.3);ctx.stroke();
-    ctx.beginPath();ctx.arc(X+r*0.3,Y-r*0.3,r*0.42,Math.PI*0.75,Math.PI*1.75,false);ctx.stroke();
+  if(k==='E'){ // 곡괭이: 굵은 자루 + 양 끝이 뾰족한 초승달 머리 (검은 테두리)
+    const pick=(fill,stroke,w)=>{ctx.save();ctx.translate(X,Y);ctx.scale(r/100,r/100);ctx.lineJoin='round';ctx.lineCap='round';
+      ctx.strokeStyle=stroke;ctx.lineWidth=w+22;ctx.beginPath();ctx.moveTo(-42,58);ctx.lineTo(18,-12);ctx.stroke();
+      ctx.strokeStyle=fill;ctx.lineWidth=22;ctx.beginPath();ctx.moveTo(-42,58);ctx.lineTo(18,-12);ctx.stroke();
+      ctx.translate(18,-12);ctx.rotate(Math.atan2(-70,60)+Math.PI/2);
+      ctx.beginPath();ctx.moveTo(-82,30);ctx.quadraticCurveTo(-40,-40,0,-40);ctx.quadraticCurveTo(40,-40,82,30);ctx.quadraticCurveTo(36,-6,0,-6);ctx.quadraticCurveTo(-36,-6,-82,30);ctx.closePath();
+      ctx.lineWidth=w;ctx.strokeStyle=stroke;ctx.stroke();ctx.fillStyle=fill;ctx.fill();ctx.fillRect(-14,-28,28,30);ctx.restore();};
+    pick('#fff6e0','rgba(20,10,4,.85)',10);
   }else{ // 활과 화살
     ctx.beginPath();ctx.arc(X-r*0.15,Y,r*0.6,-Math.PI*0.42,Math.PI*0.42);ctx.stroke();
     ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(X-r*0.15+Math.cos(-Math.PI*0.42)*r*0.6,Y+Math.sin(-Math.PI*0.42)*r*0.6);ctx.lineTo(X-r*0.15+Math.cos(Math.PI*0.42)*r*0.6,Y+Math.sin(Math.PI*0.42)*r*0.6);ctx.stroke();
     ctx.lineWidth=Math.max(1,S*0.045);ctx.beginPath();ctx.moveTo(X-r*0.25,Y);ctx.lineTo(X+r*0.7,Y);ctx.stroke();
     ctx.fillStyle='#fff6e0';ctx.beginPath();ctx.moveTo(X+r*0.78,Y);ctx.lineTo(X+r*0.5,Y-r*0.16);ctx.lineTo(X+r*0.5,Y+r*0.16);ctx.fill();
   }
+  if(k==='G'&&arrows>=0){ // 화살통: 남은 화살 (빈 칸은 어둡게)
+    const mxA=R.const.arrows||3;for(let i=0;i<mxA;i++){const ang=-Math.PI*0.5+(i-(mxA-1)/2)*0.32,px=X+Math.cos(ang)*r*1.55,py=Y+Math.sin(ang)*r*1.55;
+      ctx.strokeStyle=i<arrows?'#fff4d0':'rgba(80,60,40,.8)';ctx.lineWidth=Math.max(1.2,S*0.05);ctx.beginPath();ctx.moveTo(px,py+r*0.22);ctx.lineTo(px,py-r*0.18);ctx.stroke();
+      ctx.fillStyle=i<arrows?'#ffd25a':'rgba(80,60,40,.8)';ctx.beginPath();ctx.moveTo(px,py-r*0.32);ctx.lineTo(px-r*0.1,py-r*0.14);ctx.lineTo(px+r*0.1,py-r*0.14);ctx.fill();}}
   if(carry>0){
     for(let i=0;i<carry;i++){const ang=Math.PI*(1.15+i*0.175);const px=X+Math.cos(ang)*r*1.3,py=Y+Math.sin(ang)*r*1.3;
       ctx.fillStyle='#e8b64a';ctx.strokeStyle='#5a3a08';ctx.lineWidth=0.8;ctx.beginPath();ctx.arc(px,py,Math.max(1.6,S*0.07),0,7);ctx.fill();ctx.stroke();}}
@@ -503,7 +590,9 @@ function drawEffects(g,a,canSee){
         ctx.strokeStyle=`rgba(255,240,200,0.35)`;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-S*0.6,0);ctx.lineTo(0,0);ctx.stroke();
         ctx.strokeStyle='#e9d6ac';ctx.lineWidth=Math.max(1.2,S*0.05);ctx.beginPath();ctx.moveTo(-S*0.32,0);ctx.lineTo(S*0.1,0);ctx.stroke();
         ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(S*0.2,0);ctx.lineTo(S*0.06,-S*0.08);ctx.lineTo(S*0.06,S*0.08);ctx.fill();ctx.restore();}
-      if(a>0.55){const q=(a-0.55)/0.45;ctx.save();ctx.globalAlpha=1-q;ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();ctx.arc(X1,Y1,S*(0.15+q*0.4),0,7);ctx.stroke();ctx.restore();}}
+      if(a>0.55){const q=(a-0.55)/0.45;ctx.save();ctx.globalAlpha=1-q;ctx.strokeStyle=e[6]===-1?'#c8ff5a':e[6]<=0?'#a89880':col;ctx.lineWidth=2;ctx.beginPath();ctx.arc(X1,Y1,S*(0.15+q*0.4),0,7);ctx.stroke();ctx.restore();}
+      if(baseIds.includes(e[6])&&Math.abs(tx-ax)+Math.abs(ty-ay)===1&&a>0.3){const q=(a-0.3)/0.7;ctx.save();   // 횃불: 천막이 탄다
+        for(let i=0;i<6;i++){const t2=i*1.05+id,d=S*(0.1+q*0.3);ctx.fillStyle=`rgba(255,${120+i*20},40,${1-q})`;ctx.beginPath();ctx.arc(X1+Math.cos(t2)*d,Y1-q*S*0.5+Math.sin(t2)*d*0.5,S*0.09,0,7);ctx.fill();}ctx.restore();}}
     else if(k==='trap'){const [,id,x,y]=e; if(!canSee(x,y))continue; const X=cx(x),Y=cy(y);
       // 구덩이로 떨어진다: 먼지가 피어오르고 어둠이 빨아들인다
       ctx.save();ctx.strokeStyle=`rgba(20,10,4,${1-a})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(X,Y,S*(0.9-a*0.6),0,7);ctx.stroke();
@@ -519,6 +608,23 @@ function drawEffects(g,a,canSee){
       ctx.strokeText('+'+amt,cx(x),cy(y)-S*(0.4+a*0.8));ctx.fillText('+'+amt,cx(x),cy(y)-S*(0.4+a*0.8));ctx.restore();}
     else if(k==='spawn'){const [,id,t,kd,x,y]=e; if(!canSee(x,y))continue;
       ctx.save();ctx.strokeStyle=TEAM[t].l;ctx.globalAlpha=1-a;ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx(x),cy(y),S*(0.2+a*0.5),0,7);ctx.stroke();ctx.restore();}
+    else if(k==='push'){const [,id,px,py,tid,fx,fy,tx,ty]=e; if(!canSee(fx,fy))continue;
+      // 밀치기: 충격 고리와 밀린 쪽으로 뻗는 줄
+      const X=cx(fx),Y=cy(fy),ang=Math.atan2(fy-py,fx-px);ctx.save();ctx.globalAlpha=Math.max(0,1-a);
+      ctx.strokeStyle='#fff1a0';ctx.lineWidth=3;ctx.beginPath();ctx.arc(X,Y,S*(0.25+a*0.4),0,7);ctx.stroke();
+      ctx.lineWidth=2;for(let i=-1;i<=1;i++){const o=i*S*0.15;ctx.beginPath();ctx.moveTo(X-Math.cos(ang)*S*0.5-Math.sin(ang)*o,Y-Math.sin(ang)*S*0.5+Math.cos(ang)*o);
+        ctx.lineTo(X+Math.cos(ang)*S*(0.2+a*0.6)-Math.sin(ang)*o,Y+Math.sin(ang)*S*(0.2+a*0.6)+Math.cos(ang)*o);ctx.stroke();}
+      ctx.font=`900 ${Math.round(S*0.5)}px var(--kserif),serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#000';ctx.strokeText('밀치기!',X,Y-S*(0.6+a*0.4));ctx.fillStyle='#fff1a0';ctx.fillText('밀치기!',X,Y-S*(0.6+a*0.4));ctx.restore();}
+    else if(k==='eaten'){const [,id,x,y]=e; if(!canSee(x,y))continue; const X=cx(x),Y=cy(y);
+      ctx.save();ctx.globalAlpha=1-a;ctx.fillStyle='rgba(200,30,20,.5)';ctx.beginPath();ctx.arc(X,Y,S*(0.3+a*0.8),0,7);ctx.fill();
+      ctx.font=`900 ${Math.round(S*0.6)}px var(--kserif),serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#000';ctx.strokeText('꿀꺽!',X,Y-S*(0.5+a*0.6));ctx.fillStyle='#ff8a6a';ctx.fillText('꿀꺽!',X,Y-S*(0.5+a*0.6));ctx.restore();}
+    else if(k==='scream'){const [,id,x,y]=e; const X=cx(x),Y=cy(y);
+      ctx.save();for(let i=0;i<3;i++){const q=Math.max(0,a-i*0.12);ctx.globalAlpha=Math.max(0,1-q);ctx.strokeStyle='#c8ff5a';ctx.lineWidth=4-i;ctx.beginPath();ctx.arc(X,Y,S*(0.5+q*Math.max(W,H)*0.8),0,7);ctx.stroke();}ctx.restore();}
+    else if(k==='pick'){const [,id,x,y,amt]=e; if(!canSee(x,y))continue;
+      ctx.save();ctx.globalAlpha=1-a;ctx.fillStyle='#ffd978';ctx.strokeStyle='#1a0f06';ctx.lineWidth=3;ctx.font=`800 ${Math.round(S*0.5)}px Cinzel,serif`;ctx.textAlign='center';
+      ctx.strokeText('줍기 +'+amt,cx(x),cy(y)-S*(0.4+a*0.7));ctx.fillText('줍기 +'+amt,cx(x),cy(y)-S*(0.4+a*0.7));ctx.restore();}
+    else if(k==='refill'){const [,id,x,y]=e; if(!canSee(x,y))continue;
+      ctx.save();ctx.globalAlpha=1-a;ctx.strokeStyle='#cfe8ff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx(x),cy(y),S*(0.3+a*0.3),0,7);ctx.stroke();ctx.restore();}
   }
 }
 function mindIds(fi,team){
@@ -548,7 +654,7 @@ function selUnit(fi){
   const bi=baseIds.indexOf(selId);
   if(bi>=0){const [x,y]=R.map.bases[bi];return {id:selId,team:bi,kind:'B',x,y,hp:F[fi].bh[bi]};}
   const u=umap[fi].get(selId); if(!u)return null;
-  return {id:u[0],team:u[1],kind:u[2],x:u[3],y:u[4],hp:u[5],carry:u[6],vib:u[7]};
+  return {id:u[0],team:u[1],kind:u[2],x:u[3],y:u[4],hp:u[5],carry:u[6],vib:u[7],arrows:u[8],stench:u[9]};
 }
 // ---- 점수판 (HUD) ----
 const ICON={
@@ -643,6 +749,9 @@ const snd={on:true,ctx:null,out:null,last:-1,
   coin(){this.tone(988,0.09,'triangle',0.08);this.tone(1319,0.16,'triangle',0.08,null,0.08);},
   spawn(){this.tone(330,0.22,'triangle',0.06,660);},
   camp(){this.noise(0.3,180,0.22,'lowpass');this.tone(90,0.25,'sine',0.12,50);},
+  roar(){this.tone(110,1.1,'sawtooth',0.12,45);this.tone(160,0.9,'square',0.05,60,0.05);this.noise(1.0,240,0.18,'lowpass');},
+  gulp(){this.tone(180,0.25,'sine',0.14,60);this.noise(0.2,400,0.12,'lowpass',0.05);},
+  shove(){this.noise(0.12,900,0.14,'bandpass');this.tone(220,0.1,'triangle',0.08,140);},
   victory(){[523,659,784,1047].forEach((f,i)=>this.tone(f,0.35,'triangle',0.09,null,i*0.13));this.tone(1047,0.8,'sine',0.06,null,0.55);},
   play(g,canSee){
     if(!this.on||!this.ctx||g===this.last)return; this.last=g;
@@ -653,7 +762,11 @@ const snd={on:true,ctx:null,out:null,last:-1,
       else if(k==='trap'&&canSee(e[2],e[3]))once('fall',()=>this.fall());
       else if(k==='die'&&e[4]==='atk'&&canSee(e[2],e[3]))once('down',()=>this.down());
       else if(k==='dlv'&&canSee(e[3],e[4]))once('coin',()=>this.coin());
-      else if(k==='spawn'&&canSee(e[4],e[5]))once('spawn',()=>this.spawn());}
+      else if(k==='spawn'&&canSee(e[4],e[5]))once('spawn',()=>this.spawn());
+      else if(k==='scream')once('roar',()=>this.roar());
+      else if(k==='eaten'&&canSee(e[2],e[3]))once('gulp',()=>this.gulp());
+      else if(k==='push'&&canSee(e[5],e[6]))once('shove',()=>this.shove());
+      else if(k==='pick'&&canSee(e[2],e[3]))once('coin',()=>this.coin());}
   }};
 document.addEventListener('pointerdown',()=>snd.init(),{once:true});
 document.addEventListener('keydown',()=>snd.init(),{once:true});
@@ -668,16 +781,29 @@ function updateFeed(fi){
   for(let f=fi;f>=Math.max(1,fi-14)&&items.length<5;f--){
     const vis=team>=0?visAt[team][f]:null, see=(x,y)=>!vis||vis[y*W+x]===1;
     for(const e of F[f].e||[]){
-      if(e[0]==='trap'&&see(e[2],e[3]))items.push(['pit',f,`${who(e[1],f)} 구덩이에 빠짐`]);
+      if(e[0]==='trap'&&see(e[2],e[3]))items.push(['pit',f,(F[f].e||[]).some(p=>p[0]==='push'&&p[4]===e[1])?`${who(e[1],f)} 밀려서 구덩이에 빠짐!`:`${who(e[1],f)} 구덩이에 빠짐`]);
       else if(e[0]==='die'&&e[4]==='atk'&&see(e[2],e[3]))items.push(['kill',f,`${who(e[1],f)} 쓰러짐`]);
+      else if(e[0]==='eaten'&&see(e[2],e[3]))items.push(['wump',f,`${who(e[1],f)} 웜퍼스에게 잡아먹힘`]);
+      else if(e[0]==='scream')items.push(['wump',f,`웜퍼스의 비명! (처치: ${who(e[1],f)}) → 굴에 보물`]);
+      else if(e[0]==='push'&&see(e[5],e[6])&&!(e[5]===e[7]&&e[6]===e[8]))items.push(['push',f,`밀치기: ${who(e[1],f)} ➜ ${who(e[4],f)}`]);
     }
     for(let t=0;t<2;t++){const d=F[f-1].bh[t]-F[f].bh[t];
       if(d>0&&(team<0||team===t||see(R.map.bases[t][0],R.map.bases[t][1])))items.push(['camp',f,`<span class="${'rb'[t]}">${TEAM[t].name} 야영지</span> 공격받음 (-${d})`]);}
   }
   $('feed').innerHTML=items.slice(0,5).map(([c,f,h])=>`<div class="it ${c}" style="opacity:${Math.max(0.35,1-(fi-f)/15).toFixed(2)}"><span class="rd">R${f}</span>${h}</div>`).join('');
 }
+let screamFi=-1;
+function updateScream(fi){
+  if(fi===screamFi)return;const prev=screamFi;screamFi=fi;
+  if(fi<prev||fi-prev>3)return;                      // 건너뛰거나 되감을 때는 띄우지 않는다
+  for(let f=prev+1;f<=fi;f++)for(const e of F[f].e||[])if(e[0]==='scream'){
+    const u=umap[f].get(e[1])||umap[Math.max(0,f-1)].get(e[1]),t=u?u[1]:e[4];
+    const el=$('scream');el.innerHTML=`웜퍼스의 비명!<small><span style="color:${TEAM[t].c}">${TEAM[t].name}</span> 궁수가 웜퍼스를 쓰러뜨렸습니다 · 굴에 보물이 떨어짐</small>`;
+    el.classList.remove('go');void el.offsetWidth;el.classList.add('go');}
+}
 function updateSide(fi){
   updateFeed(fi);
+  updateScream(fi);
   updateVictory(fi);
   $('slider').value=Math.round(P);
   $('rlabel').textContent=`라운드 ${fi} / ${N-1}`;
@@ -700,7 +826,10 @@ function updateSide(fi){
     const d=(fr.d||{})[selId]; let h=`<div class="line"><b class="${'rb'[su.team]}">#${su.id} ${TEAM[su.team].name} ${KIND[su.kind]}</b> (${su.x}, ${su.y})</div>`;
     h+=`<div class="line"><span class="k">체력</span> ${su.hp}/${R.const.hp[su.kind]}`;
     if(su.kind==='E')h+=` · <span class="k">짐</span> ${su.carry}/${R.const.carry}`;
+    if(su.kind==='G'&&su.arrows>=0)h+=` · <span class="k">화살</span> ${su.arrows}/${R.const.arrows}`;
+    if(su.kind==='G'&&su.carry>0)h+=` · <span class="k">주운 금</span> ${su.carry}`;
     if(su.kind!=='B')h+=` · <span class="k">바람</span> ${su.vib?'<b style="color:#bfe9ff">느낌</b>':'없음'}`;
+    if(su.kind!=='B'&&R.map.wumpus&&R.map.wumpus.length)h+=` · <span class="k">악취</span> ${su.stench?'<b style="color:#c8ff5a">느낌</b>':'없음'}`;
     h+='</div>';
     if(d&&d.t)for(const t of d.t)h+=`<div class="line">💭 ${esc(t)}</div>`;
     else h+='<div class="line hint">이 라운드에 남긴 생각이 없습니다.</div>';
@@ -713,7 +842,17 @@ function updateSide(fi){
   for(const e of fr.e||[]){
     if(e[0]==='trap')L.push(`${who(e[1])} 구덩이를 밟음 (${e[2]},${e[3]})`);
     else if(e[0]==='die'&&e[4]==='atk')L.push(`${who(e[1])} 쓰러짐`);
-    else if(e[0]==='atk')L.push(`${who(e[1])} → ${who(e[6])} 공격`);
+    else if(e[0]==='die'&&e[4]==='wumpus')L.push(`${who(e[1])} 웜퍼스에게 잡아먹힘`);
+    else if(e[0]==='atk'&&e[6]===-1)L.push(`${who(e[1])} → 웜퍼스 명중`);
+    else if(e[0]==='atk'&&e[6]===0)L.push(`${who(e[1])} 화살 빗나감`);
+    else if(e[0]==='atk'&&e[6]===-2)L.push(`${who(e[1])} 화살이 우리 편에 막힘`);
+    else if(e[0]==='atk'&&baseIds.includes(e[6])&&Math.abs(e[4]-e[2])+Math.abs(e[5]-e[3])===1)L.push(`${who(e[1])} 횃불로 ${who(e[6])} 태움`);
+    else if(e[0]==='atk')L.push(`${who(e[1])} → ${who(e[6])} 화살`);
+    else if(e[0]==='push')L.push((e[5]===e[7]&&e[6]===e[8])?`${who(e[1])} → ${who(e[4])} 밀치기 (막힘)`:`${who(e[1])} → ${who(e[4])} 밀치기`);
+    else if(e[0]==='scream')L.push(`<b style="color:#c8ff5a">웜퍼스의 비명!</b> (처치: ${who(e[1])})`);
+    else if(e[0]==='pick')L.push(`${who(e[1])} 떨어진 금 ${e[4]}개 주움`);
+    else if(e[0]==='drop')L.push(`금 ${e[3]}개가 (${e[1]},${e[2]}) 에 떨어짐`);
+    else if(e[0]==='refill')L.push(`${who(e[1])} 화살 채움`);
     else if(e[0]==='spawn')L.push(`<span class="${'rb'[e[2]]}">${TEAM[e[2]].name}</span> ${KIND[e[3]]} #${e[1]} 생산`);
     else if(e[0]==='dlv')L.push(`${who(e[1])} 금 ${e[2]}개 바침`);
     else if(e[0]==='err')L.push(`<span style="color:#ff8080">오류</span> #${e[1]}: ${esc(e[2])}`);
@@ -777,7 +916,9 @@ function selectCell(x,y){
 function hoverCell(x,y){
   if(!R||x<0||y<0||x>=W||y>=H)return;
   const fi=Math.round(P),k=x+','+y;let s=`(${x}, ${y}) `;
-  if(R.map.rows[y][x]==='#')s+='벽';else if(oreAt[fi].has(k))s+='금 '+oreAt[fi].get(k);else if(revAt[fi].has(k))s+='드러난 구덩이';else s+='빈 칸';
+  const wi=(R.map.wumpus||[]).findIndex(([a,b])=>a===x&&b===y);
+  if(R.map.rows[y][x]==='#')s+='벽';else if(wi>=0)s+=wumAt[fi][wi]>0?`웜퍼스 굴 (체력 ${wumAt[fi][wi]})`:'쓰러진 웜퍼스';else if(oreAt[fi].has(k))s+='금 '+oreAt[fi].get(k);else if(revAt[fi].has(k))s+='드러난 구덩이';else s+='빈 칸';
+  if(lootAt[fi].has(k))s+=` · 떨어진 금 ${lootAt[fi].get(k)}`;
   $('hover').textContent=s;
 }
 cv.addEventListener('click',ev=>{const [x,y]=cellAt(ev);selectCell(x,y);});

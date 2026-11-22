@@ -7,14 +7,14 @@
 - 유닛 (야영지 · 탐험가 · 궁수) 마다 이 파일이 따로 실행된다.
   그래서 아래 전역 변수 (visited 등) 는 그 유닛 혼자만의 기억이다.
 - 팀끼리 나눌 정보는 memory (정수 64칸) 에 적는다.
-- turn 은 행동 하나 (Move · Mine · Attack · Spawn) 나 None (쉬기) 를 돌려준다.
+- turn 은 행동 하나 (Move · Mine · Shoot · Push · Spawn) 나 None (쉬기) 를 돌려준다.
 
 지금은 아주 단순하게 움직인다. TODO 표시가 있는 곳부터 고쳐 보자.
 """
 import random
 
-from wumpus.api import (Move, Mine, Attack, Spawn, debug, DIRS, cheb,
-                        EXPLORER, ARCHER, CAMP, WALL, GOLD, PIT, CARRY_MAX, COST)
+from wumpus.api import (Move, Mine, Shoot, Push, Spawn, debug, DIRS, cheb,
+                        EXPLORER, ARCHER, CAMP, WALL, GOLD, PIT, CARRY_MAX, COST, ARROW_RANGE)
 
 visited = set()          # 이 유닛이 서 본 칸
 breezy = set()           # 이 유닛이 바람을 느낀 칸
@@ -52,9 +52,16 @@ def explorer_turn(me, view, memory):
     if me.carry >= CARRY_MAX:
         return step_toward(me, view, *view.my_camp)
 
-    # 금 칸 위에 서 있으면 캔다
-    if view.tile(me.x, me.y) == GOLD:
+    # 바로 옆 적 뒤가 드러난 구덩이면 밀어 떨어뜨린다
+    for u in view.units():
+        if u.team != me.team and u.kind != CAMP and abs(u.x - me.x) + abs(u.y - me.y) == 1:
+            if view.tile(2 * u.x - me.x, 2 * u.y - me.y) == PIT:
+                return Push(next(d for d, (dx, dy) in DIRS.items() if (me.x + dx, me.y + dy) == (u.x, u.y)))
+
+    # 금 칸 위에 서 있거나 떨어진 금이 있으면 캔다 (줍는다)
+    if view.tile(me.x, me.y) == GOLD or view.loot(me.x, me.y):
         return Mine()
+    # TODO: 악취 (view.stench) 가 나면 근처에 웜퍼스 굴이 있다. 굴로 들어가면 잡아먹힌다.
 
     # 보이는 금 중 가장 가까운 곳으로 간다
     golds = [(x, y) for (x, y) in view.visible_cells() if view.tile(x, y) == GOLD and not occupied(view, x, y)]
@@ -69,10 +76,12 @@ def explorer_turn(me, view, memory):
 
 # ---------------- 궁수 ----------------
 def archer_turn(me, view, memory):
-    # 주변 8칸에 적이 있으면 쏜다
+    # 같은 줄 · 같은 열의 적이 사거리 안에 있으면 그쪽으로 쏜다 (화살이 있을 때)
+    # TODO: 사이에 벽이나 우리 편이 있으면 화살이 막힌다. 화살이 떨어지면 야영지 옆에서 채우자 (me.arrows).
     for u in view.units():
-        if u.team != me.team and cheb(me.x, me.y, u.x, u.y) <= 1:
-            return Attack(u.x, u.y)
+        if u.team != me.team and me.arrows > 0 and (u.x == me.x or u.y == me.y) and 0 < abs(u.x - me.x) + abs(u.y - me.y) <= ARROW_RANGE:
+            d = ('E' if u.x > me.x else 'W') if u.y == me.y else ('S' if u.y > me.y else 'N')
+            return Shoot(d)
     # TODO: 적 야영지가 어디인지 대칭으로 추론해 그쪽으로 가자.
     return wander(me, view)
 
