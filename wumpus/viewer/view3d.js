@@ -474,9 +474,9 @@ function floorTex() {                       // 바닥 판석: 네 조각 돌, �
   return pxMemo('floor', () => pxTex(pxCanvas(32, 32, K => {
     K.noise(0, 0, 32, 32, [200, 194, 184], 9);
     const dark = [118, 108, 96], light = [232, 226, 214];
-    for (let i = 0; i < 32; i++) { K.P(i, 31, dark); K.P(31, i, dark); K.P(i, 15, dark); K.P(15, i, dark); K.P(i, 0, light); K.P(0, i, light); K.P(i, 16, light); K.P(16, i, light); }
-    K.L(4, 5, 8, 9, [150, 140, 128]); K.L(8, 9, 7, 12, [150, 140, 128]); K.L(22, 20, 27, 24, [156, 146, 134]);
-    for (const [x, y] of [[24, 6], [6, 24], [27, 27], [10, 20]]) { K.R(x, y, 2, 2, [168, 158, 146]); K.P(x, y, [226, 220, 206]); }
+    for (let i = 0; i < 32; i++) { K.P(i, 31, dark); K.P(31, i, dark); K.P(i, 30, [160, 150, 138]); K.P(30, i, [160, 150, 138]); K.P(i, 0, light); K.P(0, i, light); }
+    K.L(5, 6, 10, 10, [150, 140, 128]); K.L(10, 10, 9, 14, [150, 140, 128]); K.L(21, 19, 26, 23, [156, 146, 134]);
+    for (const [x, y] of [[23, 7], [7, 23], [16, 26]]) { K.R(x, y, 2, 2, [168, 158, 146]); K.P(x, y, [226, 220, 206]); }
   }, 7), true));
 }
 function wallSideTex() {                    // 벽 옆면: 엇갈려 쌓은 벽돌
@@ -1537,7 +1537,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     } else if (moving && ev.mine.has(id)) st = 'mine';
     if (!show(o, x, y, u[1] === team)) continue;
     if (o.face !== null) o.g.rotation.y = lerpAng(o.g.rotation.y, o.face, 0.3);
-    { const th = o.g.rotation.y, off = 0.3 / CH; o.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); o.token.position.set(-Math.sin(th) * off * 0.6, 0, Math.cos(th) * off * 0.6); }
+    { const th = o.g.rotation.y, off = 0.22 / CH; o.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); o.token.position.set(-Math.sin(th) * off * 0.6, 0, Math.cos(th) * off * 0.6); }
     pose(o, st, a, now, id);
     for (const fl of o.flames) fl.scale.set(1, 1 + Math.sin(now * 17 + id) * 0.18, 1);
     const sc = moving && !p ? elastic(Math.min(1, a * 1.3)) : 1;
