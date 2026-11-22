@@ -597,6 +597,30 @@ function brazierTex(fr) {                   // 모서리 화로 기둥
   }, 43)));
 }
 
+function glowTex(kind, team, fr) {          // 마우스를 올렸을 때: 도트 테두리를 팀 색으로 (한 칸 더 두껍게)
+  return pxMemo('glow' + kind + team + ':' + fr, () => {
+    const src = bodyCanvas(kind, team, fr), w = src.width, h = src.height;
+    const sd = src.getContext('2d').getImageData(0, 0, w, h).data;
+    const A = (x, y) => x >= 0 && y >= 0 && x < w && y < h ? sd[(y * w + x) * 4 + 3] : 0;
+    const dark = (x, y) => { const i = (y * w + x) * 4; return sd[i + 3] && sd[i] < 40 && sd[i + 1] < 30 && sd[i + 2] < 24; };
+    const col = rgbOf(team >= 0 ? '#' + TC[team].l.toString(16).padStart(6, '0') : '#c8ff70'), hot = shade(col, 0.5);
+    return pxTex(pxCanvas(w, h, K => {
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        if (dark(x, y)) K.P(x, y, hot);
+        else if (!A(x, y)) { let n = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (A(x + dx, y + dy)) n++; if (n) K.P(x, y, col); }
+      }
+    }));
+  });
+}
+function hpTex(k10, team) {                  // 머리 위 체력바: 둥근 끝, 검은 테, 팀 색 (낮으면 주황)
+  return pxMemo('hp' + k10 + ':' + team, () => pxTex(pxCanvas(40, 7, K => {
+    K.R(1, 0, 38, 7, '#0b0705'); K.R(0, 1, 40, 5, '#0b0705');
+    K.R(2, 1, 36, 5, '#2c2620'); K.R(1, 2, 38, 3, '#2c2620');
+    const c = k10 <= 3 ? '#ff7a3d' : team >= 0 ? TC[team].css : '#9adf3a', w = Math.round(38 * k10 / 10);
+    if (w) { K.R(1, 2, w, 3, c); K.R(Math.min(2, w), 1, Math.max(0, Math.min(w, 37) - 1), 5, c); K.R(2, 1, Math.max(0, Math.min(w, 37) - 1), 1, shade(c, 0.45)); K.R(2, 5, Math.max(0, Math.min(w, 37) - 1), 1, shade(c, -0.3)); }
+  })));
+}
+let hoverC = null;
 function makeBody(kind, team, h) {
   const w = kind === 'W' ? h : h * 16 / 24;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: bodyTex(kind, team, 0), transparent: true, alphaTest: 0.5}));
@@ -826,8 +850,12 @@ function makeChar(kind, team) {
   body.add(token);
   const pix = makeBody(kind, team, 0.6);
   body.add(pix);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({map: glowTex(kind, team, 0), transparent: true, depthTest: false, blending: THREE.AdditiveBlending}));
+  glow.center.copy(pix.center); glow.scale.copy(pix.scale); glow.renderOrder = 12; glow.visible = false; body.add(glow);
+  const bar = new THREE.Sprite(new THREE.SpriteMaterial({map: hpTex(10, team), transparent: true, depthTest: false}));
+  bar.scale.set(0.36, 0.063, 1); bar.renderOrder = 14; body.add(bar);
   badge.visible = false;
-  return {g, token, pix, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
+  return {g, token, pix, glow, bar, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
 }
 
 function setFlash(o, k) {
@@ -1574,9 +1602,13 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.g.scale.setScalar(Math.max(0.001, sc) * CH * (o.kind === 'G' ? 1.12 : 1));
     o.disc.visible = false; o.badge.visible = false; o._fade = 1;
     o.tile.visible = true; o.tile.position.set(wx(Math.round(x)), 0.012, wz(Math.round(y)));
-    o.tile.material.opacity = 0.24 + 0.08 * Math.sin(now * 2.4 + id);
+    o.tile.material.opacity = 0.15 + 0.05 * Math.sin(now * 2.4 + id);
     const fr = st === 'walk' ? 1 + (Math.floor(a * 4) % 2) : 0;
-    if (o._fr !== fr) { o._fr = fr; o.pix.material.map = bodyTex(o.kind, o.team, fr); o.pix.material.needsUpdate = true; }
+    if (o._fr !== fr) { o._fr = fr; o.pix.material.map = bodyTex(o.kind, o.team, fr); o.pix.material.needsUpdate = true; o.glow.material.map = glowTex(o.kind, o.team, fr); o.glow.material.needsUpdate = true; }
+    { const hov = (hoverC && hoverC[0] === Math.round(x) && hoverC[1] === Math.round(y)) || selId === id;
+      o.glow.visible = hov && NEAR > 0.3; o.glow.material.opacity = 0.75 + 0.25 * Math.sin(now * 6);
+      o.glow.scale.copy(o.pix.scale); o.glow.material.rotation = o.pix.material.rotation; o.glow.position.copy(o.pix.position);
+      o.tile.material.color.setHex(hov ? TC[o.team].l : TC[o.team].c); }
     const sx = Math.sin(o.g.rotation.y);
     if (Math.abs(sx) > 0.3) o._left = sx < 0;
     o.pix.scale.x = o.pix.userData.w * (o._left ? -1 : 1);
@@ -1590,7 +1622,9 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     const hp10 = Math.max(0, Math.min(10, Math.ceil(src[5] / R.const.hp[u[2]] * 10))), bk = src[6] + ':' + hp10 + ':' + arr;
     if (o._bk !== bk) { o._bk = bk; o.token.material.map = tokenTex(o.kind, o.team, src[6], hp10, arr); o.token.material.needsUpdate = true; }
     const mx = R.const.hp[u[2]];
-    o.hp.visible = NEAR > 0.5;                    // 멀리서는 아이콘 고리, 가까이서는 머리 위 막대
+    o.hp.visible = false;                          // 멀리서는 아이콘 고리, 가까이서는 머리 위 도트 막대
+    o.bar.visible = NEAR > 0.5; o.bar.position.set(o.pix.position.x, 0.84, o.pix.position.z);
+    if (o._hk !== hp10) { o._hk = hp10; o.bar.material.map = hpTex(hp10, o.team); o.bar.material.needsUpdate = true; }
     setHp(o.hp, src[5] / mx, TC[u[1]].c);
     billboard(o.hp, o.g);
     const hit = moving && ev.hit.get(id);
@@ -1614,7 +1648,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
       x = u[3] + (d[2] - u[3]) * e; y = u[4] + (d[3] - u[4]) * e;
     }
     if (!show(o, x, y, u[1] === team)) continue;
-    o.hp.visible = false; o.disc.visible = o.badge.visible = false;
+    o.hp.visible = false; o.disc.visible = o.badge.visible = false; o.bar.visible = false; o.glow.visible = false;
     o._fade = Math.max(0, 1 - Math.max(0, a - 0.55) / 0.45);
     lod(o);
     o.pix.material.rotation = Math.min(1, a * 1.6) * Math.PI / 2 * (o._left ? -1 : 1);   // 옆으로 쓰러진다
@@ -2119,7 +2153,8 @@ renderer.domElement.addEventListener('pointerup', ev => {
   if (down && Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) < 5) { const c = cellOf(ev); if (c) selectCell(c[0], c[1]); }
   down = null;
 });
-renderer.domElement.addEventListener('pointermove', ev => { const c = cellOf(ev); if (c) hoverCell(c[0], c[1]); });
+renderer.domElement.addEventListener('pointermove', ev => { const c = cellOf(ev); hoverC = c; if (c) hoverCell(c[0], c[1]); });
+renderer.domElement.addEventListener('pointerleave', () => { hoverC = null; });
 
 function focus(x, y, d) {
   controls.target.set(wx(x), 0, wz(y));
