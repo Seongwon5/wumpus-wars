@@ -122,6 +122,11 @@
     "dirs": 1
    }
   },
+  "arrow": {
+   "cols": 1,
+   "rows": 1,
+   "cell": 33
+  },
   "camp_0": {
    "cols": 10,
    "rows": 1,

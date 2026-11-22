@@ -1857,6 +1857,7 @@ const ringG = new THREE.RingGeometry(0.85, 1, 40).rotateX(-Math.PI / 2);
 const cubeG = new THREE.BoxGeometry(0.06, 0.06, 0.06);
 const sphG = new THREE.SphereGeometry(1, 16, 12);
 const windG = new THREE.TorusGeometry(0.42, 0.012, 4, 24, Math.PI * 0.55);
+const AP0 = new THREE.Vector3(), AP1 = new THREE.Vector3();
 function makeArrow() {
   const g = new THREE.Group();
   const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.72, 8), new THREE.MeshStandardMaterial({color: 0xead6a8, emissive: 0x7a5a30, emissiveIntensity: 0.7}));
@@ -2032,10 +2033,19 @@ function effects(g, a, canSee) {
       const dist = Math.abs(tx - ax) + Math.abs(ty - ay), fly = Math.min(0.32, 0.12 + dist * 0.04);
       const tc = u ? TC[u[1]].c : bi >= 0 ? TC[bi].c : 0xffffff;
       if (a > 0.12) {                            // 조준선 → 빛 궤적 (쏘기 전에 가늘게, 날아가는 동안 밝게, 뒤에 사라짐)
-        const op = a < 0.28 ? 0.18 * (a - 0.12) / 0.16 : a < 0.28 + fly ? 0.55 : 0.55 * Math.max(0, 1 - (a - 0.28 - fly) / 0.35);
+        const op = a < 0.28 ? 0.12 * (a - 0.12) / 0.16 : a < 0.28 + fly ? 0.3 : 0.3 * Math.max(0, 1 - (a - 0.28 - fly) / 0.35);
         if (op > 0.01) lane(wx(ax), wz(ay), wx(tx), wz(ty), tc, op);
       }
       if (a > 0.28 && a < 0.28 + fly) {          // 화살이 줄을 따라 날아간다 (멀수록 오래)
+        if (SHEETS.arrow) {                        // LPC 도트 화살: 화면에서 날아가는 방향으로 돌린다
+          const q = (a - 0.28) / fly, x0 = wx(ax), z0 = wz(ay), x1 = wx(tx), z1 = wz(ty), y0 = 0.7;
+          const sp = fx('larrow', () => { const t = SHEETS.arrow.tex.clone(); t.needsUpdate = true; return new THREE.Sprite(new THREE.SpriteMaterial({map: t, transparent: true, alphaTest: 0.4, depthTest: false})); });
+          sp.position.set(x0 + (x1 - x0) * q, y0 + Math.sin(Math.PI * q) * 0.25, z0 + (z1 - z0) * q);
+          AP0.set(x0, y0, z0).project(camera); AP1.set(x1, y0, z1).project(camera);
+          sp.material.rotation = Math.atan2(AP1.y - AP0.y, (AP1.x - AP0.x) * camera.aspect) - Math.sin(Math.PI * q) * 0.25 * Math.sign(AP1.x - AP0.x || 1);
+          sp.scale.set(0.8, 0.8 * 7 / 33, 1); sp.renderOrder = 18;
+          continue;
+        }
         const m = fx('arrow', makeArrow);
         const q = (a - 0.28) / fly, x0 = wx(ax), z0 = wz(ay), x1 = wx(tx), z1 = wz(ty), y0 = bi >= 0 ? 1.1 : 0.95;
         m.position.set(x0 + (x1 - x0) * q, y0 + (0.75 - y0) * q + Math.sin(Math.PI * q) * 0.1, z0 + (z1 - z0) * q);

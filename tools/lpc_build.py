@@ -316,6 +316,12 @@ def main():
         L('heads_troll.json', 'head/heads/troll/adult', 100, ramp='green'),
     ]
     meta['sheets']['wumpus'] = build('wumpus', wumpus, 'slash')
+    af = os.path.join(src, 'spritesheets', 'weapon', 'ranged', 'bow', 'arrow', 'shoot', 'arrow.png')
+    if os.path.isfile(af):                               # 날아가는 화살: 활시위에 걸린 화살 (오른쪽 줄 7번 칸) 을 잘라 쓴다
+        used.append('weapon_ranged_bow_arrow.json')
+        a_ = Image.open(af).convert('RGBA').crop((64 * 7 + 28, 64 * 3 + 26, 64 * 7 + 61, 64 * 3 + 33))
+        a_.save(os.path.join(OUT, 'arrow.png'))
+        meta['sheets']['arrow'] = {'cols': 1, 'rows': 1, 'cell': a_.width}
     deco = sys.argv[2] if len(sys.argv) > 2 else None
     if deco:
         for t in (0, 1):

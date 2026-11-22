@@ -36,6 +36,7 @@
 - `torso/clothes/corset` — ElizaWy, Nila122. 라이선스: OGA-SA 3.0, CC-BY-SA 3.0, GPL 3.0. https://opengameart.org/content/lpc-clothes-and-hair https://opengameart.org/content/lpc-7-womens-shirts (original by Nila122, recolored by ElizaWy)
 - `head/heads/human/female` — bluecarrot16, Benjamin K. Smith (BenCreating), Stephen Challener (Redshrike). 라이선스: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0. https://opengameart.org/content/ https://opengameart.org/content/lpc-character-bases (original head by Redshrike, tweaks by BenCreating, modular version by bluecarrot16)
 - `head/heads/troll` — bluecarrot16, AntumDeluge, Tuomo Untinen (reemax). 라이선스: CC-BY 3.0. https://opengameart.org/content/musclemanogreminotaur https://opengameart.org/content/trolls-0 https://opengameart.org/content/lpc-folk (original "Muscleman/Ogre/Minotaur" by Reemax, modified to "Troll" by AntumDeluge, edited to LPC style and converted to modular head by bluecarrot16)
+- `weapon/ranged/bow/arrow` — Johannes Sjölund (wulax). 라이선스: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0. https://opengameart.org/content/lpc-medieval-fantasy-character-sprites 
 
 ## 야영지: [LPC] Medieval Village Decorations (bluecarrot16 외)
 
