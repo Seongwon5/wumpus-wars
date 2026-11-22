@@ -22,8 +22,15 @@ scene.background = new THREE.Color(0x0b0705);
 scene.fog = new THREE.Fog(0x0b0705, 40, 90);
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 400);
 const controls = new OrbitControls(camera, renderer.domElement);
+const PHI = 0.62;                      // 내려다보는 각도 (고정)
 controls.enableDamping = true;
-controls.maxPolarAngle = 1.32;
+controls.enableRotate = false;
+controls.minPolarAngle = controls.maxPolarAngle = PHI;
+controls.minAzimuthAngle = controls.maxAzimuthAngle = 0;
+controls.screenSpacePanning = false;   // 끌면 바닥을 따라 움직인다
+controls.zoomToCursor = true;
+controls.mouseButtons = {LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN};
+controls.touches = {ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN};
 controls.minDistance = 4;
 controls.maxDistance = 90;
 
@@ -223,6 +230,77 @@ function badgeTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {
   _badge.set(key, t);
   return t;
 }
+// 도트 초상 (20×20). 글자 하나가 픽셀 하나, '.' 은 비움. 'b' 'n' 'q' 는 팀 색.
+const PIX = {
+  E: ['....................', '........hhhh........', '.......hhhhhh.......', '......hhhhhhhh......', '......bbbbbbbb......',
+      '...hhhhhhhhhhhhhh...', '....HHHHHHHHHHHH....', '......rssssssr......', '......sesssses......', '......ssssSsss......',
+      '.....Ssssssssss.....', '......tsmmmmst......', '......tttttttt......', '.......tsssst.......', '.....nnnnssnnnn.....',
+      '...vvvcnnnnnncvvv...', '..vvvvccnnnnccvvvv..', '..vvvvcccnncccvvvv..', '.vvvvvccccccccvvvvv.', '.vvvvvccccccccvvvvv.'],
+  G: ['....................', '........yyyy........', '......yyyyyyyy......', '.....yyyyyyyyyy.yy..', '....yyYyyyyyyYyyyyy.',
+      '....yYssssssssYyyy..', '....yssssssssssyYy..', '....ylelsssslelyYy..', '....yksssSssskyyYy..', '....yssssppssssyYy..',
+      '.....ysssssssy.yYy..', '......yssssssy..yy..', '.......qssssq....y..', '.....qqqqccqqqq.....', '...qqqvvccccvvqqq...',
+      '..qqqvvvccccvvvqqq..', '..qqqvvvccccvvvqqq..', '.qqqqvvvccccvvvqqqq.', '.qqqqvvvccccvvvqqqq.', '.qqqqvvvccccvvvqqqq.'],
+  W: ['....................', '..o..............o..', '..oo............oo..', '...oo..GGGGGG..oo...', '....oGGggggggGGo....',
+      '....GggggggggggG....', '...GgkeeggggeekgG...', '...GggggggggggggG...', '..GgggmmmmmmmmgggG..', '..GggmttttttttmggG..',
+      '..GggmmmmmmmmmmggG..', '..GgggmttttttmgggG..', '..GggggggggggggggG..', '.GggBBBBBBBBBBBBggG.', '.GgBBBBBBBBBBBBBBgG.',
+      'GgGBBBBBBBBBBBBBBGgG', 'GgGBBBBBBBBBBBBBBGgG', 'ggGBBBBBBBBBBBBBBGgg', 'ggGGBBBBBBBBBBBBGGgg', 'gggGGGGGGGGGGGGGGggg'],
+};
+const PAL = {h: '#6b4423', H: '#3e2512', r: '#3b2414', s: '#e0a97e', S: '#b57f5a', e: '#15120e', t: '#8a6a50', m: '#7a3a2a',
+  c: '#e8dcc4', v: '#7a4c26', y: '#e9b452', Y: '#a8742a', l: '#2a1a10', k: '#f2a0a0', p: '#c84a5a',
+  g: '#6f9a34', G: '#3c5a1c', B: '#b6a862', o: '#efe6c8', M: '#5a1410', t2: '#e4dcc2'};
+function drawPix(g, key, team, x0, y0, px) {
+  const rows = PIX[key], col = team >= 0 ? TC[team].css : '#8fff3a', dark = team >= 0 ? '#' + TC[team].d.toString(16).padStart(6, '0') : '#2a3a10';
+  for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
+    const ch = (rows[y] || '')[x] || '.';
+    if (ch === '.') continue;
+    let c = PAL[ch];
+    if (ch === 'b' || ch === 'n' || ch === 'q') c = (ch === 'q' && (x + y) % 5 === 0) ? dark : col;
+    if (key === 'W') { if (ch === 'e') c = '#e8ff50'; else if (ch === 'k') c = '#140e08'; else if (ch === 't') c = '#f0e8d0'; else if (ch === 'm') c = '#5a1410'; }
+    if (key === 'G' && ch === 'e') c = '#2e8a52';
+    g.fillStyle = c; g.fillRect(x0 + x * px, y0 + y * px, px, px);
+  }
+}
+const _tok = new Map();
+function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 패: 팀 색 고리 (= 체력) 안에 도트 초상
+  const key = kind + team + ':' + carry + ':' + hp10 + ':' + arrows;
+  if (_tok.has(key)) return _tok.get(key);
+  const N = 160, c = document.createElement('canvas'); c.width = c.height = N;
+  const g = c.getContext('2d'), col = team >= 0 ? TC[team].css : '#8fff3a';
+  g.imageSmoothingEnabled = false;
+  const disc = (r, f) => { g.beginPath(); g.arc(80, 80, r, 0, 7); g.fillStyle = f; g.fill(); };
+  disc(79, '#0b0705');
+  disc(74, '#3a2e22');
+  g.save(); g.beginPath(); g.arc(80, 80, 74, 0, 7); g.clip();
+  g.beginPath(); g.moveTo(80, 80); g.arc(80, 80, 90, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hp10 / 10); g.closePath();
+  g.fillStyle = hp10 <= 3 ? '#ff6a3d' : col; g.fill(); g.restore();
+  disc(63, '#0b0705');
+  const gr = g.createRadialGradient(80, 70, 6, 80, 80, 62);
+  gr.addColorStop(0, '#5c4a36'); gr.addColorStop(1, '#1c140c');
+  disc(60, gr);
+  g.save(); g.beginPath(); g.arc(80, 80, 60, 0, 7); g.clip();
+  drawPix(g, kind === 'W' ? 'W' : kind === 'G' ? 'G' : 'E', team, 20, 26, 6);
+  g.restore();
+  const chip = (cx, cy, fill, txt, ink) => {
+    g.beginPath(); g.arc(cx, cy, 25, 0, 7); g.fillStyle = '#0b0705'; g.fill();
+    g.beginPath(); g.arc(cx, cy, 20, 0, 7); g.fillStyle = fill; g.fill();
+    g.fillStyle = ink; g.font = '800 30px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(txt, cx, cy + 2);
+  };
+  if (carry > 0) chip(130, 130, '#f2b52e', String(carry), '#2a1600');
+  if (arrows >= 0) chip(30, 130, arrows ? '#dfeeff' : '#ff6a3d', arrows ? '➶' + arrows : '🗡', '#1a2230');
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.NearestFilter; t.anisotropy = 4;
+  _tok.set(key, t);
+  return t;
+}
+function makeToken(kind, team, size) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: tokenTex(kind, team), transparent: true, alphaTest: 0.05}));
+  sp.center.set(0.5, 0.02);                       // 패의 아래 끝이 바닥에 닿는다
+  sp.scale.set(size, size, 1);
+  sp.renderOrder = 6;
+  return sp;
+}
+
 function starTex() {
   if (_star) return _star;
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -422,12 +500,17 @@ function makeChar(kind, team) {
   g.add(badge);
   g.traverse(o => { if (o.isMesh && o.castShadow) o.receiveShadow = true; });
   for (const m of [mTeam, mDark, mSkin]) m.userData.base = m.emissive.clone();
-  return {g, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
+  for (const ch of body.children) ch.visible = false;
+  const token = makeToken(kind, team, G ? 0.62 : 0.68);
+  body.add(token);
+  badge.visible = false;
+  return {g, token, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
 }
 
 function setFlash(o, k) {
   if (o._flash === k) return;
   o._flash = k;
+  if (o.token) o.token.material.color.setRGB(1, 1 - k * 0.65, 1 - k * 0.65);
   for (const m of o.flash) m.emissive.copy(m.userData.base).lerp(HITC, k);
 }
 
@@ -619,7 +702,10 @@ function makeWumpus() {
   g.add(hp);
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   for (const m of [fur, fur2, belly]) m.userData.base = m.emissive.clone();
-  return {g, live, dead, body, head, jaw, eyes, eyeL, arms, hp, aura, flash: [fur, fur2, belly]};
+  for (const ch of body.children) ch.visible = false;
+  const token = makeToken('W', -1, 0.95);
+  body.add(token);
+  return {g, token, live, dead, body, head, jaw, eyes, eyeL, arms, hp, aura, flash: [fur, fur2, belly]};
 }
 
 function makeLoot() {
@@ -879,9 +965,9 @@ function build() {
 }
 
 function resetCam() {
-  const s = Math.max(W, H);
-  camera.position.set(0, s * 0.74, s * 0.74);
-  controls.target.set(0, 0, 1.2);
+  const s = Math.max(W, H), d = s * 1.12;
+  controls.target.set(0, 0, 0.6);
+  camera.position.set(0, d * Math.cos(PHI), 0.6 + d * Math.sin(PHI));
   controls.update();
 }
 
@@ -1038,6 +1124,7 @@ function updateWumpus(g, a, moving, now) {
     let fl = 0;
     if (hit && a > 0.45) fl = Math.max(0, 1 - (a - 0.45) / 0.45);
     for (const m of w.flash) m.emissive.copy(m.userData.base).lerp(HITC, fl);
+    w.token.material.color.setRGB(1, 1 - fl * 0.65, 1 - fl * 0.65);
     if (hit && !scr && a > 0.45 && a < 0.9) { w.body.rotation.x = -0.25 * Math.sin(Math.PI * (a - 0.45) / 0.45); w.jaw.rotation.x = 0.6; }
     else w.body.rotation.x = 0;
     if (eat) {                                     // 덥석: 앞으로 달려들며 입을 크게 벌렸다 닫는다
@@ -1124,14 +1211,14 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     for (const fl of o.flames) fl.scale.set(1, 1 + Math.sin(now * 17 + id) * 0.18, 1);
     const sc = moving && !p ? elastic(Math.min(1, a * 1.3)) : 1;
     o.g.scale.setScalar(Math.max(0.001, sc) * CH * (o.kind === 'G' ? 1.12 : 1));
-    o.disc.visible = o.badge.visible = true;
+    o.disc.visible = true; o.badge.visible = false; o.token.material.opacity = 1;
     const src = moving && a < 0.5 && p ? p : u;
     o.pips.forEach((pp, i) => pp.visible = i < src[6]);
     const arr = o.kind === 'G' && src[8] !== undefined ? src[8] : -1;
     o.quiver.forEach((q, i) => q.visible = arr < 0 || i < arr);
     if (o.dagger) o.dagger.visible = arr === 0;
     const hp10 = Math.max(0, Math.min(10, Math.ceil(src[5] / R.const.hp[u[2]] * 10))), bk = src[6] + ':' + hp10 + ':' + arr;
-    if (o._bk !== bk) { o._bk = bk; o.badge.material.map = badgeTex(o.kind, o.team, src[6], hp10, arr); o.badge.material.needsUpdate = true; }
+    if (o._bk !== bk) { o._bk = bk; o.token.material.map = tokenTex(o.kind, o.team, src[6], hp10, arr); o.token.material.needsUpdate = true; }
     const mx = R.const.hp[u[2]];
     o.hp.visible = false;                         // 체력은 머리 위 표지의 고리로 보인다
     setHp(o.hp, src[5] / mx, TC[u[1]].c);
@@ -1158,6 +1245,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     }
     if (!show(o, x, y, u[1] === team)) continue;
     o.hp.visible = false; o.disc.visible = o.badge.visible = false;
+    o.token.material.opacity = Math.max(0, 1 - Math.max(0, a - 0.55) / 0.45);
     setFlash(o, 0);
     if (eaten) {                                   // 웜퍼스 입속으로 들려 올라가 사라진다
       const q = Math.max(0, (a - 0.35) / 0.65);
@@ -1649,7 +1737,7 @@ renderer.domElement.addEventListener('pointermove', ev => { const c = cellOf(ev)
 
 function focus(x, y, d) {
   controls.target.set(wx(x), 0, wz(y));
-  camera.position.set(wx(x), d * 0.75, wz(y) + d * 0.65);
+  camera.position.set(wx(x), d * Math.cos(PHI), wz(y) + d * Math.sin(PHI));
   controls.update();
 }
 
