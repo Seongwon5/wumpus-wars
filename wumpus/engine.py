@@ -7,7 +7,7 @@ from . import api
 from .api import (DIRS, EXPLORER, ARCHER, CAMP, EMPTY, WALL, GOLD, PIT, CAMP_TILE,
                   MAX_ROUNDS, MEMORY_SIZE, MAX_UNITS, START_BANK, INCOME_EVERY, COST, HP,
                   VISION_R2, ATTACK_DAMAGE, CAMP_ATTACK, CARRY_MAX, REGROW_EVERY, cheb, Move, Mine, Attack, Spawn,
-                  Shoot, Push, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
+                  Shoot, Push, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
 
 TEAM_NAMES = ('붉은 원정대', '푸른 원정대')
 KIND_CODE = {EXPLORER: 'E', ARCHER: 'G', CAMP: 'B'}
@@ -92,6 +92,12 @@ class View:
             return None
         return self._g.ore.get((x, y), 0)
 
+    def arrows_at(self, x, y):
+        """보이는 칸에 떨어진 화살 수. 안 보이면 None."""
+        if (x, y) not in self._vis:
+            return None
+        return self._g.ground_arrows.get((x, y), 0)
+
     def loot(self, x, y):
         """보이는 칸에 떨어진 금 (쓰러진 유닛의 짐 · 웜퍼스 보물). 안 보이면 None."""
         if (x, y) not in self._vis:
@@ -124,6 +130,8 @@ class Game:
         self.revealed = set()
         self.loot = {}                  # 칸 -> 떨어진 금
         self.loot_changed = False
+        self.ground_arrows = {}         # 칸 -> 떨어진 화살 수
+        self.arrows_changed = False
         self.frames_started = False
         self.wumpus = {}                # 굴 칸 -> 남은 체력 (0 이면 쓰러짐)
         self.screams = 0
@@ -220,6 +228,9 @@ class Game:
         u.hp = 0
         if cause != 'trap':             # 구덩이에 떨어지면 짐도 함께 사라진다
             self._drop((u.x, u.y), u.carry)
+            if u.kind == ARCHER and u.arrows > 0 and self.rules['arrows']:
+                self._land((u.x, u.y), u.arrows)
+        u.arrows = 0
         u.carry = 0
         self.at.pop((u.x, u.y), None)
         self.events.append(['die', u.id, u.x, u.y, cause])
@@ -299,6 +310,10 @@ class Game:
             self.events.append(['eaten', u.id, n[0], n[1]])
             self._kill(u, 'wumpus')
 
+    def _land(self, c, n=1):
+        self.ground_arrows[c] = self.ground_arrows.get(c, 0) + n
+        self.arrows_changed = True
+
     def _shoot(self, u, d):
         if d not in DIRS:
             return
@@ -307,6 +322,11 @@ class Game:
         torch = adj is not None and adj.kind == CAMP and adj.team != u.team   # 바로 옆 적 야영지: 화살 없이 횃불로 태운다
         if self.rules['arrows'] and not torch:
             if u.arrows <= 0:
+                if adj is not None and adj.team != u.team:              # 화살이 없으면 바로 옆 적을 단검으로
+                    adj.hp -= DAGGER_DAMAGE
+                    self.events.append(['stab', u.id, u.x, u.y, adj.x, adj.y, adj.id])
+                    if adj.hp <= 0:
+                        self._kill(adj, 'atk')
                 return
             u.arrows -= 1
         x, y = u.x, u.y
@@ -322,6 +342,8 @@ class Game:
             if n in self.at:
                 hit = 'u'
                 break
+        if self.rules['arrows'] and not torch and (hit is None or (hit == 'u' and self.at[(x, y)].team == u.team)):
+            self._land((x, y))                  # 빗나간 화살만 멈춘 칸에 떨어진다 (맞힌 화살은 부러진다)
         if hit == 'w':
             c = (x, y)
             self.wumpus[c] = max(0, self.wumpus[c] - ATTACK_DAMAGE)
@@ -374,7 +396,15 @@ class Game:
         elif isinstance(act, Mine) and u.kind in (EXPLORER, ARCHER):
             c = (u.x, u.y)
             cap = CARRY_MAX if u.kind == EXPLORER else (ARCHER_CARRY if self.rules['loot'] else 0)
-            if self.loot.get(c, 0) > 0 and u.carry < cap:
+            if u.kind == ARCHER and self.ground_arrows.get(c, 0) > 0 and u.arrows < ARROWS_MAX:
+                take = min(self.ground_arrows[c], ARROWS_MAX - u.arrows)
+                self.ground_arrows[c] -= take
+                u.arrows += take
+                if self.ground_arrows[c] == 0:
+                    del self.ground_arrows[c]
+                self.arrows_changed = True
+                self.events.append(['parrow', u.id, u.x, u.y, take])
+            elif self.loot.get(c, 0) > 0 and u.carry < cap:
                 take = min(self.loot[c], cap - u.carry)
                 self.loot[c] -= take
                 u.carry += take
@@ -459,11 +489,13 @@ class Game:
         }
         if self.loot_changed or not self.frames_started:
             fr['l'] = [[x, y, a] for (x, y), a in sorted(self.loot.items())]
+        if self.arrows_changed or not self.frames_started:
+            fr['ar'] = [[x, y, a] for (x, y), a in sorted(self.ground_arrows.items())]
         if self.wumpus:
             fr['w'] = [self.wumpus[c] for c in sorted(self.wumpus)]
         if self.debug:
             fr['d'] = {str(k): v for k, v in self.debug.items()}
-        self.events, self.debug, self.ore_changed, self.loot_changed = [], {}, set(), False
+        self.events, self.debug, self.ore_changed, self.loot_changed, self.arrows_changed = [], {}, set(), False, False
         self.frames_started = True
         return fr
 
@@ -521,7 +553,7 @@ class Game:
                 'cost': {'E': COST[EXPLORER], 'G': COST[ARCHER]},
                 'vision': {'E': VISION_R2[EXPLORER], 'G': VISION_R2[ARCHER], 'B': VISION_R2[CAMP]},
                 'arrows': ARROWS_MAX if self.rules['arrows'] else 0, 'arrow_range': ARROW_RANGE,
-                'wumpus_hp': WUMPUS_HP, 'archer_carry': ARCHER_CARRY,
+                'wumpus_hp': WUMPUS_HP, 'archer_carry': ARCHER_CARRY, 'dagger': DAGGER_DAMAGE,
                 'rules': dict(self.rules),
             },
             'map': {

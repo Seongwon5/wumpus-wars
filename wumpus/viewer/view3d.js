@@ -274,7 +274,7 @@ function makeChar(kind, team) {
   const hipL = leg(G ? -0.065 : -0.08), hipR = leg(G ? 0.065 : 0.08);
 
   const pips = [], flames = [], quiver = [];
-  let tail = null;
+  let tail = null, dagger = null;
   if (!G) {
     // ---- 몸통: 팀 색 셔츠 + 가죽 조끼 + 벨트 + 가로지른 가방끈 ----
     mesh(body, RB(0.32, 0.29, 0.18, 0.07), mShirt, 0, 0.5, 0);
@@ -400,6 +400,12 @@ function makeChar(kind, team) {
     for (const sy of [-1, 1]) mesh(bow, SP(0.022, 8, 6), mGold, 0, sy * 0.29, -0.085, false);
     mesh(bow, new THREE.CylinderGeometry(0.0035, 0.0035, 0.58, 4), std(0xf2ead8), 0, 0, -0.088, false);
     mesh(L.hand, new THREE.CylinderGeometry(0.024, 0.024, 0.08, 8), mLeather2, 0, 0, 0.05);
+    dagger = new THREE.Group(); dagger.position.set(0, -0.02, 0.03); dagger.rotation.x = Math.PI / 2; Rr.hand.add(dagger);
+    mesh(dagger, new THREE.CylinderGeometry(0.014, 0.014, 0.07, 6), mLeather2, 0, -0.03, 0, false);
+    mesh(dagger, RB(0.07, 0.012, 0.02, 0.005), mGold, 0, 0.01, 0, false);
+    const bl = mesh(dagger, new THREE.ConeGeometry(0.022, 0.18, 4), std(0xe6eef8, {metalness: 0.9, roughness: 0.15, emissive: 0x334455, emissiveIntensity: 0.4}), 0, 0.11, 0, false);
+    bl.scale.z = 0.3;
+    dagger.visible = false;
   }
   const hp = hpBar(0.6);
   hp.position.y = 1.08;
@@ -416,7 +422,7 @@ function makeChar(kind, team) {
   g.add(badge);
   g.traverse(o => { if (o.isMesh && o.castShadow) o.receiveShadow = true; });
   for (const m of [mTeam, mDark, mSkin]) m.userData.base = m.emissive.clone();
-  return {g, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
+  return {g, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
 }
 
 function setFlash(o, k) {
@@ -893,11 +899,13 @@ function resize() {
 function evOf(g) {
   let e = evCache.get(g);
   if (e) return e;
-  e = {atk: new Map(), hit: new Map(), mine: new Set(), die: new Map(), push: new Map(), pushed: new Map(), whit: new Map(), eat: new Map(), scream: new Map(), list: F[g].e || []};
+  e = {atk: new Map(), hit: new Map(), mine: new Set(), die: new Map(), push: new Map(), pushed: new Map(), whit: new Map(), eat: new Map(), scream: new Map(), stab: new Map(), list: F[g].e || []};
   for (const v of e.list) {
     if (v[0] === 'atk') { e.atk.set(v[1], v); if (v[6] > 0) e.hit.set(v[6], v); if (v[6] === -1) e.whit.set(v[4] + ',' + v[5], v); }
     else if (v[0] === 'push') { e.push.set(v[1], v); if (v[5] !== v[7] || v[6] !== v[8]) e.pushed.set(v[4], v); }
     else if (v[0] === 'eaten') e.eat.set(v[2] + ',' + v[3], v);
+    else if (v[0] === 'stab') { e.stab.set(v[1], v); e.hit.set(v[6], v); }
+    else if (v[0] === 'parrow') e.mine.add(v[1]);
     else if (v[0] === 'scream') e.scream.set(v[2] + ',' + v[3], v);
     else if (v[0] === 'mine' || v[0] === 'pick') e.mine.add(v[1]);
     else if (v[0] === 'die') e.die.set(v[1], v);
@@ -973,6 +981,21 @@ function updateStatic(fi, team, seen, now) {
     o.g.scale.setScalar(amt >= 10 ? 1.25 : 0.85 + Math.min(1, amt / 6) * 0.35);
     o.sack.position.y = Math.abs(Math.sin(now * 2 + x + y)) * 0.03;
     o.glow.material.opacity = 0.4 + 0.2 * Math.sin(now * 2.4 + x * 3);
+  }
+  // 바닥에 꽂힌 화살 (궁수가 주울 수 있다)
+  for (const [k, n] of arrAt[fi]) {
+    const [x, y] = k.split(',').map(Number);
+    if (seen && !seen[y * W + x]) continue;
+    for (let i = 0; i < Math.min(n, 4); i++) {
+      const m = fx('garrow', () => { const a2 = makeArrow(); a2.userData.trail.visible = false; a2.userData.glow.visible = false; return a2; });
+      m.userData.trail.visible = false; m.userData.glow.visible = false; m.scale.setScalar(0.9);
+      const ox = (hash(x + i, y * 3) - 0.5) * 0.5, oz = (hash(x * 5, y + i) - 0.5) * 0.5, ang = hash(i, x + y) * Math.PI * 2;
+      m.position.set(wx(x) + ox, 0.2, wz(y) + oz);
+      m.lookAt(wx(x) + ox + Math.cos(ang) * 0.5, -0.6, wz(y) + oz + Math.sin(ang) * 0.5);
+      m.userData.head.material.color.setHex(0xe8e8e8);
+      for (const f of m.userData.fl) f.material.color.setHex(0xf2ead8);
+    }
+    if (n > 1) { const s2 = textSprite('×' + n, '#e8f2ff'); s2.position.set(wx(x) + 0.3, 0.55, wz(y) + 0.3); s2.scale.set(0.5, 0.25, 1); s2.material.opacity = 0.9; }
   }
   // 웜퍼스
   const wh = wumAt[fi];
@@ -1078,7 +1101,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
   for (const u of F[g].u) {
     const id = u[0], p = A.get(id), o = getU(u);
     let x = u[3], y = u[4], st = 'idle';
-    const atk = moving ? ev.atk.get(id) : null, psh = moving ? ev.push.get(id) : null, pushed = moving ? ev.pushed.get(id) : null;
+    const atk = moving ? (ev.atk.get(id) || ev.stab.get(id)) : null, psh = moving ? ev.push.get(id) : null, pushed = moving ? ev.pushed.get(id) : null;
     if (pushed && p) {                                  // 밀려서 미끄러진다 (몸은 휘청)
       const e = easeOut(Math.min(1, Math.max(0, (a - 0.25) / 0.45)));
       x = p[3] + (u[3] - p[3]) * e; y = p[4] + (u[4] - p[4]) * e;
@@ -1092,7 +1115,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
       st = 'walk';
       o.face = Math.atan2(u[3] - p[3], u[4] - p[4]);
     } else if (atk) {
-      st = 'attack';
+      st = atk[0] === 'stab' ? 'push' : 'attack';
       o.face = Math.atan2(atk[4] - atk[2], atk[5] - atk[3]);
     } else if (moving && ev.mine.has(id)) st = 'mine';
     if (!show(o, x, y, u[1] === team)) continue;
@@ -1106,6 +1129,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.pips.forEach((pp, i) => pp.visible = i < src[6]);
     const arr = o.kind === 'G' && src[8] !== undefined ? src[8] : -1;
     o.quiver.forEach((q, i) => q.visible = arr < 0 || i < arr);
+    if (o.dagger) o.dagger.visible = arr === 0;
     const hp10 = Math.max(0, Math.min(10, Math.ceil(src[5] / R.const.hp[u[2]] * 10))), bk = src[6] + ':' + hp10 + ':' + arr;
     if (o._bk !== bk) { o._bk = bk; o.badge.material.map = badgeTex(o.kind, o.team, src[6], hp10, arr); o.badge.material.needsUpdate = true; }
     const mx = R.const.hp[u[2]];
@@ -1470,6 +1494,16 @@ function effects(g, a, canSee) {
       if (!canSee(x, y)) continue;
       burst(wx(x), wz(y), 0.2, 10, 0xffd84a, a, 1.2, id * 5 + g, -1.5, 1.1);
       const s2 = bigText('줍기 +' + amt, '#ffd978', 0.36); s2.position.set(wx(x), 1.6 + a * 0.8, wz(y)); s2.material.opacity = 1 - a * a;
+    } else if (k === 'stab') {
+      const [, id, ax, ay, tx, ty] = e;
+      if (!canSee(tx, ty)) continue;
+      if (a > 0.3) { const q = (a - 0.3) / 0.7; burst(wx(tx), wz(ty), 0.7, 8, 0xe6f0ff, q, 1.4, id * 7 + g, 3, 0.9); ring(wx(tx), wz(ty), 0.7, 0.15 + q * 0.4, 0xe6f0ff, 1 - q); }
+      if (a < 0.7) { const s2 = bigText('단검!', '#e6f0ff', 0.36); s2.position.set(wx(tx), 1.5 + a * 0.4, wz(ty)); s2.material.opacity = Math.min(1, (0.7 - a) * 3); }
+    } else if (k === 'parrow') {
+      const [, id, x, y, n] = e;
+      if (!canSee(x, y)) continue;
+      burst(wx(x), wz(y), 0.2, 6, 0xdfeeff, a, 0.9, id * 3 + g, -2.5, 0.9);
+      const s2 = bigText('화살 +' + n, '#dfeeff', 0.34); s2.position.set(wx(x), 1.6 + a * 0.7, wz(y)); s2.material.opacity = 1 - a * a;
     } else if (k === 'refill') {
       const [, id, x, y] = e;
       if (!canSee(x, y)) continue;

@@ -127,7 +127,7 @@ def test_killed_unit_drops_gold_and_archer_picks_up_two():
     act(g, a, Shoot('E'))
     assert not e.alive and g.loot[(6, 10)] == 4
     g.at.pop((5, 10)); a.x = 6; g.at[(6, 10)] = a
-    act(g, a, Mine())
+    act(g, a, Mine())                           # 금 2개 (맞힌 화살은 부러져서 없다)
     assert a.carry == 2 and g.loot[(6, 10)] == 2
 
 
@@ -179,3 +179,38 @@ def test_old_rules_switch_restores_adjacent_attack():
     e = put(g, 1, EXPLORER, 6, 11)
     act(g, a, Attack(6, 11))
     assert e.hp == HP[EXPLORER] - ATTACK_DAMAGE and not g.wumpus
+
+
+def test_fired_arrows_land_and_archer_picks_them_up():
+    from wumpus.api import Shoot, Mine
+    g = game(blank())
+    a = put(g, 0, ARCHER, 5, 10)
+    e = put(g, 1, EXPLORER, 8, 10)
+    act(g, a, Shoot('E'))                       # 맞힌 화살은 부러진다
+    act(g, a, Shoot('N'))                       # 빗나가 (5,5) 에 떨어짐
+    assert g.ground_arrows == {(5, 5): 1} and a.arrows == ARROWS_MAX - 2
+    g.at.pop((5, 10)); a.y = 5; g.at[(5, 5)] = a
+    act(g, a, Mine())
+    assert a.arrows == ARROWS_MAX - 1 and (5, 5) not in g.ground_arrows
+
+
+def test_empty_archer_stabs_adjacent_enemy():
+    from wumpus.api import Shoot, DAGGER_DAMAGE
+    g = game(blank())
+    a = put(g, 0, ARCHER, 5, 10)
+    a.arrows = 0
+    e = put(g, 1, ARCHER, 6, 10)
+    far = put(g, 1, EXPLORER, 5, 12)
+    act(g, a, Shoot('E'))
+    act(g, a, Shoot('S'))                       # 2칸 떨어진 적: 단검이 닿지 않음
+    assert e.hp == HP[ARCHER] - DAGGER_DAMAGE and far.hp == HP[EXPLORER] and not g.ground_arrows
+
+
+def test_dead_archer_drops_quiver():
+    from wumpus.api import Shoot
+    g = game(blank())
+    a = put(g, 0, ARCHER, 5, 10)
+    v = put(g, 1, ARCHER, 6, 10)
+    v.hp, v.arrows = 3, 2
+    act(g, a, Shoot('E'))
+    assert not v.alive and g.ground_arrows[(6, 10)] == 2    # 쓰러진 궁수의 남은 화살 2

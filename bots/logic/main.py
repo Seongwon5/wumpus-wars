@@ -14,7 +14,7 @@ import heapq
 
 from wumpus.api import (MAX_ROUNDS, Move, Mine, Shoot, Push, Spawn, debug, DIRS, mirror, cheb, direction_to,
                         EXPLORER, ARCHER, CAMP, WALL, GOLD, PIT, CAMP_TILE,
-                        CARRY_MAX, SAFE_RADIUS, COST, ARROW_RANGE, ARCHER_CARRY, WUMPUS_CLEAR)
+                        CARRY_MAX, SAFE_RADIUS, COST, ARROW_RANGE, ARCHER_CARRY, WUMPUS_CLEAR, ARROWS_MAX)
 
 SYMS = ('H', 'V', 'R')
 BIT = {'H': 1, 'V': 2, 'R': 4}
@@ -38,6 +38,7 @@ class Knowledge:
         self.wump = set()       # 웜퍼스 굴로 증명된 칸
         self.screams = 0
         self.loot = {}          # 본 떨어진 금
+        self.garrows = {}       # 본 떨어진 화살
         self.ruled_out = 0
         self.enemy_base = None
         self._add_safe_zone(base)
@@ -75,6 +76,11 @@ class Knowledge:
         for c in view.visible_cells():
             t = view.tile(*c)
             self.tile[c] = t
+            ga = view.arrows_at(*c)
+            if ga:
+                self.garrows[c] = ga
+            else:
+                self.garrows.pop(c, None)
             lt = view.loot(*c)
             if lt:
                 self.loot[c] = lt
@@ -433,6 +439,27 @@ def guardian_turn(me, view, memory):
             if d and not enemies:
                 show_mind(None, '웜퍼스 사냥 (%d,%d)' % c)
                 return Shoot(d)
+
+    # 1b. 화살이 없으면 바로 옆 적을 단검으로 찌른다
+    if me.arrows == 0:
+        stab = [u for u in enemies if u.kind != CAMP and direction_to(me.x, me.y, u.x, u.y)]
+        if stab:
+            t = min(stab, key=lambda u: (u.hp, u.id))
+            show_mind(None, '단검 → #%d' % t.id)
+            return Shoot(direction_to(me.x, me.y, t.x, t.y))
+    # 1c. 떨어진 화살: 서 있으면 줍고, 화살통이 비었거나 가까이 있으면 주우러 간다 (집보다 가까울 때)
+    if K.garrows.get(pos) and me.arrows < ARROWS_MAX:
+        show_mind(None, '화살 줍기 (%d개)' % K.garrows[pos])
+        return Mine()
+    if me.arrows < ARROWS_MAX and K.garrows:
+        cand = {c for c in K.garrows if K.cost(c) is not None} - occupied
+        reach = 99 if me.arrows == 0 else 4
+        if cand:
+            path = K.find_path(pos, cand, occupied)
+            home_d = max(abs(me.x - bx), abs(me.y - by)) - 1
+            if path and len(path) - 1 <= reach and (me.arrows > 0 or len(path) - 1 < home_d):
+                show_mind(path, '떨어진 화살 주우러 → (%d,%d)' % path[-1])
+                return step_along(me, path, occupied)
 
     # 2. 화살이 없으면 야영지로 채우러 간다 (적 야영지가 더 가까우면 그 옆으로 가서 태운다)
     eb = K.enemy_base

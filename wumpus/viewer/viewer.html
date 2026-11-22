@@ -218,6 +218,7 @@ input[type=checkbox]{accent-color:#c79a55}
           <span class="sw" style="background:rgba(80,160,255,.6)"></span><span>웜퍼스 의심 칸 (악취 옆)</span>
           <span class="sw" style="background:radial-gradient(circle,#c8ff5a,#3a5a10)"></span><span>웜퍼스 굴 · 초록 안개는 악취</span>
           <span class="sw" style="background:radial-gradient(circle,#ffe27a,#7a4a10);border-radius:40%"></span><span>떨어진 금 (누구나 주움)</span>
+          <span class="sw" style="background:linear-gradient(135deg,transparent 40%,#e8d6ac 40%,#e8d6ac 55%,transparent 55%)"></span><span>바닥에 꽂힌 화살 (궁수가 주움)</span>
         </div>
       </div>
       <div class="card"><h3>이번 라운드 사건</h3><div id="log"></div></div>
@@ -261,13 +262,13 @@ let R=null,F=[],N=0,W=0,H=0,S=24,DPR=1;
 let P=0,playing=false,speed=3,lastT=0;
 let mode3d=true,viewMode='all',mindMode='sel',showTraps=true,selId=null;
 let oreAt=[],revAt=[],visAt=[[],[]],seenAt=[[],[]],umap=[],dieAt=[],staticLayer=null,baseIds=[1,2];
-let lootAt=[],wumAt=[];   // 칸마다 떨어진 금, 웜퍼스 체력 (굴 순서)
+let lootAt=[],wumAt=[],arrAt=[];   // 칸마다 떨어진 금, 웜퍼스 체력 (굴 순서)
 
 // ---------- 불러오기 ----------
 function load(data){
   R=data;F=R.frames;N=F.length;W=R.meta.w;H=R.meta.h;baseIds=R.map.base_ids||[1,2];
   const ore=new Map(R.map.ore.map(o=>[o[0]+','+o[1],o[2]]));
-  const rev=new Set();oreAt=[];revAt=[];umap=[];dieAt=[];lootAt=[];wumAt=[];
+  const rev=new Set();oreAt=[];revAt=[];umap=[];dieAt=[];lootAt=[];wumAt=[];arrAt=[];let garr=new Map();
   let loot=new Map(),wh=(R.map.wumpus||[]).map(()=>(R.const.wumpus_hp||9));
   const seen=[new Uint8Array(W*H),new Uint8Array(W*H)];
   for(let i=0;i<N;i++){
@@ -276,6 +277,7 @@ function load(data){
     oreAt.push(new Map(ore));
     if(fr.l)loot=new Map(fr.l.map(o=>[o[0]+','+o[1],o[2]])); lootAt.push(loot);
     if(fr.w)wh=fr.w; wumAt.push(wh);
+    if(fr.ar)garr=new Map(fr.ar.map(o=>[o[0]+','+o[1],o[2]])); arrAt.push(garr);
     const dmap=new Map();
     for(const e of fr.e||[]){ if(e[0]==='trap')rev.add(e[2]+','+e[3]); if(e[0]==='die')dmap.set(e[1],e);}
     revAt.push(new Set(rev)); dieAt.push(dmap);
@@ -377,6 +379,8 @@ function draw(){
   for(const [k,amt] of oreAt[fi]){const [x,y]=k.split(',').map(Number); if(seen&&!seen[y*W+x])continue; drawOre(x,y,amt,now);}
   // 떨어진 금
   for(const [k,amt] of lootAt[fi]){const [x,y]=k.split(',').map(Number); if(seen&&!seen[y*W+x])continue; drawLoot(x,y,amt,now);}
+  // 바닥에 꽂힌 화살
+  for(const [k,n] of arrAt[fi]){const [x,y]=k.split(',').map(Number); if(seen&&!seen[y*W+x])continue; drawGroundArrows(x,y,n);}
   // 웜퍼스 굴 (전체 보기에서는 늘, 팀 시야에서는 쓰러진 뒤 본 칸만)
   (R.map.wumpus||[]).forEach(([x,y],i)=>{const hp=wumAt[fi][i];
     if(team<0||(hp<=0&&seen&&seen[y*W+x]))drawWumpus(x,y,hp,now,team<0);});
@@ -488,6 +492,18 @@ function drawWumpus(x,y,hp,now,full){
     ctx.fillStyle='#1a140c';for(const s2 of [-1,1]){ctx.beginPath();ctx.arc(X+s2*S*0.07,Y-S*0.02,S*0.045,0,7);ctx.fill();}
     ctx.fillStyle='#e9e2c6';for(const s2 of [-1,1]){ctx.beginPath();ctx.moveTo(X+s2*S*0.12,Y-S*0.12);ctx.quadraticCurveTo(X+s2*S*0.34,Y-S*0.3,X+s2*S*0.24,Y-S*0.38);ctx.lineTo(X+s2*S*0.08,Y-S*0.14);ctx.fill();}
   }
+  ctx.restore();
+}
+function drawGroundArrows(x,y,n){
+  // 땅에 꽂힌 화살: 비스듬히 박힌 화살대와 깃 (궁수가 주울 수 있다)
+  const X=cx(x),Y=cy(y);ctx.save();ctx.lineCap='round';
+  for(let i=0;i<Math.min(n,4);i++){const ox=(hash(x+i,y*3)-0.5)*S*0.5,oy=(hash(x*5,y+i)-0.5)*S*0.4,ang=-0.6+hash(i,x+y)*1.2;
+    const bx=X+ox,by=Y+oy+S*0.12,tx=bx+Math.sin(ang)*S*0.32,ty=by-Math.cos(ang)*S*0.32;
+    ctx.strokeStyle='rgba(0,0,0,.6)';ctx.lineWidth=Math.max(2,S*0.08);ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(tx,ty);ctx.stroke();
+    ctx.strokeStyle='#e8d6ac';ctx.lineWidth=Math.max(1.2,S*0.045);ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(tx,ty);ctx.stroke();
+    ctx.fillStyle='#f6f0e0';ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx-S*0.07,ty+S*0.05);ctx.lineTo(tx+S*0.07,ty+S*0.05);ctx.fill();}
+  if(n>1){const fs=Math.max(8,Math.round(S*0.3));ctx.font=`800 ${fs}px Cinzel,serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#000';
+    ctx.strokeText('×'+n,X+S*0.3,Y+S*0.38);ctx.fillStyle='#e8f2ff';ctx.fillText('×'+n,X+S*0.3,Y+S*0.38);}
   ctx.restore();
 }
 function drawStink(x,y,now){
@@ -623,6 +639,13 @@ function drawEffects(g,a,canSee){
     else if(k==='pick'){const [,id,x,y,amt]=e; if(!canSee(x,y))continue;
       ctx.save();ctx.globalAlpha=1-a;ctx.fillStyle='#ffd978';ctx.strokeStyle='#1a0f06';ctx.lineWidth=3;ctx.font=`800 ${Math.round(S*0.5)}px Cinzel,serif`;ctx.textAlign='center';
       ctx.strokeText('줍기 +'+amt,cx(x),cy(y)-S*(0.4+a*0.7));ctx.fillText('줍기 +'+amt,cx(x),cy(y)-S*(0.4+a*0.7));ctx.restore();}
+    else if(k==='stab'){const [,id,ax,ay,tx,ty]=e; if(!canSee(tx,ty))continue; const X=cx(tx),Y=cy(ty),ang=Math.atan2(ty-ay,tx-ax);
+      ctx.save();ctx.globalAlpha=Math.max(0,1-a);ctx.strokeStyle='#f4f8ff';ctx.lineWidth=3;ctx.lineCap='round';
+      ctx.beginPath();ctx.arc(X-Math.cos(ang)*S*0.3,Y-Math.sin(ang)*S*0.3,S*0.45,ang-0.9+a*0.6,ang+0.3+a*0.6);ctx.stroke();
+      ctx.font=`900 ${Math.round(S*0.45)}px var(--kserif),serif`;ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#000';ctx.strokeText('단검!',X,Y-S*(0.55+a*0.4));ctx.fillStyle='#e6f0ff';ctx.fillText('단검!',X,Y-S*(0.55+a*0.4));ctx.restore();}
+    else if(k==='parrow'){const [,id,x,y,n]=e; if(!canSee(x,y))continue;
+      ctx.save();ctx.globalAlpha=1-a;ctx.fillStyle='#dfeeff';ctx.strokeStyle='#0a1220';ctx.lineWidth=3;ctx.font=`800 ${Math.round(S*0.45)}px var(--kserif),serif`;ctx.textAlign='center';
+      ctx.strokeText('화살 +'+n,cx(x),cy(y)-S*(0.4+a*0.7));ctx.fillText('화살 +'+n,cx(x),cy(y)-S*(0.4+a*0.7));ctx.restore();}
     else if(k==='refill'){const [,id,x,y]=e; if(!canSee(x,y))continue;
       ctx.save();ctx.globalAlpha=1-a;ctx.strokeStyle='#cfe8ff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(cx(x),cy(y),S*(0.3+a*0.3),0,7);ctx.stroke();ctx.restore();}
   }
@@ -751,6 +774,8 @@ const snd={on:true,ctx:null,out:null,last:-1,
   camp(){this.noise(0.3,180,0.22,'lowpass');this.tone(90,0.25,'sine',0.12,50);},
   roar(){this.tone(110,1.1,'sawtooth',0.12,45);this.tone(160,0.9,'square',0.05,60,0.05);this.noise(1.0,240,0.18,'lowpass');},
   gulp(){this.tone(180,0.25,'sine',0.14,60);this.noise(0.2,400,0.12,'lowpass',0.05);},
+  stab(){this.noise(0.08,3200,0.12,'highpass');this.tone(900,0.06,'triangle',0.05,400);},
+  parrow(){this.tone(660,0.05,'triangle',0.05);this.tone(880,0.07,'triangle',0.05,null,0.05);},
   shove(){this.noise(0.12,900,0.14,'bandpass');this.tone(220,0.1,'triangle',0.08,140);},
   victory(){[523,659,784,1047].forEach((f,i)=>this.tone(f,0.35,'triangle',0.09,null,i*0.13));this.tone(1047,0.8,'sine',0.06,null,0.55);},
   play(g,canSee){
@@ -766,7 +791,9 @@ const snd={on:true,ctx:null,out:null,last:-1,
       else if(k==='scream')once('roar',()=>this.roar());
       else if(k==='eaten'&&canSee(e[2],e[3]))once('gulp',()=>this.gulp());
       else if(k==='push'&&canSee(e[5],e[6]))once('shove',()=>this.shove());
-      else if(k==='pick'&&canSee(e[2],e[3]))once('coin',()=>this.coin());}
+      else if(k==='pick'&&canSee(e[2],e[3]))once('coin',()=>this.coin());
+      else if(k==='stab'&&canSee(e[4],e[5]))once('stab',()=>this.stab());
+      else if(k==='parrow'&&canSee(e[2],e[3]))once('parrow',()=>this.parrow());}
   }};
 document.addEventListener('pointerdown',()=>snd.init(),{once:true});
 document.addEventListener('keydown',()=>snd.init(),{once:true});
@@ -853,6 +880,8 @@ function updateSide(fi){
     else if(e[0]==='pick')L.push(`${who(e[1])} 떨어진 금 ${e[4]}개 주움`);
     else if(e[0]==='drop')L.push(`금 ${e[3]}개가 (${e[1]},${e[2]}) 에 떨어짐`);
     else if(e[0]==='refill')L.push(`${who(e[1])} 화살 채움`);
+    else if(e[0]==='stab')L.push(`${who(e[1])} → ${who(e[6])} 단검`);
+    else if(e[0]==='parrow')L.push(`${who(e[1])} 떨어진 화살 ${e[4]}개 주움`);
     else if(e[0]==='spawn')L.push(`<span class="${'rb'[e[2]]}">${TEAM[e[2]].name}</span> ${KIND[e[3]]} #${e[1]} 생산`);
     else if(e[0]==='dlv')L.push(`${who(e[1])} 금 ${e[2]}개 바침`);
     else if(e[0]==='err')L.push(`<span style="color:#ff8080">오류</span> #${e[1]}: ${esc(e[2])}`);
@@ -919,6 +948,7 @@ function hoverCell(x,y){
   const wi=(R.map.wumpus||[]).findIndex(([a,b])=>a===x&&b===y);
   if(R.map.rows[y][x]==='#')s+='벽';else if(wi>=0)s+=wumAt[fi][wi]>0?`웜퍼스 굴 (체력 ${wumAt[fi][wi]})`:'쓰러진 웜퍼스';else if(oreAt[fi].has(k))s+='금 '+oreAt[fi].get(k);else if(revAt[fi].has(k))s+='드러난 구덩이';else s+='빈 칸';
   if(lootAt[fi].has(k))s+=` · 떨어진 금 ${lootAt[fi].get(k)}`;
+  if(arrAt[fi].has(k))s+=` · 떨어진 화살 ${arrAt[fi].get(k)}`;
   $('hover').textContent=s;
 }
 cv.addEventListener('click',ev=>{const [x,y]=cellAt(ev);selectCell(x,y);});
