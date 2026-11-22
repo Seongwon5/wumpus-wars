@@ -2154,7 +2154,14 @@ function effects(g, a, canSee) {
       const [id, x, y, cause] = [e[1], e[2], e[3], e[4]];
       if (!canSee(x, y)) continue;
       const bi = baseIdx(id);
-      if (bi >= 0) {
+      if (bi >= 0 && SHEETS.floor) {               // 야영지 파괴: 도트 불길 · 검은 연기 · 천막 조각 · 큰 도트 글씨
+        burst(wx(x), wz(y), 0.4, 46, 0xff8a2a, a, 3.4, id + g, -0.5, 2.2);
+        burst(wx(x), wz(y), 0.6, 30, 0xffe08a, a, 2.2, id * 3 + g, -1.2, 1.6);
+        burst(wx(x), wz(y), 0.9, 26, 0x2a2420, a, 1.6, id * 5 + g, -2.2, 3.2);      // 검은 연기는 위로
+        burst(wx(x), wz(y), 0.7, 18, TC[bi].c, a, 3, id * 7 + g, 5, 2);             // 팀 색 천막 조각
+        ring(wx(x), wz(y), 0.05, 0.4 + a * 2.6, 0xff9a40, 1 - a);
+        const s2 = bigText('야영지 파괴!', '#ff7a3d', 0.8); s2.position.set(wx(x), 2.3 + a * 0.6, wz(y)); s2.material.opacity = Math.min(1, (1 - a) * 2);
+      } else if (bi >= 0) {
         const m = fx('flash', () => new THREE.Mesh(sphG, addMat(0xff8030)));
         m.position.set(wx(x), 0.6, wz(y)); m.scale.setScalar(0.3 + easeOut(a) * 2); m.material.opacity = 1 - a;
         m.material.color.setHex(TC[bi].c);
