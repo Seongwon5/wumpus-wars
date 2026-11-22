@@ -69,7 +69,7 @@ python -m wumpus scrim mybot starter            # 맵 10개에서 양쪽 진영�
 | 파일 | 내용 |
 |---|---|
 | `demo/starter_vs_random.html` | 시작용 봇 vs 무작위 봇. 1000 라운드 끝에 417 : 261 |
-| `demo/logic_vs_starter.html` | 추론 봇 vs 시작용 봇. 추론 봇이 273 라운드에 야영지를 부순다 |
+| `demo/logic_vs_starter.html` | 추론 봇 vs 시작용 봇. 추론 봇이 254 라운드에 야영지를 부순다 |
 
 ## 설명서
 

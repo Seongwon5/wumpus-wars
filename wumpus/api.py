@@ -2,7 +2,7 @@
 
 봇 파일은 `turn(me, view, memory)` 함수 하나를 가진다.
 유닛 하나마다 봇 파일이 따로 실행되므로, 모듈 전역 변수는 그 유닛만의 기억이다.
-팀이 함께 쓰는 정보는 `memory` (정수 64칸) 로만 나눈다.
+팀이 함께 쓰는 정보는 `memory` (정수 16칸) 로만 나눈다.
 """
 
 # ---- 방향 (상하좌우 4방향) ----
@@ -17,7 +17,7 @@ EMPTY, WALL, GOLD, PIT, CAMP_TILE = '.', '#', 'G', 'P', 'C'
 
 # ---- 규칙 상수 ----
 MAX_ROUNDS = 1000
-MEMORY_SIZE = 64
+MEMORY_SIZE = 16
 MAX_UNITS = 10          # 팀당 살아 있는 유닛 수 한도 (야영지 제외)
 START_BANK = 20
 INCOME_EVERY = 3        # 3라운드마다 금고 +1

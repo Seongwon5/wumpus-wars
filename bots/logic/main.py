@@ -8,7 +8,7 @@
 - A*: 안전한 칸은 비용 1, 모르는 칸은 비싸게, 의심 칸은 더 비싸게. 휴리스틱은 맨해튼 거리 (허용 가능).
 
 유닛마다 이 파일이 따로 실행되므로 전역 변수 K 는 그 유닛만의 지식 베이스다.
-팀 공유 memory 칸 쓰임: [0] 지운 대칭 비트, [1],[2] 적 야영지 x+1, y+1, [3] 만든 궁수 수.
+팀 공유 memory (16칸) 쓰임: [0] 지운 대칭 비트, [1],[2] 적 야영지 x+1, y+1, [3] 만든 궁수 수, [4..15] 모험가 위치 (한 명당 한 칸: 자리 · 라운드 · 번호를 묶음).
 """
 import heapq
 
@@ -762,16 +762,37 @@ bumps = {}              # 칸 -> 연달아 부딪힌 횟수
 atk_i = 0               # 발소리만 날 때 옆 칸을 차례로 쳐 본다
 
 
+MATE0, MATES = 4, 12      # 팀 공유 메모리 [4..15]: 모험가 한 명당 한 칸
+
+
+def mate_word(x, y, rnd, uid):
+    """칸 하나에 (자리 12비트, 라운드 10비트, 번호 9비트) 를 묶는다 (31비트, 부호 없이 들어간다)."""
+    return (x + 1) + 64 * (y + 1) + (rnd << 12) + ((uid & 511) << 22)
+
+
+def my_slot(memory, me):
+    """내 칸: 내 번호가 적힌 칸, 없으면 지난 라운드 뒤로 아무도 안 쓴 칸."""
+    free = None
+    for j in range(MATES):
+        v = memory[MATE0 + j]
+        if v and (v >> 22) & 511 == me.id & 511 and me.round - ((v >> 12) & 1023) <= 1:
+            return j
+        if free is None and (not v or me.round - ((v >> 12) & 1023) > 1):
+            free = j
+    return free
+
+
 def mates_from(memory, me):
-    """팀 공유 메모리 [8..55]: 모험가마다 (x+1)+64*(y+1) 와 그 라운드. 지난 라운드까지 적힌 팀원 위치."""
-    k = me.id % 24
-    memory[8 + 2 * k] = (me.x + 1) + 64 * (me.y + 1)
-    memory[9 + 2 * k] = me.round
+    """지난 라운드까지 적힌 팀원 위치. 내 자리도 적는다."""
+    k = my_slot(memory, me)
+    if k is not None:
+        memory[MATE0 + k] = mate_word(me.x, me.y, me.round, me.id)
     out = set()
-    for j in range(24):
-        v, r = memory[8 + 2 * j], memory[9 + 2 * j]
-        if j != k and v and me.round - r <= 1:
-            out.add((v % 64 - 1, v // 64 - 1))
+    for j in range(MATES):
+        v = memory[MATE0 + j]
+        if j != k and v and me.round - ((v >> 12) & 1023) <= 1:
+            p = v & 4095
+            out.add((p % 64 - 1, p // 64 - 1))
     return out
 
 
@@ -800,8 +821,9 @@ def agent_turn(me, view, memory):
         mv = step_along(me, path, mates)
         if mv:
             last_target = path[1]
-            k = me.id % 24                       # 움직인 뒤 자리를 미리 적어 둔다 (팀원이 헷갈리지 않게)
-            memory[8 + 2 * k] = (path[1][0] + 1) + 64 * (path[1][1] + 1)
+            k = my_slot(memory, me)              # 움직인 뒤 자리를 미리 적어 둔다 (팀원이 헷갈리지 않게)
+            if k is not None:
+                memory[MATE0 + k] = mate_word(path[1][0], path[1][1], me.round, me.id)
         return mv
 
     # 2. 적 야영지가 바로 옆이면 친다

@@ -9,7 +9,7 @@
   지각: view.breeze 바람 · view.stench 악취 · view.glitter 반짝임 · view.bump 부딪힘
         view.footsteps 발소리 · view.hurt 아픔 · view.screams 비명
 - 한 턴에 행동 하나: Move(d) · Mine() · Attack(x, y) (상하좌우 옆 칸) · None (쉬기)
-- 팀끼리 나눌 정보는 memory (32비트 정수 64칸) 에 적는다.
+- 팀끼리 나눌 정보는 memory (32비트 정수 16칸, 맵 전체는 못 담는다) 에 적는다.
 
 이 봇이 하는 일 (기본 동작은 다 한다)
 1. "바람도 악취도 없는 칸의 상하좌우는 안전하다" 로 안전한 칸을 넓히며 탐험한다.
