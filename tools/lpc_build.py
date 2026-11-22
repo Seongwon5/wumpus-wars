@@ -238,6 +238,8 @@ def build_cave(cav):
     out['wall_top'] = {'cols': 1, 'rows': 1, 'cell': 32, 'tile': True}
     tile(13, 3).save(os.path.join(OUT, 'pit.png'))      # 칸 하나짜리 낭떠러지 (금빛 테두리 · 갈색 절벽 · 검은 구멍)
     out['pit'] = {'cols': 1, 'rows': 1, 'cell': T, 'tile': True}
+    tile(23, 2).save(os.path.join(OUT, 'bones.png'))    # 해골과 뼈 (쓰러진 웜퍼스 굴)
+    out['bones'] = {'cols': 1, 'rows': 1, 'cell': T, 'foot': 30}
     rock = tile(12, 9)
     small, cluster, tall = tile(9, 10), tile(9, 11), tile(10, 10, 1, 2)
     gold = lambda p: recolor(p, 'gold')

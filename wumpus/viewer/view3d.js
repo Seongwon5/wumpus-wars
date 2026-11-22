@@ -660,6 +660,19 @@ if (SP) await Promise.all(Object.entries(SP.img).map(([name, url]) => new Promis
   img.onerror = () => res();
   img.src = url;
 })));
+const shadowMat = new THREE.MeshBasicMaterial({map: softTex(), color: 0x000000, transparent: true, opacity: 0.55, depthWrite: false});
+const shadowG = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+function makeShadow(w, d) {                       // 발밑의 부드러운 그림자 (Cambridge 처럼)
+  const m = new THREE.Mesh(shadowG, shadowMat); m.scale.set(w, 1, d); m.position.y = 0.006; m.renderOrder = 3; return m;
+}
+function slashTex() {                             // 근접 공격의 도트 베기 호
+  return pxMemo('slash', () => pxTex(pxCanvas(32, 32, K => {
+    for (let a = -1.25; a <= 1.25; a += 0.02) {
+      const w = 3 * Math.cos(a * 1.2);
+      for (let r = 11; r < 11 + w; r += 0.5) K.P(16 + Math.cos(a) * r, 16 + Math.sin(a) * r, r > 10 + w ? [255, 230, 160] : [255, 255, 255]);
+    }
+  })));
+}
 function frameSprite(name, col, w, h, cy) {     // 한 줄짜리 LPC 시트의 한 칸 (떨어진 금 · 횃불 기둥 등)
   const S = SHEETS[name]; if (!S) return null;
   const t = S.tex.clone(); t.repeat.set(1 / S.m.cols, 1); t.offset.set(col / S.m.cols, 0); t.needsUpdate = true;
@@ -914,6 +927,7 @@ function makeChar(kind, team) {
   for (const ch of body.children) ch.visible = false;
   const token = makeToken(kind, team, G ? 0.62 : 0.68);
   body.add(token);
+  const shadow = makeShadow(0.5, 0.3); g.add(shadow);
   const pix = makeBody(kind, team, 0.6);
   body.add(pix);
   const glow = pix.userData.lpc ? lpcSprite(sheetName(kind, team), pix.userData.w, true)
@@ -922,7 +936,7 @@ function makeChar(kind, team) {
   const bar = new THREE.Sprite(new THREE.SpriteMaterial({map: hpTex(10, team), transparent: true, depthTest: false}));
   bar.scale.set(0.36, 0.063, 1); bar.renderOrder = 14; body.add(bar);
   badge.visible = false;
-  return {g, token, pix, glow, bar, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
+  return {g, shadow, token, pix, glow, bar, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
 }
 
 function setFlash(o, k) {
@@ -1140,7 +1154,9 @@ function makeWumpus() {
   const dsp = makeBody('W', -1, 0.75);
   if (dsp.userData.lpc) lpcFrame(dsp, 'hurt', 0, 99); else dsp.material.map = bodyTex('W', -1, 9);
   dead.add(dsp);
-  return {g, token, pix, live, dead, body, head, jaw, eyes, eyeL, arms, hp, aura, flash: [fur, fur2, belly]};
+  const wsh = makeShadow(0.75, 0.42); live.add(wsh);
+  const bones = frameSprite('bones', 0, 0.55, 0.55, 2 / 32); if (bones) { bones.position.set(-0.22, 0, 0.12); dead.add(bones); }
+  return {g, den, wsh, token, pix, live, dead, body, head, jaw, eyes, eyeL, arms, hp, aura, flash: [fur, fur2, belly]};
 }
 
 function makeLoot() {
@@ -1568,6 +1584,7 @@ function updateStatic(fi, team, seen, now) {
     w.g.visible = team < 0 || (!alive && seen && seen[w.y * W + w.x] === 1);
     if (!w.g.visible) return;
     w.dead.visible = !alive; w.live.visible = alive; w.hp.visible = alive; w.aura.visible = alive; if (w.bar) w.bar.visible = alive;
+    if (w.den) w.den.visible = alive; if (w.wsh) w.wsh.position.set(w.pix.position.x, 0.006, w.pix.position.z);
     if (!alive) return;
     w.aura.material.opacity = 0.12 + 0.06 * Math.sin(now * 2.2 + i);
     lpcFrame(w.pix, 'idle', 2, 0);
@@ -1699,7 +1716,8 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     } else if (moving && ev.mine.has(id)) st = 'mine';
     if (!show(o, x, y, u[1] === team)) continue;
     if (o.face !== null) o.g.rotation.y = lerpAng(o.g.rotation.y, o.face, 0.3);
-    { const th = o.g.rotation.y, off = 0.22 / CH; o.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); o.token.position.set(-Math.sin(th) * off * 0.6, 0, Math.cos(th) * off * 0.6); }
+    { const th = o.g.rotation.y, off = 0.22 / CH; o.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); o.token.position.set(-Math.sin(th) * off * 0.6, 0, Math.cos(th) * off * 0.6);
+      o.shadow.position.set(o.pix.position.x, 0.006, o.pix.position.z); o.shadow.visible = NEAR > 0.3; }
     pose(o, st, a, now, id);
     for (const fl of o.flames) fl.scale.set(1, 1 + Math.sin(now * 17 + id) * 0.18, 1);
     const sc = moving && !p ? elastic(Math.min(1, a * 1.3)) : 1;
@@ -1981,7 +1999,16 @@ function effects(g, a, canSee) {
       const [, id, ax, ay, tx, ty, tid] = e;
       if (!canSee(ax, ay) && !canSee(tx, ty)) continue;
       const u = umap[g].get(id) || umap[Math.max(0, g - 1)].get(id), bi = baseIdx(id), col = u ? TC[u[1]].l : bi >= 0 ? TC[bi].l : 0xffffff;
+      if ((tid > 0 || tid === -1) && a > 0.45 && canSee(tx, ty)) {   // 피해 숫자: 맞은 자리 위로 떠오른다
+        const q = (a - 0.45) / 0.55, s3 = textSprite('-' + (R.const.attack_damage || 3), '#ff5a48');
+        s3.position.set(wx(tx), 1.25 + q * 0.6, wz(ty)); s3.scale.set(0.62, 0.31, 1); s3.material.opacity = 1 - q * q;
+      }
       if (u && u[2] === 'E') {                    // 광부 근접 공격: 곡괭이를 휘둘러 번쩍
+        if (a > 0.3 && a < 0.7) {                  // 도트 베기 호
+          const q = (a - 0.3) / 0.4, sl = fx('slash', () => new THREE.Sprite(new THREE.SpriteMaterial({map: slashTex(), transparent: true, depthTest: false, blending: THREE.AdditiveBlending})));
+          sl.position.set((wx(ax) + wx(tx)) / 2, 0.75, (wz(ay) + wz(ty)) / 2); sl.scale.setScalar(0.9 + q * 0.3);
+          sl.material.rotation = Math.atan2(-(ty - ay), tx - ax) + (q - 0.5) * 1.6; sl.material.opacity = 1 - q; sl.material.color.setHex(TC[u[1]].l); sl.renderOrder = 19;
+        }
         if (a > 0.3 && a < 0.85) {
           const q = (a - 0.3) / 0.55, tc2 = TC[u[1]].c;
           burst(wx(tx), wz(ty), 0.6, 12, 0xffffff, q, 1.8, id * 7 + g, 3, 0.9);
@@ -2065,6 +2092,7 @@ function effects(g, a, canSee) {
       if (!canSee(x, y)) continue;
       if (Math.abs(x - ux) + Math.abs(y - uy) > 1 && a > 0.1 && a < 0.6) lane(wx(ux), wz(uy), wx(x), wz(y), 0xffd84a, 0.5 * (1 - (a - 0.1) / 0.5));
       if (a >= 0.4) burst(wx(x), wz(y), 0.2, 9, 0xffd84a, (a - 0.4) / 0.6, 1.6, id * 7 + g, 5, 0.8);
+      if (a >= 0.4) { const q = (a - 0.4) / 0.6, s4 = textSprite('+1', '#ffd24a'); s4.position.set(wx(x) + 0.2, 1.0 + q * 0.5, wz(y)); s4.scale.set(0.46, 0.23, 1); s4.material.opacity = 1 - q * q; }
     } else if (k === 'dlv') {
       const [, id, amt, x, y] = e;
       if (!canSee(x, y)) continue;
