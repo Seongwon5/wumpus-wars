@@ -2052,20 +2052,27 @@ function effects(g, a, canSee) {
         if (a < 0.6) { const s2 = bigText('횃불!', '#ffb347', 0.45); s2.position.set(wx(tx), 1.9 + a * 0.6, wz(ty)); s2.material.opacity = 1 - a / 0.6; }
         continue;
       }
-      const dist = Math.abs(tx - ax) + Math.abs(ty - ay), fly = Math.min(0.32, 0.12 + dist * 0.04);
+      const dist = Math.abs(tx - ax) + Math.abs(ty - ay), fly = SHEETS.arrow ? Math.min(0.5, 0.26 + dist * 0.07) : Math.min(0.32, 0.12 + dist * 0.04);
       const tc = u ? TC[u[1]].c : bi >= 0 ? TC[bi].c : 0xffffff;
       if (a > 0.12) {                            // 조준선 → 빛 궤적 (쏘기 전에 가늘게, 날아가는 동안 밝게, 뒤에 사라짐)
         const op = a < 0.28 ? 0.12 * (a - 0.12) / 0.16 : a < 0.28 + fly ? 0.3 : 0.3 * Math.max(0, 1 - (a - 0.28 - fly) / 0.35);
         if (op > 0.01) lane(wx(ax), wz(ay), wx(tx), wz(ty), tc, op);
       }
       if (a > 0.28 && a < 0.28 + fly) {          // 화살이 줄을 따라 날아간다 (멀수록 오래)
-        if (SHEETS.arrow) {                        // LPC 도트 화살: 화면에서 날아가는 방향으로 돌린다
-          const q = (a - 0.28) / fly, x0 = wx(ax), z0 = wz(ay), x1 = wx(tx), z1 = wz(ty), y0 = 0.7;
-          const sp = fx('larrow', () => { const t = SHEETS.arrow.tex.clone(); t.needsUpdate = true; return new THREE.Sprite(new THREE.SpriteMaterial({map: t, transparent: true, alphaTest: 0.4, depthTest: false})); });
-          sp.position.set(x0 + (x1 - x0) * q, y0 + Math.sin(Math.PI * q) * 0.25, z0 + (z1 - z0) * q);
-          AP0.set(x0, y0, z0).project(camera); AP1.set(x1, y0, z1).project(camera);
-          sp.material.rotation = Math.atan2(AP1.y - AP0.y, (AP1.x - AP0.x) * camera.aspect) - Math.sin(Math.PI * q) * 0.25 * Math.sign(AP1.x - AP0.x || 1);
-          sp.scale.set(0.8, 0.8 * 7 / 33, 1); sp.renderOrder = 18;
+        if (SHEETS.arrow) {                        // LPC 도트 화살: 포물선을 그리며 날아가는 투사체 (머리가 진행 방향, 꼬리에 잔상)
+          const x0 = wx(ax), z0 = wz(ay), x1 = wx(tx), z1 = wz(ty), y0 = 0.72, H = 0.22 + dist * 0.12;
+          const at = q => [x0 + (x1 - x0) * q, y0 + 4 * H * q * (1 - q) - 0.25 * q, z0 + (z1 - z0) * q];
+          const q0 = (a - 0.28) / fly;
+          for (let k = 3; k >= 0; k--) {           // k = 0 이 화살, 1..3 은 잔상
+            const q = q0 - k * 0.07; if (q < 0) continue;
+            const P = at(q), P2 = at(Math.min(1, q + 0.03));
+            const sp = fx('larrow', () => { const t = SHEETS.arrow.tex.clone(); t.needsUpdate = true; return new THREE.Sprite(new THREE.SpriteMaterial({map: t, transparent: true, alphaTest: 0.05, depthTest: false})); });
+            sp.position.set(P[0], P[1], P[2]);
+            AP0.set(P[0], P[1], P[2]).project(camera); AP1.set(P2[0], P2[1], P2[2]).project(camera);
+            sp.material.rotation = Math.atan2(AP1.y - AP0.y, (AP1.x - AP0.x) * camera.aspect);
+            sp.scale.set(1.0, 1.0 * 7 / 33, 1); sp.renderOrder = 18 - k;
+            sp.material.opacity = k ? 0.38 - k * 0.1 : 1; sp.material.color.setHex(k ? tc : 0xffffff);
+          }
           continue;
         }
         const m = fx('arrow', makeArrow);

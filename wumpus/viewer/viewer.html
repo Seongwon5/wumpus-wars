@@ -319,7 +319,26 @@ function layout(){
   if(window.View3D)View3D.resize();
 }
 function hash(x,y){let h=(x*374761393+y*668265263)^0x5bd1e995;h=Math.imul(h^(h>>>13),1274126177);return ((h^(h>>>16))>>>0)/4294967296;}
+// ---- 2D 화면도 LPC 그림 (3D 와 같은 시트) ----
+const SPR2={};
+function spr2(name){
+  if(!window.SPRITES||!SPRITES.img[name])return null;
+  let o=SPR2[name];
+  if(!o){o=SPR2[name]={img:new Image(),m:SPRITES.meta.sheets[name],ok:false};
+    o.img.onload=()=>{o.ok=true;if(['floor','wall_top','wall_side','pit'].includes(name)&&R)buildStatic();requestAnimationFrame(()=>{try{draw();}catch(e){}});};o.img.src=SPRITES.img[name];}
+  return o.ok?o:null;
+}
+function drawSheet(name,anim,dir,col,X,Yfoot,size){            // 시트의 한 칸을 발이 Yfoot 에 오게 그린다
+  const o=spr2(name);if(!o)return false;
+  const m=o.m,C=m.cell||SPRITES.meta.cell,foot=m.foot!=null?m.foot:SPRITES.meta.foot;
+  let row=0,c=col;
+  if(anim){const A=m[anim];row=A.row+(A.dirs>1?dir:0);c=Math.max(0,Math.min(A.n-1,col));}
+  const ch=m.rows===1&&m.cell&&o.img.height!==C?o.img.height:C;
+  ctx.save();ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(o.img,c*C,row*ch,C,ch,X-size/2,Yfoot-size*ch/C*foot/ch,size,size*ch/C);ctx.restore();return true;
+}
 function buildStatic(){
+  if(window.SPRITES)for(const n in SPRITES.img)spr2(n);          // LPC 그림을 미리 불러 둔다
   staticLayer=document.createElement('canvas');
   staticLayer.width=W*S*DPR;staticLayer.height=H*S*DPR;
   const g=staticLayer.getContext('2d');g.setTransform(DPR,0,0,DPR,0,0);
@@ -341,6 +360,13 @@ function buildStatic(){
       g.moveTo(px+S*0.15,py+S*(0.2+r*4));g.lineTo(px+S*0.5,py+S*0.45);g.lineTo(px+S*0.62,py+S*0.85);g.stroke();
     }
   }
+  const fl=spr2('floor'),wt=spr2('wall_top'),ws=spr2('wall_side');
+  if(fl){g.imageSmoothingEnabled=false;for(let y=0;y<H;y++)for(let x=0;x<W;x++)g.drawImage(fl.img,x*S,y*S,S,S);}   // LPC 동굴 바닥
+  if(wt&&ws){g.imageSmoothingEnabled=false;
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){ if(rows[y][x]!=='#')continue;
+      g.fillStyle='rgba(0,0,0,0.5)';g.fillRect(x*S+S*0.1,y*S+S*0.12,S,S);
+      g.drawImage(ws.img,x*S,y*S+S*0.3,S,S*0.7);g.drawImage(wt.img,x*S,y*S-S*0.25,S,S*0.62);}
+    return;}
   // 무너진 석벽: 그림자, 옆면, 윗면, 돌 줄눈
   for(let y=0;y<H;y++)for(let x=0;x<W;x++){
     if(rows[y][x]!=='#')continue;
@@ -428,6 +454,9 @@ function draw(){
   updateSide(fi);
 }
 function drawOre(x,y,amt,now){
+  if(spr2('ore')){const n=amt>0?Math.max(1,Math.ceil(Math.min(1,amt/16)*7)):0;drawSheet('ore',null,0,n,cx(x),y*S+S*0.95,S*1.05);
+    if(amt>0){const fs=Math.max(9,Math.round(S*0.32));ctx.font=`800 ${fs}px Cinzel,serif`;ctx.textAlign='right';ctx.textBaseline='bottom';ctx.lineWidth=3;ctx.strokeStyle='#1a0f06';ctx.strokeText(amt,x*S+S*0.98,y*S+S*0.98);ctx.fillStyle='#ffd978';ctx.fillText(amt,x*S+S*0.98,y*S+S*0.98);}
+    return;}
   // 금맥: 어두운 바위에 금줄기와 금덩이 (많이 남을수록 금덩이가 많다), 바닥에 금빛
   const px=x*S,py=y*S,X=px+S/2,Y=py+S/2,h0=hash(x,y),n=Math.max(1,Math.ceil(Math.min(1,amt/16)*5));
   ctx.save();
@@ -452,6 +481,8 @@ function drawOre(x,y,amt,now){
   ctx.restore();
 }
 function drawLoot(x,y,amt,now){
+  if(spr2('loot')){drawSheet('loot',null,0,amt>=10?2:amt>=5?1:0,cx(x),y*S+S*0.92,S*0.8);
+    const fs=Math.max(9,Math.round(S*0.3));ctx.save();ctx.font=`800 ${fs}px Cinzel,serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3;ctx.strokeStyle='#1a0f06';ctx.strokeText(amt,cx(x),y*S+S*0.05);ctx.fillStyle='#ffe27a';ctx.fillText(amt,cx(x),y*S+S*0.05);ctx.restore();return;}
   // 떨어진 금: 가죽 자루 (많으면 보물 상자) 와 흩어진 금화
   const X=cx(x),Y=cy(y),big=amt>=10;ctx.save();
   const gl=ctx.createRadialGradient(X,Y,S*0.05,X,Y,S*0.6);gl.addColorStop(0,`rgba(255,210,80,${0.45+0.15*Math.sin(now/300+x)})`);gl.addColorStop(1,'rgba(255,200,60,0)');
@@ -468,6 +499,11 @@ function drawLoot(x,y,amt,now){
   ctx.lineWidth=3;ctx.strokeStyle='#1a0f06';ctx.strokeText(amt,X,Y-S*0.42);ctx.fillStyle='#ffe27a';ctx.fillText(amt,X,Y-S*0.42);ctx.restore();
 }
 function drawWumpus(x,y,hp,now,full){
+  if(spr2('wumpus')){const alive=hp>0,X=cx(x),Yf=y*S+S*0.9;
+    ctx.save();ctx.fillStyle='rgba(0,0,0,0.4)';ctx.beginPath();ctx.ellipse(X,Yf,S*0.38,S*0.12,0,0,7);ctx.fill();ctx.restore();
+    if(alive){drawSheet('wumpus','idle',2,0,X,Yf,S*2.9);hpBar(X-S*0.4,y*S-S*0.5,S*0.8,hp/(R.const.wumpus_hp||9),'#9adf3a');}
+    else{drawSheet('wumpus','hurt',0,99,X,Yf,S*2.9);if(spr2('bones'))drawSheet('bones',null,0,0,X-S*0.25,Yf,S*0.6);}
+    return;}
   // 웜퍼스: 굴 둘레의 뼈와 초록 악취, 털북숭이 몸과 빛나는 눈. 쓰러지면 해골만 남는다
   const X=cx(x),Y=cy(y),mx=R.const.wumpus_hp||9,alive=hp>0;ctx.save();
   ctx.fillStyle='rgba(10,14,4,0.55)';ctx.beginPath();ctx.arc(X,Y,S*0.46,0,7);ctx.fill();
@@ -521,6 +557,7 @@ function drawHiddenTrap(x,y){
   ctx.beginPath();ctx.arc(X,Y,S*0.3,0,7);ctx.stroke();ctx.restore();
 }
 function drawTrap(x,y){
+  if(spr2('pit')){ctx.save();ctx.imageSmoothingEnabled=false;ctx.drawImage(spr2('pit').img,x*S,y*S,S,S);ctx.restore();return;}
   // 드러난 구덩이: 돌 테두리와 끝없이 깊은 어둠
   const X=cx(x),Y=cy(y);ctx.save();
   ctx.fillStyle='#4a3824';ctx.beginPath();ctx.arc(X,Y,S*0.42,0,7);ctx.fill();
@@ -530,6 +567,9 @@ function drawTrap(x,y){
   ctx.fillStyle=gr;ctx.beginPath();ctx.arc(X,Y,S*0.33,0,7);ctx.fill();ctx.restore();
 }
 function drawBase(x,y,t,hp){
+  if(spr2('camp_'+t)){const dead=hp<=0,m=SPRITES.meta.sheets['camp_'+t],k=Math.floor(performance.now()/110+t*2)%5;
+    drawSheet('camp_'+t,null,0,(dead?m.dead[0]:m.alive[0])+k,cx(x),y*S+S*0.98,S*1.9);
+    hpBar(x*S+S*0.05,y*S-S*0.75,S*0.9,hp/R.const.hp.B,TEAM[t].c);return;}
   // 야영지: 팀 색 천막과 모닥불
   const T=TEAM[t],px=x*S,py=y*S,dead=hp<=0;ctx.save();
   if(dead)ctx.globalAlpha=0.4;
@@ -553,6 +593,14 @@ function hpBar(x,y,w,frac,col){
   ctx.fillStyle='rgba(255,255,255,0.25)';ctx.fillRect(x,y,w*frac,h*0.4);
 }
 function drawUnit(x,y,t,k,hp,carry,sc,al,arrows){
+  const nm=k==='E'?'explorer_'+t:k==='G'?'archer_'+t:null;
+  if(nm&&spr2(nm)){const T=TEAM[t],X=cx(x),Yf=y*S+S*0.95;ctx.save();ctx.globalAlpha=al;
+    ctx.fillStyle=T.c;ctx.globalAlpha=al*0.22;ctx.fillRect(Math.round(x)*S,Math.round(y)*S,S,S);ctx.globalAlpha=al;   // 점유 칸
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.beginPath();ctx.ellipse(X,Yf-S*0.02,S*0.26,S*0.09,0,0,7);ctx.fill();
+    drawSheet(nm,'idle',2,0,X,Yf,S*2.6*sc);
+    const mx=R.const.hp[k];if(al>0.2)hpBar(X-S*0.3,y*S-S*0.18,S*0.6,hp/mx,T.c);
+    if(carry>0){const fs=Math.max(8,Math.round(S*0.28));ctx.font=`800 ${fs}px Cinzel,serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=3;ctx.strokeStyle='#1a0f06';ctx.strokeText(carry,X+S*0.36,Yf-S*0.2);ctx.fillStyle='#ffd24a';ctx.fillText(carry,X+S*0.36,Yf-S*0.2);}
+    ctx.restore();return;}
   const T=TEAM[t],X=cx(x),Y=cy(y),r=S*0.32*sc;
   ctx.save();ctx.globalAlpha=al;
   ctx.fillStyle='rgba(0,0,0,0.45)';ctx.beginPath();ctx.ellipse(X,Y+r*0.85,r*0.9,r*0.3,0,0,7);ctx.fill();
