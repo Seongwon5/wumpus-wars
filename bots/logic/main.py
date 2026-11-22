@@ -825,7 +825,7 @@ def agent_turn(me, view, memory):
     if ores:
         return go(ores - mates, '아는 금맥')
     # 6. 늦게는 적 야영지를 치러 간다
-    if me.round > 300:
+    if me.round > MAX_ROUNDS * 0.6:
         return go({n for n in K.nb4(eb) if n not in K.walls} - mates, '적 야영지로')
     # 7. 탐험: 안전이 증명된, 아직 서 보지 않은 칸 → 없으면 바람 옆의 모르는 칸 (위험 감수)
     frontier = {c for c in K.safe if c not in K.vib and c not in K.walls and not K.wsuspect(c) and c not in (K.base, eb)} - mates

@@ -16,7 +16,7 @@ EMPTY, WALL, GOLD, PIT, CAMP_TILE = '.', '#', 'G', 'P', 'C'
 # None 은 "지금 안 보이는 칸" 이다. 숨은 구덩이는 EMPTY 로 보인다.
 
 # ---- 규칙 상수 ----
-MAX_ROUNDS = 500
+MAX_ROUNDS = 1000
 MEMORY_SIZE = 64
 MAX_UNITS = 10          # 팀당 살아 있는 유닛 수 한도 (야영지 제외)
 START_BANK = 20
