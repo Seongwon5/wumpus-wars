@@ -1900,13 +1900,14 @@ function burst(x, z, y0, n, color, a, speed, seed, grav = 4, size = 1) {
     m.position.set(x + Math.cos(th) * sp * t, Math.max(0.03, y0 + up * sp * t * 1.4 - grav * t * t * 0.5), z + Math.sin(th) * sp * t);
     m.material.color.setHex(color); m.material.opacity = Math.max(0, 1 - a);
     m.scale.setScalar(size * (1 - a * 0.5));
-    m.rotation.set(t * 9 + k, t * 7, 0);
+    if (SHEETS.floor) m.rotation.set(0, 0, 0); else m.rotation.set(t * 9 + k, t * 7, 0);   // 도트 화풍: 돌지 않는 네모 알갱이
   }
 }
 const texCache = new Map();
 function textSprite(str, color) {
   const key = str + color;
   let tex = texCache.get(key);
+  if (!tex && SHEETS.floor) { tex = pixelText(str, color, 12, 2).tex; texCache.set(key, tex); }
   if (!tex) {
     const c = document.createElement('canvas'); c.width = 128; c.height = 64;
     const g = c.getContext('2d');
@@ -1948,9 +1949,30 @@ function stink(pos, now, id) {             // 악취를 맡는 유닛: 머리 �
   }
 }
 const _big = new Map();
+function pixelText(str, color, px, fixedAsp) {   // 도트 글씨: 작은 캔버스에 그리고 반투명을 없앤 뒤, 위는 밝게 · 검은 테두리
+  const f = `bold ${px}px "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif`;
+  const m = document.createElement('canvas').getContext('2d'); m.font = f;
+  const tw = Math.ceil(m.measureText(str).width) + 6, h = px + 6, w = fixedAsp ? Math.max(tw, Math.ceil(h * fixedAsp)) : tw;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); g.font = f; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff'; g.fillText(str, w / 2, h / 2 + 1);
+  const d = g.getImageData(0, 0, w, h), a = d.data, on = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) on[i] = a[i * 4 + 3] > 110 ? 1 : 0;
+  const col = rgbOf(color), hi = shade(color, 0.45), lo = shade(color, -0.25);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x, k = i * 4;
+    if (on[i]) { const v = y < h * 0.42 ? hi : y > h * 0.7 ? lo : col; a[k] = v[0]; a[k + 1] = v[1]; a[k + 2] = v[2]; a[k + 3] = 255; continue; }
+    let n = 0;
+    for (let dy = -1; dy <= 1 && !n; dy++) for (let dx = -1; dx <= 1; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < w && yy < h && on[yy * w + xx]) { n = 1; break; } }
+    if (n) { a[k] = 18; a[k + 1] = 10; a[k + 2] = 6; a[k + 3] = 255; } else a[k + 3] = 0;
+  }
+  g.putImageData(d, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  return {tex: t, asp: w / h};
+}
 function bigText(str, color, h = 0.6) {     // 한글이 들어가는 큰 글자 (폭을 글자에 맞춘다)
   const key = str + color;
   let t = _big.get(key);
+  if (!t && SHEETS.floor) { t = pixelText(str, color, 13); _big.set(key, t); }   // LPC 화풍: 도트 글씨
   if (!t) {
     const c = document.createElement('canvas'), g0 = c.getContext('2d');
     g0.font = '900 64px "Noto Serif KR", serif';
@@ -2019,7 +2041,7 @@ function effects(g, a, canSee) {
         }
         continue;
       }
-      const torch = baseIdx(tid) >= 0 && Math.abs(tx - ax) + Math.abs(ty - ay) === 1 && bi < 0;
+      const torch = !(R.const.rules && R.const.rules.unified) && baseIdx(tid) >= 0 && Math.abs(tx - ax) + Math.abs(ty - ay) === 1 && bi < 0;   // 횃불은 시안 1 규칙만
       if (torch) {                               // 횃불: 천막에 불이 붙어 솟는다
         if (a > 0.25) {
           const q = (a - 0.25) / 0.75;
@@ -2140,6 +2162,7 @@ function effects(g, a, canSee) {
       m.position.set(wx(x), 1.6, wz(y)); m.material.color.setHex(0xb8ff4a); m.material.opacity = 0.8 * (1 - a);
       m.scale.set(1.4 - a, 2.5, 1.4 - a);
       burst(wx(x), wz(y), 1.0, 30, 0xe4dcc2, a, 3, id + g, 5, 1.4);
+      burst(wx(x), wz(y), 0.6, 22, 0x4e7048, a, 2.4, id * 7 + g, 6, 1.8);     // 이끼 낀 돌 조각
       const s2 = bigText('비명!', '#d8ff6a', 0.9); s2.position.set(wx(x), 2.8 + a * 0.8, wz(y)); s2.material.opacity = 1 - a * a;
     } else if (k === 'drop') {
       const [, x, y, amt] = e;
