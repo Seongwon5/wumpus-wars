@@ -42,7 +42,31 @@ DAGGER_DAMAGE = 1       # 화살이 없는 궁수가 바로 옆 (상하좌우) �
 WUMPUS_HP = 9           # 웜퍼스 체력 (화살 3발)
 WUMPUS_HOARD = 20       # 웜퍼스가 쓰러지면 그 칸에 떨어지는 보물 금
 WUMPUS_CLEAR = 5        # 웜퍼스 굴은 두 야영지에서 체비셰프 거리 5 밖, 맵 가운데에 가장 가까운 칸 (대칭 짝)
+# ---- 시안 2: 하나로 합친 규칙 (unified) ----
+# 누구나 금을 캐고 누구나 싸운다. 화살 수 · 화살 줍기 · 단검은 없다.
+# 광부 (탐험가) 는 한 턴에 이동 1번 + 행동 1번 (공격 · 캐기 · 줍기 · 밀치기). 봇은 (Move(d), 행동) 을 돌려준다.
+# 궁수는 한 턴에 이동 또는 행동 1번.
+HP_UNIFIED = {EXPLORER: 12, ARCHER: 8, CAMP: 150}
+CARRY = {EXPLORER: 5, ARCHER: 2}    # 한 번에 들 수 있는 금
+MELEE_RANGE = 1         # 광부 공격: 상하좌우 바로 옆
+BOW_RANGE = 3           # 궁수 공격: 맨해튼 거리 3 안. 두 칸 중심을 잇는 선이 벽 칸을 지나면 못 쏜다
+                        # 야영지는 누구든 바로 옆 (상하좌우) 에서만 칠 수 있다
+
+
+def sight_cells(x0, y0, x1, y1):
+    """두 칸 중심을 잇는 선이 지나는 칸들 (두 끝 칸 빼고). 이 중 벽이 있으면 시선이 막힌다."""
+    n = 4 * max(abs(x1 - x0), abs(y1 - y0))
+    out = []
+    for i in range(1, n):
+        t = i / n
+        c = (int(x0 + (x1 - x0) * t + 0.5), int(y0 + (y1 - y0) * t + 0.5))
+        if c != (x0, y0) and c != (x1, y1) and c not in out:
+            out.append(c)
+    return out
+
+
 RULES = {               # 규칙 스위치 (모두 켜면 시안 규칙, 모두 끄면 옛 규칙)
+    'unified': True,    # 시안 2 (위). 켜면 line_shot · arrows 는 꺼진 것으로 본다
     'line_shot': True,  # 궁수 공격 = 직선 화살 (끄면 옆 8칸 공격)
     'arrows': True,     # 화살 수 제한과 야영지에서 채우기
     'push': True,       # 탐험가 밀치기

@@ -18,7 +18,7 @@ from concurrent.futures import ProcessPoolExecutor
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-OFF = {'line_shot': False, 'arrows': False, 'push': False, 'loot': False, 'wumpus': False}
+OFF = {'unified': False, 'line_shot': False, 'arrows': False, 'push': False, 'loot': False, 'wumpus': False}
 
 
 def maps_list(n):
@@ -46,6 +46,10 @@ def measure(r):
     no_exp = 0
     ev = {'push': 0, 'pushkill': 0, 'scream': 0, 'eaten': 0, 'pick': 0, 'atk': 0, 'refill': 0}
     pushed = {}
+    kill = {'E': 0, 'G': 0}      # 공격으로 쓰러뜨린 수 (때린 쪽 종류)
+    dlv = {'E': 0, 'G': 0}       # 바친 금 (나른 쪽 종류)
+    last_hit = {}
+    no_arch = 0
     for i, fr in enumerate(frames):
         us = fr['u']
         arch = [(u[1], u[3], u[4]) for u in us if u[2] == 'G']
@@ -58,12 +62,20 @@ def measure(r):
             k = e[0]
             if k in ev:
                 ev[k] += 1
+            if k == 'atk' and e[6] and e[6] > 0:
+                last_hit[e[6]] = kinds.get(e[1]) or next((u[2] for u in us if u[0] == e[1]), None)
+            if k == 'dlv':
+                kd = kinds.get(e[1]) or next((u[2] for u in us if u[0] == e[1]), None)
+                if kd in dlv:
+                    dlv[kd] += e[2]
             if k == 'push' and (e[5], e[6]) != (e[7], e[8]):
                 pushed[e[4]] = i
             if k == 'die':
                 died[e[1]] = (i, e[4])
                 if e[4] == 'atk' and kinds.get(e[1]) == 'E':
                     shot_exp += 1
+                if e[4] == 'atk' and last_hit.get(e[1]) in kill:
+                    kill[last_hit[e[1]]] += 1
                 if e[4] in ('trap', 'wumpus') and pushed.get(e[1]) == i:
                     ev['pushkill'] += 1
         d = fr['sc'][0] - fr['sc'][1]
@@ -76,12 +88,16 @@ def measure(r):
             ne = [sum(1 for u in us if u[1] == t and u[2] == 'E') for t in (0, 1)]
             if min(ne) == 0:
                 no_exp += 1
+            na = [sum(1 for u in us if u[1] == t and u[2] == 'G') for t in (0, 1)]
+            if min(na) == 0:
+                no_arch += 1
     enc = len(first)
     surv = sum(1 for uid, r0 in first.items() if not (uid in died and died[uid][0] - r0 <= 10))
     m = r['meta']
     return {'reason': m['reason'].split(',')[0].split(' ')[0] if '야영지' in m['reason'] else '시간 끝', 'rounds': m['rounds'],
             'enc': enc, 'surv': surv, 'shot_exp': shot_exp, 'changes': changes,
-            'no_exp': no_exp / max(1, len(frames) - 51), **ev}
+            'no_exp': no_exp / max(1, len(frames) - 51), 'no_arch': no_arch / max(1, len(frames) - 51),
+            'kE': kill['E'], 'kG': kill['G'], 'dE': dlv['E'], 'dG': dlv['G'], **ev}
 
 
 def summarize(name, rows):
@@ -93,7 +109,9 @@ def summarize(name, rows):
     print(f'[{name}] {n}판')
     print(f'  야영지 파괴로 끝 {camp / n:.0%} · 평균 길이 {agg("rounds"):.0f}라운드')
     print(f'  마주침 생존율 {surv / max(1, enc):.0%} ({surv}/{enc}) · 화살에 쓰러진 탐험가 {agg("shot_exp"):.1f}/판')
-    print(f'  앞선 팀 바뀜 {agg("changes"):.2f}/판 · 탐험가 없는 시간 {agg("no_exp"):.0%}')
+    print(f'  앞선 팀 바뀜 {agg("changes"):.2f}/판 · 탐험가 없는 시간 {agg("no_exp"):.0%} · 궁수 없는 시간 {agg("no_arch"):.0%}')
+    dE, dG = agg('dE'), agg('dG')
+    print(f'  쓰러뜨림: 광부 {agg("kE"):.1f} · 궁수 {agg("kG"):.1f} /판 · 바친 금 중 궁수 몫 {dG / max(1e-9, dE + dG):.0%}')
     print(f'  밀치기 {agg("push"):.1f} (떨어뜨림 {agg("pushkill"):.2f}) · 웜퍼스 처치 {agg("scream"):.2f} · 잡아먹힘 {agg("eaten"):.2f}'
           f' · 줍기 {agg("pick"):.1f} · 화살 {agg("atk"):.1f} · 채우기 {agg("refill"):.1f} /판')
 
@@ -104,11 +122,15 @@ def main():
     ap.add_argument('--new', default='logic', help='새 규칙에서 쓸 봇')
     ap.add_argument('--maps', type=int, default=40)
     ap.add_argument('--new-only', action='store_true')
+    ap.add_argument('--drafts', action='store_true', help='시안 1 (unified 끔) 과 시안 2 (unified) 를 비교')
     ap.add_argument('--jobs', type=int, default=max(1, (os.cpu_count() or 2) - 2))
     a = ap.parse_args()
     ms = maps_list(a.maps)
     with ProcessPoolExecutor(a.jobs) as ex:
         sets = (('옛 규칙', a.old, OFF), ('새 규칙', a.new, None))
+        if a.drafts:
+            sets = (('시안 1', a.new, {'unified': False}), ('시안 2', a.new, {'unified': True}))
+            a.new_only = False
         for name, bot, rules in (sets[1:] if a.new_only else sets):
             jobs = [([bot, bot], rules, k, m, s) for k, m in ms for s in (0, 1)]
             summarize(name, list(ex.map(one, jobs)))

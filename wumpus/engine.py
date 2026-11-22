@@ -7,7 +7,7 @@ from . import api
 from .api import (DIRS, EXPLORER, ARCHER, CAMP, EMPTY, WALL, GOLD, PIT, CAMP_TILE,
                   MAX_ROUNDS, MEMORY_SIZE, MAX_UNITS, START_BANK, INCOME_EVERY, COST, HP,
                   VISION_R2, ATTACK_DAMAGE, CAMP_ATTACK, CARRY_MAX, REGROW_EVERY, cheb, Move, Mine, Attack, Spawn,
-                  Shoot, Push, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
+                  Shoot, Push, HP_UNIFIED, CARRY, MELEE_RANGE, BOW_RANGE, sight_cells, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
 
 TEAM_NAMES = ('붉은 원정대', '푸른 원정대')
 KIND_CODE = {EXPLORER: 'E', ARCHER: 'G', CAMP: 'B'}
@@ -74,6 +74,7 @@ class View:
         self.stench = u.kind != CAMP and g.stench_at(u.x, u.y)
         # 비명: 지금까지 쓰러진 웜퍼스 수 (맵 어디서든 모두에게 들린다)
         self.screams = g.screams
+        self.rules = dict(g.rules)      # 켜진 규칙 (봇이 규칙에 맞게 움직이도록)
 
     def visible(self, x, y):
         return (x, y) in self._vis
@@ -121,6 +122,10 @@ class Game:
         self.rules = dict(RULES)
         if rules:
             self.rules.update(rules)
+        self.rules.setdefault('unified', False)
+        if self.rules['unified']:
+            self.rules['line_shot'] = self.rules['arrows'] = False
+        self.HPT = HP_UNIFIED if self.rules['unified'] else HP
         self.map = gmap
         self.w, self.h = gmap.w, gmap.h
         self.walls = set(gmap.walls)
@@ -211,6 +216,7 @@ class Game:
     # ---------- 유닛 ----------
     def _new_unit(self, team, kind, x, y):
         u = Unit(self.next_id, team, kind, x, y)
+        u.hp = self.HPT[kind]
         self.next_id += 1
         self.at[(x, y)] = u
         ns = {'__name__': f'bot_{team}_{u.id}'}
@@ -263,7 +269,18 @@ class Game:
         d = api.debug.dump()
         if d:
             self.debug[u.id] = d
-        if act is not None:
+        if isinstance(act, (list, tuple)):              # (이동, 행동): 광부만 둘 다, 나머지는 첫 행동만
+            acts = [a for a in act if a is not None]
+            if self.rules['unified'] and u.kind == EXPLORER:
+                mv = next((a for a in acts if isinstance(a, Move)), None)
+                ot = next((a for a in acts if not isinstance(a, Move)), None)
+                if mv is not None:
+                    self._apply(u, mv)
+                if ot is not None and u.alive:
+                    self._apply(u, ot)
+            elif acts:
+                self._apply(u, acts[0])
+        elif act is not None:
             self._apply(u, act)
         if u.alive and u.kind == ARCHER and self.rules['arrows'] and u.arrows < ARROWS_MAX:
             b = self.bases[u.team]
@@ -363,6 +380,30 @@ class Game:
                 return
         self.events.append(['atk', u.id, u.x, u.y, x, y, 0 if hit is None else -2])   # 0 빗나감, -2 우리 편에 막힘
 
+    def _hit(self, u, tx, ty):
+        """시안 2 공격: 광부는 바로 옆, 궁수는 맨해튼 3 안 (벽이 가리면 안 됨). 야영지는 바로 옆에서만."""
+        d = abs(tx - u.x) + abs(ty - u.y)
+        if d < 1 or d > (BOW_RANGE if u.kind == ARCHER else MELEE_RANGE):
+            return
+        if any(c in self.walls for c in sight_cells(u.x, u.y, tx, ty)):
+            return
+        c = (tx, ty)
+        if self.wumpus.get(c, 0) > 0:
+            self.wumpus[c] = max(0, self.wumpus[c] - ATTACK_DAMAGE)
+            self.events.append(['atk', u.id, u.x, u.y, tx, ty, -1])
+            if self.wumpus[c] == 0:
+                self.screams += 1
+                self.events.append(['scream', u.id, tx, ty, u.team])
+                self._drop(c, WUMPUS_HOARD)
+            return
+        t = self.at.get(c)
+        if t is None or t.team == u.team or (t.kind == CAMP and d > 1):
+            return
+        t.hp -= ATTACK_DAMAGE
+        self.events.append(['atk', u.id, u.x, u.y, tx, ty, t.id])
+        if t.hp <= 0:
+            self._kill(t, 'atk')
+
     def _push(self, u, d):
         if d not in DIRS:
             return
@@ -395,7 +436,7 @@ class Game:
             self._landed(u)
         elif isinstance(act, Mine) and u.kind in (EXPLORER, ARCHER):
             c = (u.x, u.y)
-            cap = CARRY_MAX if u.kind == EXPLORER else (ARCHER_CARRY if self.rules['loot'] else 0)
+            cap = CARRY[u.kind] if self.rules['unified'] else CARRY_MAX if u.kind == EXPLORER else (ARCHER_CARRY if self.rules['loot'] else 0)
             if u.kind == ARCHER and self.ground_arrows.get(c, 0) > 0 and u.arrows < ARROWS_MAX:
                 take = min(self.ground_arrows[c], ARROWS_MAX - u.arrows)
                 self.ground_arrows[c] -= take
@@ -412,7 +453,7 @@ class Game:
                     del self.loot[c]
                 self.loot_changed = True
                 self.events.append(['pick', u.id, u.x, u.y, take])
-            elif u.kind == EXPLORER and self.ore.get(c, 0) > 0 and u.carry < CARRY_MAX:
+            elif (u.kind == EXPLORER or self.rules['unified']) and self.ore.get(c, 0) > 0 and u.carry < cap:
                 self.ore[c] -= 1
                 u.carry += 1
                 self.ore_changed.add(c)
@@ -423,6 +464,12 @@ class Game:
             self._shoot(u, act.d)
         elif isinstance(act, Push) and u.kind == EXPLORER and self.rules['push']:
             self._push(u, act.d)
+        elif isinstance(act, Attack) and u.kind in (EXPLORER, ARCHER) and self.rules['unified']:
+            try:
+                tx, ty = int(act.x), int(act.y)
+            except Exception:
+                return
+            self._hit(u, tx, ty)
         elif isinstance(act, Attack) and u.kind == ARCHER:
             try:
                 tx, ty = int(act.x), int(act.y)
@@ -548,7 +595,8 @@ class Game:
                 'time_limit_ms': self.time_limit_ms,
             },
             'const': {
-                'hp': {'E': HP[EXPLORER], 'G': HP[ARCHER], 'B': HP[CAMP]},
+                'hp': {'E': self.HPT[EXPLORER], 'G': self.HPT[ARCHER], 'B': self.HPT[CAMP]},
+                'bow_range': BOW_RANGE, 'carry': {'E': CARRY[EXPLORER], 'G': CARRY[ARCHER]},
                 'carry': CARRY_MAX, 'max_rounds': MAX_ROUNDS,
                 'cost': {'E': COST[EXPLORER], 'G': COST[ARCHER]},
                 'vision': {'E': VISION_R2[EXPLORER], 'G': VISION_R2[ARCHER], 'B': VISION_R2[CAMP]},

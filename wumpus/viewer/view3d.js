@@ -1802,6 +1802,16 @@ function effects(g, a, canSee) {
       const [, id, ax, ay, tx, ty, tid] = e;
       if (!canSee(ax, ay) && !canSee(tx, ty)) continue;
       const u = umap[g].get(id) || umap[Math.max(0, g - 1)].get(id), bi = baseIdx(id), col = u ? TC[u[1]].l : bi >= 0 ? TC[bi].l : 0xffffff;
+      if (u && u[2] === 'E') {                    // 광부 근접 공격: 곡괭이를 휘둘러 번쩍
+        if (a > 0.3 && a < 0.85) {
+          const q = (a - 0.3) / 0.55, tc2 = TC[u[1]].c;
+          burst(wx(tx), wz(ty), 0.6, 12, 0xffffff, q, 1.8, id * 7 + g, 3, 0.9);
+          ring(wx(tx), wz(ty), 0.6, 0.15 + q * 0.6, tc2, 1 - q);
+          if (q < 0.4) { const st2 = fx('spark', () => new THREE.Sprite(new THREE.SpriteMaterial({map: starTex(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending})));
+            st2.position.set(wx(tx), 0.7, wz(ty)); st2.scale.setScalar(0.5 + q * 1.8); st2.material.opacity = 1 - q / 0.4; st2.material.color.setHex(tc2); }
+        }
+        continue;
+      }
       const torch = baseIdx(tid) >= 0 && Math.abs(tx - ax) + Math.abs(ty - ay) === 1 && bi < 0;
       if (torch) {                               // 횃불: 천막에 불이 붙어 솟는다
         if (a > 0.25) {

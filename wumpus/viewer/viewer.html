@@ -294,7 +294,8 @@ function load(data){
   $('metaline').textContent=`맵 ${W}×${H} · 맵 시드 ${m.map_seed} · 대칭(정답) ${symKo[m.sym]} · ${m.rounds}라운드`;
   $('vsline').innerHTML=`<span class="r">${esc(m.names[0])}</span> &nbsp;vs&nbsp; <span class="b">${esc(m.names[1])}</span>`;
   const rl=R.const.rules;
-  if(rl&&Object.values(rl).some(v=>v)){const on=[['line_shot','직선 화살'],['arrows','화살 '+(R.const.arrows||3)+'발'],['push','밀치기'],['loot','떨어진 금'],['wumpus','웜퍼스']].filter(([k])=>rl[k]).map(([,n])=>n);
+  if(rl&&rl.unified){$('rulesTag').style.display='block';$('rulesTag').textContent='시안 2: 누구나 캐고 싸움 · 광부 이동+행동 · 궁수 사거리 '+(R.const.bow_range||3)+' · 밀치기 · 떨어진 금 · 웜퍼스';}
+  else if(rl&&Object.values(rl).some(v=>v)){const on=[['line_shot','직선 화살'],['arrows','화살 '+(R.const.arrows||3)+'발'],['push','밀치기'],['loot','떨어진 금'],['wumpus','웜퍼스']].filter(([k])=>rl[k]).map(([,n])=>n);
     $('rulesTag').style.display='block';$('rulesTag').textContent='시안 규칙: '+on.join(' · ');} else $('rulesTag').style.display='none';
   P=0;selId=null;layout();
   if(window.View3D)View3D.build();

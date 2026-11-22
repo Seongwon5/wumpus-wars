@@ -12,7 +12,7 @@
 """
 import heapq
 
-from wumpus.api import (MAX_ROUNDS, Move, Mine, Shoot, Push, Spawn, debug, DIRS, mirror, cheb, direction_to,
+from wumpus.api import (MAX_ROUNDS, Move, Mine, Shoot, Push, Spawn, Attack, sight_cells, BOW_RANGE, MELEE_RANGE, CARRY, debug, DIRS, mirror, cheb, direction_to,
                         EXPLORER, ARCHER, CAMP, WALL, GOLD, PIT, CAMP_TILE,
                         CARRY_MAX, SAFE_RADIUS, COST, ARROW_RANGE, ARCHER_CARRY, WUMPUS_CLEAR, ARROWS_MAX)
 
@@ -297,6 +297,8 @@ def turn(me, view, memory):
     K.observe(me, view, memory)
     if me.kind == CAMP:
         return base_turn(me, view, memory)
+    if getattr(view, 'rules', {}).get('unified'):          # 시안 2: 누구나 캐고 싸운다
+        return miner_turn(me, view, memory) if me.kind == EXPLORER else archer_turn(me, view, memory)
     if me.kind == EXPLORER:
         return explorer_turn(me, view)
     return guardian_turn(me, view, memory)
@@ -525,6 +527,194 @@ def guardian_turn(me, view, memory):
         if not goals or not K.find_path(pos, goals, occupied):
             goals = aligned_goals(eb, occupied)
         label = '적 야영지 (%d,%d)' % eb
+    else:
+        cands = [mirror(s, *K.base, K.w, K.h) for s in K.alive_syms()]
+        cand = min(cands, key=lambda c: (abs(c[0] - me.x) + abs(c[1] - me.y), c))
+        goals = {(x, y) for x in range(K.w) for y in range(K.h)
+                 if (x - cand[0]) ** 2 + (y - cand[1]) ** 2 <= 8 and (x, y) != cand}
+        label = '정찰: 후보 (%d,%d)' % cand
+    goals = {c for c in goals if K.inb(c) and K.cost(c) is not None}
+    path = K.find_path(pos, goals, occupied)
+    show_mind(path, label)
+    return step_along(me, path, occupied)
+
+
+# ---------------- 시안 2 (unified): 누구나 캐고 싸운다 ----------------
+def los(a, b):
+    """두 칸 사이 시선이 벽에 막히지 않았나 (엔진과 같은 계산)."""
+    return not any(c in K.walls for c in sight_cells(a[0], a[1], b[0], b[1]))
+
+
+def pick_target(pos, enemies, r):
+    """사거리 r (맨해튼) 안에서 칠 대상. 궁수 > 광부 > 야영지 (야영지는 바로 옆만), 체력 낮은 쪽."""
+    cand = []
+    for u in enemies:
+        d = abs(u.x - pos[0]) + abs(u.y - pos[1])
+        if d < 1 or d > r or (u.kind == CAMP and d != 1) or not los(pos, (u.x, u.y)):
+            continue
+        cand.append(((u.kind == CAMP, u.kind != ARCHER, u.hp, u.id), u))
+    return min(cand, key=lambda t: t[0])[1] if cand else None
+
+
+def range_goals(target, occupied, r=BOW_RANGE, lo=2):
+    """target 을 칠 수 있는 칸들 (맨해튼 lo..r, 시선이 트임)."""
+    out = set()
+    for dx in range(-r, r + 1):
+        for dy in range(-r, r + 1):
+            d = abs(dx) + abs(dy)
+            c = (target[0] + dx, target[1] + dy)
+            if lo <= d <= r and K.inb(c) and c not in occupied and K.cost(c) is not None and los(c, target):
+                out.add(c)
+    return out
+
+
+def free_step(n, occupied):
+    return n not in occupied and K.cost(n) is not None and K.cost(n) <= 8
+
+
+def miner_turn(me, view, memory):
+    """광부: 이동 1번 + 행동 1번. 싸움은 붙은 적만, 나머지는 캐서 나른다."""
+    pos = (me.x, me.y)
+    units = view.units()
+    occupied = {(u.x, u.y) for u in units if u.id != me.id}
+    enemies = [u for u in units if u.team != me.team]
+    foes = [u for u in enemies if u.kind != CAMP]
+    cap = CARRY[EXPLORER]
+    home = {n for n in K.nb4(K.base) if n not in K.walls and n not in occupied}
+
+    # 1. 밀치기: 옆의 적 뒤가 구덩이 · 웜퍼스 굴이면 밀어 떨어뜨린다
+    for u in foes:
+        d = direction_to(me.x, me.y, u.x, u.y)
+        if d:
+            dx, dy = DIRS[d]
+            behind = (u.x + dx, u.y + dy)
+            if behind in K.trap or behind in K.wump:
+                show_mind(None, '밀치기 #%d → %s' % (u.id, '구덩이' if behind in K.trap else '웜퍼스 굴'))
+                return Push(d)
+    # 2. 바로 옆 적을 친다
+    t = pick_target(pos, foes, MELEE_RANGE)
+    if t:
+        show_mind(None, '근접 공격 → #%d' % t.id)
+        return Attack(t.x, t.y)
+    # 3. 한 걸음 붙어서 친다 (이동 + 공격)
+    best = None
+    for n in sorted(K.nb4(pos)):
+        if not free_step(n, occupied):
+            continue
+        t = pick_target(n, foes, MELEE_RANGE)
+        if t and (best is None or (t.kind != ARCHER, t.hp) < best[0]):
+            best = ((t.kind != ARCHER, t.hp), n, t)
+    if best:
+        _, n, t = best
+        show_mind([pos, n], '붙어서 공격 → #%d' % t.id)
+        return Move(direction_to(me.x, me.y, *n)), Attack(t.x, t.y)
+    # 4. 옆에 아는 웜퍼스 굴이 있고 적이 없으면 굴을 친다
+    if not foes:
+        for c in sorted(K.wump):
+            if abs(c[0] - me.x) + abs(c[1] - me.y) == 1:
+                show_mind(None, '웜퍼스 치기 (%d,%d)' % c)
+                return Attack(*c)
+    # 5. 캐고 나르기 (이동한 칸이 금이면 같은 턴에 캔다)
+    if me.carry >= cap or (me.carry > 0 and me.round > MAX_ROUNDS - 30):
+        goals, label = home, '귀환 (짐 %d)' % me.carry
+    elif (K.loot.get(pos) or K.tile.get(pos) == GOLD) and me.carry < cap:
+        show_mind(None, '줍기' if K.loot.get(pos) else '채굴')
+        return Mine()
+    else:
+        loot = {c for c in K.loot if K.cost(c) is not None} - occupied
+        ores = {c for c, t in K.tile.items() if t == GOLD} - occupied
+        if loot:
+            goals, label = loot, '떨어진 금'
+        elif ores:
+            goals, label = ores, '금'
+        else:
+            frontier = {c for c in K.safe if c not in K.vib and c not in K.walls and not K.wsuspect(c)
+                        and c != K.base and c != K.enemy_base and c not in occupied}
+            if frontier:
+                goals, label = frontier, '탐사 (안전 증명된 칸)'
+            else:
+                goals = {n for c in K.vib for n in K.nb4(c)
+                         if n not in K.safe and n not in K.trap and n not in K.walls and n not in occupied}
+                label = '탐사 (위험 감수)'
+    path = K.find_path(pos, goals, occupied)
+    if path is None and me.carry > 0:
+        path, label = K.find_path(pos, home, occupied), '귀환'
+    show_mind(path, label + (' → (%d,%d)' % path[-1] if path else ' (길 없음)'))
+    mv = step_along(me, path, occupied)
+    if mv and len(path) >= 2:
+        nxt = path[1]
+        if me.carry < cap and (K.loot.get(nxt) or K.tile.get(nxt) == GOLD):
+            return mv, Mine()
+        t = pick_target(nxt, enemies, MELEE_RANGE)
+        if t and (t.kind != CAMP or me.carry == 0):
+            return mv, Attack(t.x, t.y)
+    return mv
+
+
+def archer_turn(me, view, memory):
+    """궁수: 이동 또는 행동 1번. 사거리 3 안의 적을 쏘고, 한가하면 가까운 금을 캔다."""
+    pos = (me.x, me.y)
+    units = view.units()
+    occupied = {(u.x, u.y) for u in units if u.id != me.id}
+    enemies = [u for u in units if u.team != me.team]
+    foes = [u for u in enemies if u.kind != CAMP]
+    bx, by = K.base
+    cap = CARRY[ARCHER]
+    home = {n for n in K.nb4(K.base) if n not in K.walls and n not in occupied}
+
+    # 1. 사거리 안의 적
+    t = pick_target(pos, enemies, BOW_RANGE)
+    if t:
+        show_mind(None, '활 → #%d' % t.id)
+        return Attack(t.x, t.y)
+    # 2. 사거리 안의 웜퍼스 굴 (적이 안 보일 때)
+    if not foes:
+        for c in sorted(K.wump):
+            if 1 <= abs(c[0] - me.x) + abs(c[1] - me.y) <= BOW_RANGE and los(pos, c):
+                show_mind(None, '웜퍼스 사냥 (%d,%d)' % c)
+                return Attack(*c)
+    # 3. 짐이 차면 바치러
+    if me.carry >= cap or (me.carry > 0 and me.round > MAX_ROUNDS - 30):
+        path = K.find_path(pos, home, occupied)
+        if path:
+            show_mind(path, '금 바치러 (짐 %d)' % me.carry)
+            return step_along(me, path, occupied)
+    # 4. 보이는 적: 쏠 수 있는 자리로
+    if foes:
+        e = min(foes, key=lambda u: (abs(u.x - me.x) + abs(u.y - me.y), u.id))
+        path = K.find_path(pos, range_goals((e.x, e.y), occupied), occupied)
+        if path:
+            show_mind(path, '사격 자리로 (적 #%d)' % e.id)
+            return step_along(me, path, occupied)
+    # 5. 서 있는 칸의 금 · 떨어진 금
+    if (K.loot.get(pos) or K.tile.get(pos) == GOLD) and me.carry < cap:
+        show_mind(None, '줍기' if K.loot.get(pos) else '채굴')
+        return Mine()
+    rally = memory[3] < RALLY and me.round < 150
+    # 6. 집결하는 동안: 가까운 웜퍼스 사냥, 아니면 가까운 금을 캔다
+    if rally:
+        if K.wump:
+            goals = set()
+            for c in K.wump:
+                goals |= range_goals(c, occupied)
+            path = K.find_path(pos, goals, occupied)
+            if path and len(path) <= 12:
+                show_mind(path, '웜퍼스 사냥 자리로')
+                return step_along(me, path, occupied)
+        gold = {c for c, t in K.tile.items() if t == GOLD} | {c for c in K.loot if K.cost(c) is not None}
+        path = K.find_path(pos, gold - occupied, occupied)
+        if path and len(path) <= 10:
+            show_mind(path, '집결 중 채굴 → (%d,%d)' % path[-1])
+            return step_along(me, path, occupied)
+        show_mind(None, '집결 대기 (%d/%d)' % (memory[3], RALLY))
+        return None
+    # 7. 출정: 적 야영지 바로 옆으로 (야영지는 옆에서만 칠 수 있다)
+    if K.enemy_base is not None:
+        eb = K.enemy_base
+        goals = {c for c in K.nb4(eb) if K.cost(c) is not None} - occupied
+        label = '적 야영지 (%d,%d)' % eb
+        if not goals:
+            goals = range_goals(eb, occupied, lo=2)
     else:
         cands = [mirror(s, *K.base, K.w, K.h) for s in K.alive_syms()]
         cand = min(cands, key=lambda c: (abs(c[0] - me.x) + abs(c[1] - me.y), c))
