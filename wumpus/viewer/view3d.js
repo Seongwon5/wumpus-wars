@@ -2146,7 +2146,12 @@ function effects(g, a, canSee) {
       }
     } else if (k === 'trap') {
       const [, id, x, y] = e;
-      if (!canSee(x, y) || a < 0.35) continue;
+      if (!canSee(x, y)) continue;
+      if (SHEETS.floor && a > 0.25) {               // 낭떠러지 추락: 도트 글씨와 함께 떨어지는 돌 부스러기
+        const s2 = bigText('으악!', '#ffd2a0', 0.5); s2.position.set(wx(x), 1.7 + (a - 0.25) * 0.5, wz(y)); s2.material.opacity = Math.min(1, (1 - a) * 2.5);
+        burst(wx(x), wz(y), 0.02, 10, 0x8a7a64, (a - 0.25) / 0.75, 0.6, id * 23 + g, 9, 1.1);
+      }
+      if (a < 0.35) continue;
       const q = (a - 0.35) / 0.65;                  // 무너지는 흙먼지
       ring(wx(x), wz(y), 0.04, 0.3 + q * 1.2, 0xb89a70, 0.7 * (1 - q));
       burst(wx(x), wz(y), 0.05, 16, 0xa88a60, q, 1.6, id * 17 + g, -1.2, 1.6);
@@ -2210,7 +2215,8 @@ function effects(g, a, canSee) {
     } else if (k === 'eaten') {
       const [, id, x, y] = e;
       if (!canSee(x, y)) continue;
-      if (a > 0.4) { const q = (a - 0.4) / 0.6; burst(wx(x), wz(y), 1.0, 22, 0xd83a2a, q, 2, id * 11 + g, 4, 1.3); ring(wx(x), wz(y), 0.9, 0.3 + q, 0xff5a3a, 1 - q); }
+      if (a > 0.4) { const q = (a - 0.4) / 0.6; burst(wx(x), wz(y), 1.0, 22, 0xd83a2a, q, 2, id * 11 + g, 4, 1.3); ring(wx(x), wz(y), 0.9, 0.3 + q, 0xff5a3a, 1 - q);
+        if (SHEETS.floor) { burst(wx(x), wz(y), 0.2, 18, 0x4e7048, q, 2.6, id * 13 + g, 6, 1.6); ring(wx(x), wz(y), 0.03, 0.4 + q * 1.4, 0x8a7a64, 0.8 * (1 - q)); } }   // 골렘이 내려친 자리: 이끼 돌 조각 · 땅 울림
       const s2 = bigText('꿀꺽!', '#ff8a6a', 0.55); s2.position.set(wx(x), 2.2 + a * 0.6, wz(y)); s2.material.opacity = 1 - a * a;
     } else if (k === 'scream') {
       const [, id, x, y] = e;
