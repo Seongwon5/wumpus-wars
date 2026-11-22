@@ -29,6 +29,7 @@ controls.minPolarAngle = controls.maxPolarAngle = PHI;
 controls.minAzimuthAngle = controls.maxAzimuthAngle = 0;
 controls.screenSpacePanning = false;   // 끌면 바닥을 따라 움직인다
 controls.zoomToCursor = true;
+controls.zoomSpeed = 2;
 controls.mouseButtons = {LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN};
 controls.touches = {ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN};
 controls.minDistance = 4;
@@ -247,7 +248,7 @@ const PIX = {
 };
 const PAL = {h: '#6b4423', H: '#3e2512', r: '#3b2414', s: '#e0a97e', S: '#b57f5a', e: '#15120e', t: '#8a6a50', m: '#7a3a2a',
   c: '#e8dcc4', v: '#7a4c26', y: '#e9b452', Y: '#a8742a', l: '#2a1a10', k: '#f2a0a0', p: '#c84a5a',
-  g: '#6f9a34', G: '#3c5a1c', B: '#b6a862', o: '#efe6c8', M: '#5a1410', t2: '#e4dcc2'};
+  g: '#6f9a34', G: '#3c5a1c', B: '#b6a862', o: '#b8ae90', M: '#5a1410', t2: '#e4dcc2'};
 function drawPix(g, key, team, x0, y0, px) {
   const rows = PIX[key], col = team >= 0 ? TC[team].css : '#8fff3a', dark = team >= 0 ? '#' + TC[team].d.toString(16).padStart(6, '0') : '#2a3a10';
   for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
@@ -255,7 +256,7 @@ function drawPix(g, key, team, x0, y0, px) {
     if (ch === '.') continue;
     let c = PAL[ch];
     if (ch === 'b' || ch === 'n' || ch === 'q') c = (ch === 'q' && (x + y) % 5 === 0) ? dark : col;
-    if (key === 'W') { if (ch === 'e') c = '#e8ff50'; else if (ch === 'k') c = '#140e08'; else if (ch === 't') c = '#f0e8d0'; else if (ch === 'm') c = '#5a1410'; }
+    if (key === 'W') { if (ch === 'e') c = '#e8ff50'; else if (ch === 'k') c = '#140e08'; else if (ch === 't') c = '#bdb39a'; else if (ch === 'm') c = '#5a1410'; }
     if (key === 'G' && ch === 'e') c = '#2e8a52';
     g.fillStyle = c; g.fillRect(x0 + x * px, y0 + y * px, px, px);
   }
@@ -293,6 +294,69 @@ function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 �
   _tok.set(key, t);
   return t;
 }
+// 가까이에서 보이는 서 있는 도트 캐릭터 (16×24). 다리 줄만 바꿔 걷는 두 장을 만든다.
+const BODY = {
+  E: ['................', '.....oooooo.....', '....ohhhhhho.....', '....ohhhhhho....', '...obbbbbbbbo...', '..ohhhhhhhhhho..',
+      '...oossssssoo...', '....osesseso.iI.', '....ossssSsoiIIi', '....otsmmstow.i.', '.....otttto.w...', '....onnnnnnow...',
+      '...ovvcnncvvow..', '..ovvvccccvvvs..', '..osvvccccvvoo..', '...oVVggggVVo...', '...oppppppppo...', '...opppoopppo...'],
+  G: ['................', '.....oooooo.....', '....oyyyyyyo....', '...oyyyyyyyyo...', '...oyYyyyyYyoo..', '...oyssssssyyYo.',
+      '...oysessesyyYo.', '...oykssssksyYo.', '...oyssppssyoYo.', '.w..ossssssooYo.', 'w.l..ossssoqqo..', 'w.l.oqqcccqqqqo.',
+      'w.lsvvcccvvqqqo.', 'w.l.ovvcccvvqqo.', 'w.l.ovvcccvvqqo.', 'w.l.oVggggVVqqo.', '.w..oqqqqqqqqqo.', '.w..oqqqqqqqqqo.'],
+};
+const LEGS = {
+  E: [['...oppo..oppo...', '...oppo..oppo...', '...oPPo..oPPo...', '..oBBBo..oBBBo..', '..oBBBo..oBBBo..', '...ooo....ooo...'],
+      ['...oppo..oppo...', '..oppo....oppo..', '..oPPo....oPPo..', '.oBBBo....oBBBo.', '.oBBBo.....ooo..', '..ooo...........'],
+      ['...oppo..oppo...', '....oppo..oppo..', '....oPPo..oPPo..', '...oBBBo.oBBBo..', '....ooo..oBBBo..', '...........ooo..']],
+  G: [['....oqqqqqqqqqo.', '.....oppo.oppo..', '.....oppo.oppo..', '.....oppo.oppo..', '....oBBBo.oBBBo.', '.....ooo...ooo..'],
+      ['....oqqqqqqqqqo.', '....oppo...oppo.', '....oppo...oppo.', '...oBBBo...oppo.', '....ooo...oBBBo.', '...........ooo..'],
+      ['....oqqqqqqqqqo.', '......oppo.oppo.', '......oppo.oppo.', '......oppo.oBBBo', '.....oBBBo..ooo.', '......ooo.......']],
+};
+const BPAL = {o: '#1a120a', h: '#6b4423', H: '#3e2512', s: '#e8b48a', S: '#b57f5a', e: '#15120e', t: '#8a6a50', m: '#7a3a2a',
+  c: '#efe4cc', v: '#7a4c26', V: '#4a2c14', g: '#ffc63a', p: '#4a3a2a', P: '#2e2218', B: '#2a1a10', w: '#8a5a2a', i: '#d0d8e0',
+  I: '#7a8290', y: '#f0c058', Y: '#b07a2a', k: '#f2a0a0', l: '#f4f0e0'};
+const _body = new Map();
+function bodyTex(kind, team, fr) {
+  const key = kind + team + ':' + fr;
+  if (_body.has(key)) return _body.get(key);
+  const c = document.createElement('canvas');
+  const g = c.getContext('2d');
+  if (kind === 'W') { c.width = c.height = 20; drawPix(g, 'W', -1, 0, 0, 1); }
+  else {
+    c.width = 16; c.height = 24;
+    const rows = BODY[kind].concat(LEGS[kind][fr]), col = TC[team].css, dark = '#' + TC[team].d.toString(16).padStart(6, '0');
+    for (let y = 0; y < 24; y++) for (let x = 0; x < 16; x++) {
+      const ch = (rows[y] || '')[x] || '.';
+      if (ch === '.') continue;
+      let cc = BPAL[ch];
+      if (ch === 'b' || ch === 'n') cc = col;
+      if (ch === 'q') cc = (x + y) % 4 === 0 ? dark : col;
+      if (kind === 'G' && ch === 'p') cc = '#3a2a36';
+      if (kind === 'G' && ch === 'p' && y < 18) cc = '#d89070';
+      g.fillStyle = cc; g.fillRect(x, y, 1, 1);
+    }
+  }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  _body.set(key, t);
+  return t;
+}
+function makeBody(kind, team, h) {
+  const w = kind === 'W' ? h : h * 16 / 24;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: bodyTex(kind, team, 0), transparent: true, alphaTest: 0.5}));
+  sp.center.set(0.5, 0.02);
+  sp.scale.set(w, h, 1);
+  sp.userData.w = w;
+  sp.renderOrder = 6;
+  return sp;
+}
+let NEAR = 0;                                    // 0 = 멀리 (둥근 아이콘), 1 = 가까이 (도트 캐릭터)
+function lod(o) {
+  const n = NEAR;
+  o.token.visible = n < 0.999; o.token.material.opacity = (1 - n) * (o._fade ?? 1);
+  o.pix.visible = n > 0.001; o.pix.material.opacity = n * (o._fade ?? 1);
+  o.pix.material.alphaTest = n > 0.6 ? 0.5 : 0.01;
+}
+
 function makeToken(kind, team, size) {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: tokenTex(kind, team), transparent: true, alphaTest: 0.05}));
   sp.center.set(0.5, 0.02);                       // 패의 아래 끝이 바닥에 닿는다
@@ -503,14 +567,16 @@ function makeChar(kind, team) {
   for (const ch of body.children) ch.visible = false;
   const token = makeToken(kind, team, G ? 0.62 : 0.68);
   body.add(token);
+  const pix = makeBody(kind, team, 0.74);
+  body.add(pix);
   badge.visible = false;
-  return {g, token, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
+  return {g, token, pix, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
 }
 
 function setFlash(o, k) {
   if (o._flash === k) return;
   o._flash = k;
-  if (o.token) o.token.material.color.setRGB(1, 1 - k * 0.65, 1 - k * 0.65);
+  if (o.token) { o.token.material.color.setRGB(1, 1 - k * 0.65, 1 - k * 0.65); o.pix.material.color.setRGB(1, 1 - k * 0.65, 1 - k * 0.65); }
   for (const m of o.flash) m.emissive.copy(m.userData.base).lerp(HITC, k);
 }
 
@@ -705,7 +771,9 @@ function makeWumpus() {
   for (const ch of body.children) ch.visible = false;
   const token = makeToken('W', -1, 0.95);
   body.add(token);
-  return {g, token, live, dead, body, head, jaw, eyes, eyeL, arms, hp, aura, flash: [fur, fur2, belly]};
+  const pix = makeBody('W', -1, 0.9);
+  body.add(pix);
+  return {g, token, pix, live, dead, body, head, jaw, eyes, eyeL, arms, hp, aura, flash: [fur, fur2, belly]};
 }
 
 function makeLoot() {
@@ -1124,7 +1192,7 @@ function updateWumpus(g, a, moving, now) {
     let fl = 0;
     if (hit && a > 0.45) fl = Math.max(0, 1 - (a - 0.45) / 0.45);
     for (const m of w.flash) m.emissive.copy(m.userData.base).lerp(HITC, fl);
-    w.token.material.color.setRGB(1, 1 - fl * 0.65, 1 - fl * 0.65);
+    w.token.material.color.setRGB(1, 1 - fl * 0.65, 1 - fl * 0.65); w.pix.material.color.copy(w.token.material.color);
     if (hit && !scr && a > 0.45 && a < 0.9) { w.body.rotation.x = -0.25 * Math.sin(Math.PI * (a - 0.45) / 0.45); w.jaw.rotation.x = 0.6; }
     else w.body.rotation.x = 0;
     if (eat) {                                     // 덥석: 앞으로 달려들며 입을 크게 벌렸다 닫는다
@@ -1211,7 +1279,14 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     for (const fl of o.flames) fl.scale.set(1, 1 + Math.sin(now * 17 + id) * 0.18, 1);
     const sc = moving && !p ? elastic(Math.min(1, a * 1.3)) : 1;
     o.g.scale.setScalar(Math.max(0.001, sc) * CH * (o.kind === 'G' ? 1.12 : 1));
-    o.disc.visible = true; o.badge.visible = false; o.token.material.opacity = 1;
+    o.disc.visible = true; o.badge.visible = false; o._fade = 1;
+    const fr = st === 'walk' ? 1 + (Math.floor(a * 4) % 2) : 0;
+    if (o._fr !== fr) { o._fr = fr; o.pix.material.map = bodyTex(o.kind, o.team, fr); o.pix.material.needsUpdate = true; }
+    const sx = Math.sin(o.g.rotation.y);
+    if (Math.abs(sx) > 0.3) o._left = sx < 0;
+    o.pix.scale.x = o.pix.userData.w * (o._left ? -1 : 1);
+    o.pix.material.rotation = st === 'mine' || st === 'attack' || st === 'push' ? Math.sin(Math.PI * Math.min(1, a / 0.6)) * 0.35 * (o._left ? 1 : -1) : 0;
+    lod(o);
     const src = moving && a < 0.5 && p ? p : u;
     o.pips.forEach((pp, i) => pp.visible = i < src[6]);
     const arr = o.kind === 'G' && src[8] !== undefined ? src[8] : -1;
@@ -1220,7 +1295,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     const hp10 = Math.max(0, Math.min(10, Math.ceil(src[5] / R.const.hp[u[2]] * 10))), bk = src[6] + ':' + hp10 + ':' + arr;
     if (o._bk !== bk) { o._bk = bk; o.token.material.map = tokenTex(o.kind, o.team, src[6], hp10, arr); o.token.material.needsUpdate = true; }
     const mx = R.const.hp[u[2]];
-    o.hp.visible = false;                         // 체력은 머리 위 표지의 고리로 보인다
+    o.hp.visible = NEAR > 0.5;                    // 멀리서는 아이콘 고리, 가까이서는 머리 위 막대
     setHp(o.hp, src[5] / mx, TC[u[1]].c);
     billboard(o.hp, o.g);
     const hit = moving && ev.hit.get(id);
@@ -1245,7 +1320,9 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     }
     if (!show(o, x, y, u[1] === team)) continue;
     o.hp.visible = false; o.disc.visible = o.badge.visible = false;
-    o.token.material.opacity = Math.max(0, 1 - Math.max(0, a - 0.55) / 0.45);
+    o._fade = Math.max(0, 1 - Math.max(0, a - 0.55) / 0.45);
+    lod(o);
+    o.pix.material.rotation = Math.min(1, a * 1.6) * Math.PI / 2 * (o._left ? -1 : 1);   // 옆으로 쓰러진다
     setFlash(o, 0);
     if (eaten) {                                   // 웜퍼스 입속으로 들려 올라가 사라진다
       const q = Math.max(0, (a - 0.35) / 0.65);
@@ -1634,6 +1711,8 @@ function frame(f, g, a, fi, team, vis, seen) {
   const now = performance.now() / 1000, moving = g !== f;
   const canSee = (x, y) => !vis || vis[y * W + x] === 1;
   fxBegin();
+  { const d = camera.position.distanceTo(controls.target); NEAR = Math.min(1, Math.max(0, (15 - d) / 4)); }
+  if (world.wum) world.wum.forEach(w => lod(w));
   applyFog(fi, team, vis, seen);
   updateStatic(fi, team, seen, now);
   updateBases(fi, g, a, moving, seen, vis, now);
