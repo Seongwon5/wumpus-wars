@@ -669,7 +669,7 @@ function decoTex(v) {                            // 바닥 장식: 작은 돌 ·
   return pxMemo('deco' + v, () => pxTex(pxCanvas(32, 32, K => {
     if (v === 0) { for (const [x, y, r] of [[9, 20, 2.2], [14, 23, 1.5], [22, 12, 1.8]]) { K.E(x, y, r + 0.6, r, '#5e5a54'); K.P(x - 1, y - 1, '#8c887e'); K.P(x, y + Math.ceil(r), '#2e2c28'); } }
     else if (v === 1) { for (let k = 0; k < 26; k++) { const x = 6 + Math.floor(K.rn() * 20), y = 8 + Math.floor(K.rn() * 16); K.P(x, y, K.rn() < 0.5 ? '#3a5a2a' : '#4e7036'); if (K.rn() < 0.4) K.P(x + 1, y, '#2c4420'); } }
-    else { K.L(10, 18, 20, 14, '#d8d0b6', 2); K.E(9, 18, 1.6, 1.6, '#e4dcc2'); K.E(21, 14, 1.6, 1.6, '#e4dcc2'); K.outline('#2a2418'); }
+    else { K.L(11, 18, 19, 15, '#8a8270', 1); K.E(10, 18, 1.2, 1.2, '#9a927e'); K.E(20, 15, 1.2, 1.2, '#9a927e'); }
   }, 61 + v), true));
 }
 function coinTex() {                              // 도트 금화

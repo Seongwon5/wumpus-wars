@@ -924,7 +924,8 @@ function updateSide(fi){
   // 사건
   const L=[];
   const who=id=>{const bi=baseIds.indexOf(id);if(bi>=0)return `<span class="${'rb'[bi]}">${TEAM[bi].name} 야영지</span>`;
-    const u=umap[fi].get(id)||umap[Math.max(0,fi-1)].get(id);return u?`<span class="${'rb'[u[1]]}">${TEAM[u[1]].name} ${KIND[u[2]]} #${id}</span>`:'#'+id;};
+    const u=umap[fi].get(id)||umap[Math.max(0,fi-1)].get(id);return u?`${face(u[2],u[1]).startsWith('<img')?face(u[2],u[1]):''}<span class="${'rb'[u[1]]}">${TEAM[u[1]].name} ${KIND[u[2]]} #${id}</span>`:'#'+id;};
+  const uni=R.const.rules&&R.const.rules.unified, kindOf=id=>{const u=umap[fi].get(id)||umap[Math.max(0,fi-1)].get(id);return u?u[2]:null;};
   for(const e of fr.e||[]){
     if(e[0]==='trap')L.push(`${who(e[1])} 구덩이를 밟음 (${e[2]},${e[3]})`);
     else if(e[0]==='die'&&e[4]==='atk')L.push(`${who(e[1])} 쓰러짐`);
@@ -932,8 +933,8 @@ function updateSide(fi){
     else if(e[0]==='atk'&&e[6]===-1)L.push(`${who(e[1])} → 웜퍼스 명중`);
     else if(e[0]==='atk'&&e[6]===0)L.push(`${who(e[1])} 화살 빗나감`);
     else if(e[0]==='atk'&&e[6]===-2)L.push(`${who(e[1])} 화살이 우리 편에 막힘`);
-    else if(e[0]==='atk'&&baseIds.includes(e[6])&&Math.abs(e[4]-e[2])+Math.abs(e[5]-e[3])===1)L.push(`${who(e[1])} 횃불로 ${who(e[6])} 태움`);
-    else if(e[0]==='atk')L.push(`${who(e[1])} → ${who(e[6])} 화살`);
+    else if(!uni&&e[0]==='atk'&&baseIds.includes(e[6])&&Math.abs(e[4]-e[2])+Math.abs(e[5]-e[3])===1)L.push(`${who(e[1])} 횃불로 ${who(e[6])} 태움`);
+    else if(e[0]==='atk')L.push(`${who(e[1])} → ${who(e[6])} ${uni&&kindOf(e[1])==='E'?'근접 공격':'화살'}`);
     else if(e[0]==='push')L.push((e[5]===e[7]&&e[6]===e[8])?`${who(e[1])} → ${who(e[4])} 밀치기 (막힘)`:`${who(e[1])} → ${who(e[4])} 밀치기`);
     else if(e[0]==='scream')L.push(`<b style="color:#c8ff5a">웜퍼스의 비명!</b> (처치: ${who(e[1])})`);
     else if(e[0]==='pick')L.push(`${who(e[1])} 떨어진 금 ${e[4]}개 주움`);
@@ -941,7 +942,7 @@ function updateSide(fi){
     else if(e[0]==='refill')L.push(`${who(e[1])} 화살 채움`);
     else if(e[0]==='stab')L.push(`${who(e[1])} → ${who(e[6])} 단검`);
     else if(e[0]==='parrow')L.push(`${who(e[1])} 떨어진 화살 ${e[4]}개 주움`);
-    else if(e[0]==='spawn')L.push(`<span class="${'rb'[e[2]]}">${TEAM[e[2]].name}</span> ${KIND[e[3]]} #${e[1]} 생산`);
+    else if(e[0]==='spawn')L.push(`${face(e[3],e[2]).startsWith('<img')?face(e[3],e[2]):''}<span class="${'rb'[e[2]]}">${TEAM[e[2]].name}</span> ${KIND[e[3]]} #${e[1]} 생산`);
     else if(e[0]==='dlv')L.push(`${who(e[1])} 금 ${e[2]}개 바침`);
     else if(e[0]==='err')L.push(`<span style="color:#ff8080">오류</span> #${e[1]}: ${esc(e[2])}`);
   }
