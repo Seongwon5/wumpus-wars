@@ -747,6 +747,7 @@ function face(k,t){
     im.src=SPRITES.img[nm];}
   return f.url?`<img class="face" src="${f.url}" alt="${nmK}" title="${nmK}">`:nmK;
 }
+function faceImg(k,t){const f=face(k,t);return f.startsWith('<img')?f+' ':'';}   // 얼굴 그림만 (글자로 대신하지 않음)
 function hudCost(){return (R.const&&R.const.cost)||{E:10,G:15};}
 function buildHud(){
   const cost=hudCost();
@@ -775,7 +776,7 @@ function updateHud(fi){
   const cost=hudCost(),mx=R.const.hp.B;
   for(let t=0;t<2;t++){
     let ne=0,ng=0;for(const u of fr.u)if(u[1]===t){if(u[2]==='E')ne++;else ng++;}
-    $('uc'+t).innerHTML=AG()?`${face('E',t)} 모험가 ${ne} (${ne}/10)`:`${face('E',t)} ${ne} · ${face('G',t)} ${ng} (${ne+ng}/10)`;
+    $('uc'+t).innerHTML=AG()?`${faceImg('E',t)}모험가 ${ne} (${ne}/10)`:`${face('E',t)} ${ne} · ${face('G',t)} ${ng} (${ne+ng}/10)`;
     $('afE'+t).innerHTML=`${face('E',t)} ${cost.E}`;$('afG'+t).innerHTML=`${face('G',t)} ${cost.G}`;$('afG'+t).style.display=AG()?'none':'';
     $('sc'+t).textContent=fr.sc[t];
     $('bk'+t).textContent=fr.bk[t];
@@ -904,7 +905,7 @@ function updateSide(fi){
     let ne=0,ng=0;for(const u of fr.u)if(u[1]===t){if(u[2]==='E')ne++;else ng++;}
     const hp=fr.bh[t],mx=R.const.hp.B;
     $('team'+t).innerHTML=`<div class="top"><span class="nm ${'rb'[t]}">${TEAM[t].name}</span><span class="bot">${esc(R.meta.names[t])}</span></div>
-      <div class="stat"><span>바친 금 <b>${fr.sc[t]}</b></span><span>금고 <b>${fr.bk[t]}</b></span><span>${face('E',t)} ${AG()?'모험가 ':''}<b>${ne}</b></span>${AG()?'':`<span>${face('G',t)} <b>${ng}</b></span>`}</div>
+      <div class="stat"><span>바친 금 <b>${fr.sc[t]}</b></span><span>금고 <b>${fr.bk[t]}</b></span><span>${AG()?faceImg('E',t)+'모험가 ':face('E',t)+' '}<b>${ne}</b></span>${AG()?'':`<span>${face('G',t)} <b>${ng}</b></span>`}</div>
       <div class="bar"><i style="width:${100*hp/mx}%;background:${TEAM[t].c}"></i></div>
       <div class="bot">야영지 체력 ${hp} / ${mx}</div>`;
   }

@@ -40,6 +40,8 @@ def write_html(replay, path):
     """리플레이를 품은 뷰어 html 을 쓴다. replay 가 None 이면 빈 뷰어 (json 을 끌어다 놓아 연다)."""
     html = _template()
     if replay is not None:
+        # 뷰어는 봇의 머릿속 기록 (debug, 프레임의 'd') 을 쓰지 않는다 → html 을 가볍게 (.json 에는 남는다)
+        replay = dict(replay, frames=[{k: v for k, v in fr.items() if k != 'd'} for fr in replay.get('frames', [])])
         data = json.dumps(replay, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
         html = html.replace('/*REPLAY_DATA*/', data, 1)
     with open(path, 'w', encoding='utf-8') as f:

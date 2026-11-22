@@ -49,17 +49,15 @@ python -m wumpus new mybot
 ```python
 def turn(me, view, memory):
     if me.kind == CAMP:
-        return camp_turn(me, view, memory)       # 야영지: 유닛을 만든다
-    if me.kind == EXPLORER:
-        return explorer_turn(me, view, memory)   # 탐험가: 금을 캐 나른다
-    return archer_turn(me, view, memory)         # 궁수: 싸운다
+        return camp_turn(me, view, memory)       # 야영지: 모험가를 만든다
+    return adventurer_turn(me, view, memory)     # 모험가: 느끼고 · 추론하고 · 캐고 · 싸운다
 ```
 
 꼭 알아 둘 세 가지:
 
-1. **유닛마다 이 파일이 따로 실행된다.** 모듈 전역 변수는 그 유닛 혼자만의 기억이다.
+1. **모험가마다 이 파일이 따로 실행된다.** 모듈 전역 변수는 그 모험가 혼자만의 기억 (지식 베이스) 이다.
 2. **팀끼리 나눌 것은 `memory` (정수 64칸)** 에 적는다.
-3. **유닛은 자기 시야만 본다.** 숨은 구덩이는 눈에 안 보이고, 옆 칸에서 **바람** (`view.breeze`) 으로만 느낀다.
+3. **모험가는 자기 칸만 느낀다.** 벽 · 구덩이 · 금 · 웜퍼스 · 다른 모험가는 보이지 않고, 지각 (`view.breeze` · `stench` · `glitter` · `bump` · `footsteps` · `hurt` · `screams`) 으로만 추론한다.
 
 자세한 API 는 [봇 API](API.md), 규칙은 [게임 규칙](RULES.md) 에 있다.
 
@@ -71,9 +69,7 @@ python -m wumpus run mybot random --open      # 2) 한 판을 눈으로 본다
 python -m wumpus scrim mybot logic            # 3) 맵 10개 x 양쪽 진영 = 20판으로 실력을 잰다
 ```
 
-![봇의 머릿속 보기: 탐험가 #5 가 안전하다고 증명한 칸 (초록) 과 갈 길](images/mind.png)
-
-**디버그 표시**: `debug.mark(x, y, 'green')`, `debug.path(칸들)`, `debug.say('글')` 을 부르면, 뷰어에서 그 유닛을 누를 때 봇의 생각이 겹쳐 보인다. 경기 결과에는 영향이 없다. 추론이 맞는지 눈으로 확인하는 가장 빠른 길이다.
+**디버그 기록**: `debug.mark(x, y, 'green')`, `debug.path(칸들)`, `debug.say('글')` 을 부르면 리플레이 .json 의 프레임 `d` 에 남는다. 경기 결과에는 영향이 없다. 추론이 맞는지 확인할 때 쓴다. 리플레이 화면에서는 모험가 머리 위의 **지각 아이콘**으로 그 순간 무엇을 느꼈는지 볼 수 있다.
 
 고칠 때마다 `scrim` 으로 예전 봇과 겨뤄 보자. 예전 봇은 폴더째 복사해 두면 된다:
 
@@ -85,5 +81,5 @@ python -m wumpus scrim mybot mybot_v1          # 새 봇이 정말 나아졌나?
 
 ## 5. 더 볼 것
 
-- 예시 추론 봇 `bots/logic/main.py`: 명제논리 · 대칭 추론 · A* 를 쓴다. 일부러 고칠 거리를 남겨 두었다 (CSP 배정, 미니맥스, 여러 바람 칸을 엮는 레졸루션).
+- 예시 추론 봇 `bots/logic/main.py`: 명제논리 · 대칭 추론 · A* · 발소리 추론을 쓴다. 일부러 고칠 거리를 남겨 두었다 (공유 지도, 웜퍼스 사냥, CSP 배정, 여러 바람 칸을 엮는 레졸루션).
 - 기본 점검: `python -m unittest discover tests`

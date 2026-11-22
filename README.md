@@ -2,7 +2,7 @@
 
 인공지능개론 배틀코드형 과제 게임이다. 학생은 **봇 코드**를 짠다. 경기 중에 사람은 아무것도 하지 않고, 봇의 판단만으로 승부가 난다.
 
-두 원정대가 고대 유적 동굴에서 금을 캐 나르고, **바람**으로 숨은 **구덩이**를 추론해 피하며, 적 야영지를 찾아 부순다. 수업의 Wumpus 세계를 두 팀 대전으로 옮긴 게임이다.
+두 원정대의 **모험가**들이 어두운 동굴에서 금을 캐 나른다. 모험가는 **자기 칸만 느낀다** (바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔 · 비명). 구덩이 · 웜퍼스 · 금 · 적은 모두 기억과 추론으로 알아내야 한다. 수업의 웜퍼스 월드를 두 팀 대전으로 옮긴 게임이다.
 
 ![경기 장면](docs/images/hero.png)
 
@@ -10,10 +10,11 @@
 |---|---|---|
 | 숨은 구덩이와 바람 | Pit · Breeze | 명제논리 추론, 지식 베이스 |
 | 숨은 맵 대칭 | 1차 술어 논리 | 대칭 후보 지우기, 전칭 예화 |
-| 시야 밖 어둠 | 부분 관측 | 믿음 상태, 탐사 |
+| 웜퍼스와 악취 · 금과 반짝임 | Wumpus · Stench · Glitter | 명제논리 추론, 모델 검사 |
+| 자기 칸만 느끼는 모험가 | 부분 관측 | 믿음 상태, 지식 베이스, 탐사 |
+| 보이지 않는 적 (발소리 · 아픔) | 지각 추론 | 가설 지우기, 팀 공유 지식 |
 | 금 캐기 · 길 찾기 | 탐색 | BFS · A* · 위험 비용 |
-| 탐험가 여럿에게 금맥 나누기 | CSP | 배정 · 제약 만족 |
-| 궁수끼리 싸움 | 게임 트리 | 미니맥스 |
+| 모험가 여럿에게 금맥 나누기 | CSP | 배정 · 제약 만족 |
 
 ## 바로 해 보기
 
@@ -34,9 +35,8 @@ python -m wumpus scrim mybot logic              # 맵 10개에서 양쪽 진영�
 
 | 파일 | 내용 |
 |---|---|
-| `demo/logic_vs_logic.html` | 추론 봇끼리. 푸른 원정대가 점수에서 75 까지 뒤지다 500라운드 끝에 163:150 으로 뒤집는다 |
-| `demo/logic_vs_random.html` | 추론 봇 vs 무작위 봇. 무작위 봇은 구덩이에 자주 빠진다 |
-| `demo/starter_vs_random.html` | 시작용 봇 vs 무작위 봇 |
+| `demo/starter_vs_random.html` | 시작용 봇 vs 무작위 봇. 1000 라운드 끝에 417 : 261 |
+| `demo/logic_vs_starter.html` | 예시 추론 봇 vs 시작용 봇. 추론 봇이 273 라운드에 야영지를 부순다 |
 
 ## 설명서
 
@@ -44,7 +44,7 @@ python -m wumpus scrim mybot logic              # 맵 10개에서 양쪽 진영�
 |---|---|
 | [시작하기](docs/GETTING_STARTED.md) | 설치, 첫 경기, 내 봇 만들기, 고치고 시험하는 순서 |
 | [게임 규칙](docs/RULES.md) | 맵 · 구덩이 · 바람 · 금맥 · 유닛 · 전투 · 승리 조건 · 모든 수치 |
-| [봇 API](docs/API.md) | `turn(me, view, memory)`, 행동, 시야, 공유 메모리, 디버그 표시 |
+| [봇 API](docs/API.md) | `turn(me, view, memory)`, 지각, 행동, 공유 메모리, 디버그 기록 |
 | [스크림 도구](docs/SCRIM.md) | 여러 맵 묶음 대전, 승률 · 시간 · 오류 보기, CSV |
 | [리플레이 도구](docs/REPLAY.md) | 리플레이 파일, 3D · 2D 뷰어 사용법, 봇의 머릿속 보기 |
 | [맵](docs/MAPS.md) | 맵 목록 · 그림 보기 · 새 맵 만들기 · 맵 파일 형식 |
@@ -89,10 +89,9 @@ docs/              설명서와 그림
 tests/             기본 점검 (python -m unittest discover tests)
 ```
 
-![전투 장면: 붉은 궁수가 푸른 야영지를 쏜다](docs/images/battle.png)
-
 ## 쓴 오픈소스
 
 - 3D 뷰어: [three.js](https://threejs.org) 0.160 (MIT 라이선스). 인터넷 (jsDelivr CDN) 에서 불러온다. 인터넷이 없으면 2D 뷰로 저절로 바뀐다.
 - 글꼴: Cinzel, Noto Serif KR (SIL Open Font License, Google Fonts).
-- 캐릭터 · 지형 · 질감 · 효과음은 모두 코드로 만들었다 (외부 모델 · 그림 · 소리 파일 없음).
+- 캐릭터 · 야영지 · 웜퍼스 · 동굴 그림: [Liberated Pixel Cup (LPC)](https://lpc.opengameart.org) 공개 그림 (CC-BY-SA 3.0 / 4.0, GPL, OGA-BY, CC-BY). 합성 도구 `tools/lpc_build.py`, 만든 사람 표기 [`wumpus/viewer/sprites/CREDITS.md`](wumpus/viewer/sprites/CREDITS.md).
+- 효과음은 코드로 만들었다.
