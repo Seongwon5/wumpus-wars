@@ -206,26 +206,21 @@ input[type=checkbox]{accent-color:#c79a55}
       <div class="card team" id="team0"></div>
       <div class="card team" id="team1"></div>
       <div class="card"><h3>바친 금 추이</h3><canvas id="chart"></canvas></div>
-      <div class="card" id="mind"><h3>봇의 머릿속</h3><div id="mindbody" class="hint">유닛이나 야영지를 누르면 그 유닛이 아는 것과 추론한 것이 보입니다.</div></div>
+      <div class="card" id="mind" style="display:none"><h3>봇의 머릿속</h3><div id="mindbody" class="hint">유닛이나 야영지를 누르면 그 유닛이 아는 것과 추론한 것이 보입니다.</div></div>
       <div class="card"><h3>표시</h3>
         <div id="legend">
-          <span class="sw" style="background:rgba(80,220,120,.55)"></span><span>안전하다고 증명된 칸 (아직 안 가 봄)</span>
-          <span class="sw" style="background:rgba(255,70,70,.6)"></span><span>구덩이라고 추론한 칸</span>
-          <span class="sw" style="background:rgba(255,200,60,.6)"></span><span>구덩이 의심 칸 (바람 옆)</span>
-          <span class="sw" style="background:rgba(180,110,255,.6)"></span><span>적 야영지 후보 (남은 대칭)</span>
+          <span class="sw" style="background:#000;border:2px solid #d8a840"></span><span>구덩이 (봇은 바람으로만 안다)</span>
           <span class="sw" style="border:2px solid #bfe9ff;border-radius:50%;border-left-color:transparent"></span><span>바람을 느끼는 유닛 (구덩이 옆)</span>
-          <span class="sw" style="border:2px dashed rgba(229,83,63,.85);border-radius:50%;background:#000"></span><span>숨은 구덩이 (전체 보기에서만)</span>
-          <span class="sw" style="background:rgba(80,160,255,.6)"></span><span>웜퍼스 의심 칸 (악취 옆)</span>
           <span class="sw" style="background:radial-gradient(circle,#c8ff5a,#3a5a10)"></span><span>웜퍼스 굴 · 초록 안개는 악취</span>
-          <span class="sw" style="background:radial-gradient(circle,#ffe27a,#7a4a10);border-radius:40%"></span><span>떨어진 금 (누구나 주움)</span>
-          <span class="sw" style="background:linear-gradient(135deg,transparent 40%,#e8d6ac 40%,#e8d6ac 55%,transparent 55%)"></span><span>바닥에 꽂힌 화살 (궁수가 주움)</span>
+          <span class="sw" style="background:radial-gradient(circle,#ffe27a,#7a4a10);border-radius:40%"></span><span>떨어진 금 (밟으면 주움)</span>
+          <span class="sw" style="background:linear-gradient(90deg,#ffc63a 60%,#3a2e22 60%)"></span><span>금맥 위 막대: 다시 자라는 시계</span>
         </div>
       </div>
       <div class="card"><h3>이번 라운드 사건</h3><div id="log"></div></div>
     </aside>
   </main>
   <footer>
-    <button id="b3d" title="2D / 3D 바꾸기">2D 보기</button>
+    <button id="b3d" title="2D / 3D 바꾸기" style="display:none">2D 보기</button>
     <button id="bCam" title="카메라를 처음 위치로 (끌어서 돌리기 · 휠로 확대)">카메라 ↺</button>
     <button id="bSpec" title="싸움 · 사고가 난 곳을 카메라가 따라간다 (끌면 꺼짐)">관전 카메라</button>
     <button id="bSnd" class="on" title="효과음 켜기 / 끄기">소리 켬</button>
@@ -242,10 +237,10 @@ input[type=checkbox]{accent-color:#c79a55}
     <select id="viewSel" title="누구의 눈으로 볼지">
       <option value="all">전체 보기</option><option value="0">붉은 원정대 시야</option><option value="1">푸른 원정대 시야</option>
     </select>
-    <select id="mindSel" title="머릿속 보기">
+    <select id="mindSel" title="머릿속 보기" style="display:none">
       <option value="sel">머릿속: 선택 유닛</option><option value="team">머릿속: 팀 전체</option><option value="off">머릿속: 끔</option>
     </select>
-    <label class="ck"><input type="checkbox" id="ckTrap" checked>숨은 구덩이</label>
+    <label class="ck" style="display:none"><input type="checkbox" id="ckTrap" checked>숨은 구덩이</label>
   </footer>
 </div>
 
@@ -260,7 +255,7 @@ const $=id=>document.getElementById(id);
 const cv=$('cv'),ctx=cv.getContext('2d');
 let R=null,F=[],N=0,W=0,H=0,S=24,DPR=1;
 let P=0,playing=false,speed=3,lastT=0;
-let mode3d=true,viewMode='all',mindMode='sel',showTraps=true,selId=null;
+let mode3d=true,viewMode='all',mindMode='off',showTraps=true,selId=null;
 let oreAt=[],revAt=[],visAt=[[],[]],seenAt=[[],[]],umap=[],dieAt=[],staticLayer=null,baseIds=[1,2];
 let lootAt=[],wumAt=[],arrAt=[];   // 칸마다 떨어진 금, 웜퍼스 체력 (굴 순서)
 
@@ -1015,7 +1010,7 @@ $('bSnd').onclick=()=>{snd.init();snd.on=!snd.on;$('bSnd').classList.toggle('on'
 window.onView3DReady=()=>{ if(R)View3D.build(); applyMode();
   const q=new URLSearchParams(location.hash.slice(1));   // 예: #cam=12,18,9 (칸 x,y 와 거리)
   if(R&&q.has('cam')){const [x,y,d]=q.get('cam').split(',').map(Number);View3D.focus(x,y,d||10);}
-  if(q.get('mode')==='2d'){mode3d=false;applyMode();} };
+  };   // 2D 화면은 없앴다 (3D 를 못 불러올 때만 비상용으로 쓴다)
 setTimeout(()=>{ if(!window.View3D){mode3d=false;applyMode();$('b3d').textContent='3D (인터넷 필요)';} },6000);
 window.addEventListener('resize',()=>{layout();lastSide=-1;});
 // 끌어다 놓기
@@ -1031,7 +1026,7 @@ document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.f
   if(R&&location.hash.length>1){const q=new URLSearchParams(location.hash.slice(1));
     if(q.has('r'))P=Math.max(0,Math.min(N-1,+q.get('r')));
     if(q.has('view')){viewMode=q.get('view');$('viewSel').value=viewMode;}
-    if(q.has('mind')){mindMode=q.get('mind');$('mindSel').value=mindMode;}
+
     if(q.has('sel'))selId=+q.get('sel');}
   mode3d=false;applyMode();mode3d=true;
   requestAnimationFrame(t=>{lastT=t;tick(t);});
