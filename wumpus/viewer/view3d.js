@@ -45,7 +45,7 @@ scene.add(sun, sun.target);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.75, 0.5, 0.78);
+const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.75, 0.5, 0.88);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -280,7 +280,7 @@ function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 �
   disc(60, gr);
   g.save(); g.beginPath(); g.arc(80, 80, 60, 0, 7); g.clip();
   { const bc = bodyCanvas(kind, team, 0);          // 서 있는 도트 캐릭터의 얼굴 부분을 크게
-    if (kind === 'W') g.drawImage(bc, 2, 0, 36, 36, 20, 22, 120, 120); else g.drawImage(bc, 4, 1, 24, 24, 20, 22, 120, 120); }
+    if (kind === 'W') g.drawImage(bc, 2, 0, 36, 36, 20, 22, 120, 120); else g.drawImage(bc, 8, 2, 17, 17, 20, 22, 120, 120); }
   g.restore();
   const chip = (cx, cy, fill, txt, ink) => {
     g.beginPath(); g.arc(cx, cy, 25, 0, 7); g.fillStyle = '#0b0705'; g.fill();
@@ -345,102 +345,92 @@ function pxSprite(tex, w, h, cy = 0.04) {
 }
 
 // ---------------- 도트 캐릭터 (32×48) ----------------
-function drawExplorer(K, team, fr) {
+function drawExplorer(K, team, fr) {          // 머리가 키의 1/3 쯤인 날씬한 비율 (32×48 안에 키 약 42)
   const T = teamHex(team, 'c'), Td = teamHex(team, 'd');
   const pants = '#4a3a2a', pantsD = '#33271b', boot = '#2a1a10', bootL = '#55361e';
-  const shirt = '#ece0c4', shirtD = '#c4b28c', vest = '#7a4c26', vestD = '#54301a', vestL = '#9a6438';
-  const skin = '#e8b48a', skinD = '#c48a64', hair = '#3b2414', hat = '#6b4423', hatD = '#45291a', hatL = '#8c5c32';
-  const iron = '#9aa4b0', ironL = '#e8eef4', ironD = '#5a6270', wood = '#8a5a2a', woodL = '#b07a40';
-  // 다리: 걸을 때 한쪽을 들어 올리고 벌린다
+  const shirt = '#d8ccb0', shirtD = '#b0a080', vest = '#7a4c26', vestD = '#54301a', vestL = '#9a6438';
+  const skin = '#e0ac84', skinD = '#bc8660', hair = '#3b2414', hat = '#6b4423', hatD = '#45291a', hatL = '#8c5c32';
+  const iron = '#9aa4b0', ironL = '#d8dee6', ironD = '#5a6270', wood = '#8a5a2a', woodL = '#b07a40';
   const up = fr === 1 ? [2, 0] : fr === 2 ? [0, 2] : [0, 0], sp = fr ? 1 : 0;
-  [[11 - sp, up[0], pants], [18 + sp, up[1], pantsD]].forEach(([x, u, c], i) => {
-    K.R(x, 35, 4, 8 - u, c); K.R(x + (i ? 3 : 0), 35, 1, 8 - u, i ? shade(pantsD, -0.2) : shade(pants, 0.15));
-    K.R(x - 1 + i, 42 - u, 5, 4, boot); K.R(x - 1 + i, 42 - u, 5, 1, bootL); K.R(x - 1 + i, 45 - u, 5, 1, '#140a04');
+  // 다리 · 장화
+  [[13 - sp, up[0], pants], [17 + sp, up[1], pantsD]].forEach(([x, u, c], i) => {
+    K.R(x, 30, 3, 10 - u, c); K.R(x + (i ? 2 : 0), 30, 1, 10 - u, i ? shade(pantsD, -0.2) : shade(pants, 0.15));
+    K.R(x - (i ? 0 : 1), 40 - u, 4, 4, boot); K.R(x - (i ? 0 : 1), 40 - u, 4, 1, bootL); K.R(x - (i ? 0 : 1), 43 - u, 4, 1, '#140a04');
   });
-  // 몸통: 셔츠 · 조끼 · 단추 · 허리띠
-  K.R(10, 22, 13, 13, shirt);
-  K.R(10, 22, 4, 13, vest); K.R(19, 22, 4, 13, vestD); K.R(10, 22, 1, 13, vestL); K.R(13, 23, 1, 11, vestD);
-  K.R(18, 23, 1, 11, shirtD);
-  for (let y = 25; y < 33; y += 3) K.P(16, y, shirtD);
-  K.R(10, 33, 13, 2, '#3a2414'); K.R(15, 33, 3, 2, '#ffc63a'); K.P(16, 33, '#fff0a0');
-  // 금 가방과 끈
-  K.L(11, 22, 21, 32, '#5a3418');
-  K.R(19, 31, 6, 6, '#8a5a2a'); K.R(19, 31, 6, 2, '#a87040'); K.R(24, 32, 1, 5, '#6a4020'); K.P(21, 34, '#ffc63a'); K.P(22, 34, '#fff0a0');
-  // 왼팔
+  // 몸통
+  K.R(12, 18, 9, 11, shirt); K.R(12, 18, 2, 11, vest); K.R(19, 18, 2, 11, vestD); K.P(12, 18, vestL); K.R(12, 19, 1, 9, vestL);
+  K.R(17, 19, 1, 8, shirtD); K.P(16, 21, shirtD); K.P(16, 24, shirtD);
+  K.R(12, 28, 9, 2, '#3a2414'); K.R(15, 28, 2, 2, '#ffc63a');
+  K.L(13, 18, 20, 27, '#5a3418');                                         // 가방 끈 · 가방
+  K.R(19, 26, 4, 4, '#8a5a2a'); K.R(19, 26, 4, 1, '#a87040'); K.P(20, 28, '#ffc63a');
   const sw = fr === 1 ? 1 : fr === 2 ? -1 : 0;
-  K.R(7, 23 + sw, 3, 9, shirt); K.R(7, 23 + sw, 1, 9, shirtD); K.R(7, 31 + sw, 3, 3, skin); K.P(9, 33 + sw, skinD);
-  // 곡괭이: 자루 → 쇠머리 → 쥔 손
-  K.L(25, 37, 27, 5, wood, 2); K.L(25, 37, 26.5, 6, woodL, 1);
-  K.L(27, 5, 22, 6, iron, 3); K.L(22, 6, 19, 10, iron, 2); K.L(27, 5, 30, 6, iron, 3); K.L(30, 6, 31, 9, iron, 2);
-  K.L(21, 5, 29, 4, ironL, 1); K.L(22, 8, 20, 10, ironD, 1); K.R(26, 4, 3, 3, ironD); K.P(26, 4, ironL);
-  K.R(23, 23, 3, 5, shirt); K.R(25, 23, 1, 5, shirtD); K.R(24, 27, 4, 3, skin); K.R(24, 29, 4, 1, skinD);
-  // 목수건
-  K.R(12, 21, 9, 2, T); K.R(12, 21, 9, 1, shade(T, 0.3)); K.R(13, 23, 7, 1, T); K.R(15, 24, 3, 1, Td); K.P(16, 25, Td);
-  // 머리: 목 · 얼굴 · 귀 · 구레나룻 · 눈썹 · 눈 · 코 · 입 · 수염
-  K.R(14, 19, 5, 2, skinD);
-  K.E(16.5, 14.5, 5.5, 6.2, skin, (x, y, dx, dy) => dx > 0.5 || dy > 0.62 ? skinD : skin);
-  K.R(10, 13, 1, 3, skinD); K.R(22, 13, 1, 3, skinD);
-  K.R(11, 10, 2, 6, hair); K.R(21, 10, 2, 6, hair);
-  K.R(13, 12, 3, 1, hair); K.R(18, 12, 3, 1, hair);
-  K.P(13, 13, '#ffffff'); K.R(14, 13, 1, 2, '#1a120a'); K.P(18, 13, '#ffffff'); K.R(19, 13, 1, 2, '#1a120a');
-  K.P(16, 15, skinD); K.P(17, 16, skinD);
-  for (let x = 12; x <= 21; x++) for (let y = 17; y <= 20; y++) if ((x + y) % 2 === 0 && K.A(x, y) && K.C(x, y)[0] > 180) K.P(x, y, '#a88262');
-  K.R(15, 18, 3, 1, '#8a3a2a');
+  K.R(10, 18 + sw, 2, 8, shirt); K.R(10, 18 + sw, 1, 8, shirtD); K.R(10, 26 + sw, 2, 2, skin);   // 왼팔
+  // 곡괭이
+  K.L(22, 32, 24, 4, wood, 1); K.L(23, 32, 25, 4, woodL, 1);
+  K.L(24, 4, 20, 5, iron, 2); K.L(20, 5, 18, 8, iron, 1); K.L(24, 4, 27, 5, iron, 2); K.L(27, 5, 28, 8, iron, 1);
+  K.L(20, 4, 26, 3, ironL, 1); K.R(23, 3, 2, 2, ironD);
+  K.R(21, 18, 2, 5, shirt); K.R(22, 18, 1, 5, shirtD); K.R(21, 22, 3, 2, skin);                // 오른팔 · 쥔 손
+  // 목 · 목수건
+  K.R(15, 16, 3, 2, skinD); K.R(13, 17, 7, 1, T); K.R(15, 18, 3, 1, Td);
+  // 얼굴
+  K.E(16.5, 12.5, 3.6, 4, skin, (x, y, dx, dy) => dx > 0.5 || dy > 0.6 ? skinD : skin);
+  K.P(12, 12, skinD); K.P(20, 12, skinD);
+  K.R(13, 9, 1, 4, hair); K.R(19, 9, 1, 4, hair);
+  K.P(15, 11, hair); K.P(18, 11, hair);
+  K.P(15, 12, '#1a120a'); K.P(18, 12, '#1a120a');
+  K.P(17, 13, skinD);
+  K.R(16, 15, 2, 1, '#8a3a2a'); K.P(14, 14, '#a88262'); K.P(19, 14, '#a88262'); K.P(15, 16, '#a88262');
   // 중절모
-  K.E(16.5, 9.5, 11, 2.4, hat, (x, y, dx, dy) => dy < -0.35 ? hatL : dy > 0.4 ? hatD : hat);
-  K.R(10, 2, 13, 7, hat); K.clear(10, 2); K.clear(22, 2);
-  K.R(10, 3, 2, 5, hatL); K.R(20, 3, 3, 5, hatD); K.R(14, 2, 5, 1, hatD);
-  K.R(10, 7, 13, 2, T); K.R(10, 7, 13, 1, shade(T, 0.25));
+  K.E(16.5, 9, 7, 1.5, hat, (x, y, dx, dy) => dy < -0.2 ? hatL : hatD);
+  K.R(13, 4, 7, 5, hat); K.clear(13, 4); K.clear(19, 4);
+  K.R(13, 5, 1, 3, hatL); K.R(18, 5, 2, 3, hatD); K.R(15, 4, 3, 1, hatD);
+  K.R(13, 7, 7, 1, T);
   K.outline('#140c06');
 }
 
 function drawArcher(K, team, fr) {
-  const T = teamHex(team, 'c'), Td = teamHex(team, 'd'), Tl = teamHex(team, 'l');
-  const skin = '#f2cbb0', skinD = '#d8a88a', hair = '#f0c058', hairL = '#ffe496', hairD = '#b07a2a';
-  const blouse = '#f4ead6', blouseD = '#cfc2a6', cors = '#6a3c1c', corsL = '#8a5430', boot = '#3a2414', bootL = '#5e3c22', wood = '#8a5a2a', woodL = '#c08a48';
+  const T = teamHex(team, 'c'), Td = teamHex(team, 'd');
+  const skin = '#ecc4a6', skinD = '#cc9c80', hair = '#e8b850', hairL = '#f8d880', hairD = '#a87228';
+  const blouse = '#ddd2ba', blouseD = '#b8ac90', cors = '#6a3c1c', corsL = '#8a5430', boot = '#3a2414', bootL = '#5e3c22', wood = '#8a5a2a', woodL = '#c08a48';
   // 망토 (뒤)
-  for (let y = 21; y <= 43; y++) { const half = 6 + (y - 21) / 22 * 5, x0 = Math.round(16 - half), x1 = Math.round(16 + half); K.R(x0, y, x1 - x0 + 1, 1, y > 41 ? Td : T); K.P(x0, y, Td); K.P(x1, y, Td); }
-  // 화살통 (오른 어깨 뒤)
-  K.R(22, 12, 4, 13, '#6a4020'); K.R(22, 12, 1, 13, '#8a5430'); K.R(22, 15, 4, 1, '#ffc63a'); K.R(22, 21, 4, 1, '#ffc63a');
-  K.R(22, 8, 1, 4, '#f4f0e0'); K.R(24, 7, 1, 5, T); K.R(25, 9, 1, 3, '#f4f0e0');
+  for (let y = 17; y <= 38; y++) { const half = 4 + (y - 17) / 21 * 3.5, x0 = Math.round(16.5 - half), x1 = Math.round(16.5 + half); K.R(x0, y, x1 - x0 + 1, 1, y > 36 ? Td : T); K.P(x0, y, Td); K.P(x1, y, Td); }
+  // 화살통
+  K.R(20, 9, 3, 11, '#6a4020'); K.R(20, 9, 1, 11, '#8a5430'); K.R(20, 12, 3, 1, '#ffc63a');
+  K.R(20, 6, 1, 3, '#e8e2d0'); K.R(22, 5, 1, 4, T);
   // 다리 · 장화
   const up = fr === 1 ? [2, 0] : fr === 2 ? [0, 2] : [0, 0], sp = fr ? 1 : 0;
-  [[12 - sp, up[0]], [17 + sp, up[1]]].forEach(([x, u], i) => {
-    K.R(x, 37, 3, 4 - u, '#3a2a36');
-    K.R(x - (i ? 0 : 1), 41 - u, 4, 5, boot); K.R(x - (i ? 0 : 1), 41 - u, 4, 1, bootL); K.R(x - (i ? 0 : 1), 45 - u, 4, 1, '#140a04');
+  [[14 - sp, up[0]], [17 + sp, up[1]]].forEach(([x, u], i) => {
+    K.R(x, 33, 2, 6 - u, '#3a2a36');
+    K.R(x - (i ? 0 : 1), 38 - u, 3, 6, boot); K.R(x - (i ? 0 : 1), 38 - u, 3, 1, bootL); K.R(x - (i ? 0 : 1), 43 - u, 3, 1, '#140a04');
   });
-  // 치마 (주름)
-  for (let y = 31; y <= 38; y++) { const half = 5 + (y - 31) * 0.6, x0 = Math.round(16 - half); K.R(x0, y, Math.round(half * 2) + 1, 1, y === 38 ? Td : T); }
-  for (const x of [13, 16, 19]) K.L(x, 33, x + (x - 16) * 0.35, 37, Td);
-  // 몸통: 블라우스 · 코르셋 · 금 끈
-  K.R(11, 22, 11, 10, blouse); K.R(20, 22, 2, 10, blouseD);
-  K.R(12, 26, 9, 6, cors); K.R(12, 26, 1, 6, corsL);
-  for (let y = 27; y < 31; y += 2) { K.P(15, y, '#ffc63a'); K.P(17, y, '#ffc63a'); }
+  // 치마
+  for (let y = 26; y <= 33; y++) { const half = 4 + (y - 26) * 0.45, x0 = Math.round(16.5 - half); K.R(x0, y, Math.round(half * 2) + 1, 1, y === 33 ? Td : T); }
+  K.L(15, 28, 14, 33, Td); K.L(18, 28, 19, 33, Td);
+  // 몸통
+  K.R(13, 17, 7, 9, blouse); K.R(18, 17, 2, 9, blouseD);
+  K.R(14, 21, 5, 5, cors); K.R(14, 21, 1, 5, corsL); K.P(16, 22, '#ffc63a'); K.P(16, 24, '#ffc63a');
   // 팔
   const sw = fr === 1 ? 1 : fr === 2 ? -1 : 0;
-  K.R(8, 23, 3, 8, blouse); K.R(8, 23, 1, 8, blouseD);
-  K.R(22, 23 - sw, 3, 8, blouse); K.R(24, 23 - sw, 1, 8, blouseD); K.R(22, 30 - sw, 3, 3, skin);
-  // 활 (왼손): 휜 활대와 곧은 시위
-  for (let y = 10; y <= 44; y++) { const t = (y - 10) / 34, x = Math.round(7 - Math.sin(Math.PI * t) * 4.5); K.R(x, y, 2, 1, t < 0.07 || t > 0.93 ? '#e0c070' : wood); K.P(x, y, woodL); }
-  K.L(8, 11, 8, 43, '#f4f0e0');
-  K.R(7, 30, 3, 3, skin); K.P(9, 32, skinD);
-  // 목 · 머리카락 (뒤) · 꽁지머리
-  K.R(14, 19, 4, 3, skinD);
-  K.E(16.5, 11, 7.5, 6, hair);
-  K.E(24.5, 11, 3, 4, hair); K.E(25.5, 17, 2.3, 4, hair, (x, y, dx) => dx > 0.3 ? hairD : hair); K.E(25, 22, 1.5, 2.5, hairD);
-  K.R(22, 8, 2, 2, T);
-  K.R(9, 12, 2, 9, hair); K.R(22, 12, 2, 8, hair); K.R(9, 18, 2, 3, hairD); K.R(23, 17, 1, 3, hairD);
+  K.R(11, 17, 2, 8, blouse); K.R(11, 17, 1, 8, blouseD);
+  K.R(20, 17 - sw, 2, 8, blouse); K.R(21, 17 - sw, 1, 8, blouseD); K.R(20, 25 - sw, 2, 2, skin);
+  // 활
+  for (let y = 8; y <= 40; y++) { const t = (y - 8) / 32, x = Math.round(9 - Math.sin(Math.PI * t) * 4); K.P(x, y, t < 0.06 || t > 0.94 ? '#e0c070' : wood); K.P(x + 1, y, t < 0.06 || t > 0.94 ? '#e0c070' : woodL); }
+  K.L(10, 9, 10, 39, '#d8d2c0');
+  K.R(10, 24, 2, 2, skin);
+  // 머리카락 · 꽁지머리
+  K.R(15, 15, 3, 2, skinD);
+  K.E(16.5, 9.5, 4.6, 4.3, hair);
+  K.E(21.5, 9, 1.8, 2.5, hair); K.E(22, 13.5, 1.4, 3.2, hair, (x, y, dx) => dx > 0.2 ? hairD : hair);
+  K.P(20, 7, T);
+  K.R(12, 9, 1, 6, hair); K.R(20, 9, 1, 5, hair); K.P(12, 14, hairD);
   // 얼굴
-  K.E(16.5, 14.5, 5.3, 6, skin, (x, y, dx, dy) => dx > 0.5 || dy > 0.65 ? skinD : skin);
-  // 앞머리
-  K.R(11, 7, 11, 4, hair); for (const x of [12, 13, 15, 19, 20, 21]) K.P(x, 11, hair);
-  K.R(12, 7, 5, 1, hairL); K.P(13, 8, hairL); K.P(14, 8, hairL); K.R(18, 9, 3, 1, hairD);
-  // 눈 (속눈썹 · 초록 눈동자 · 빛) · 볼 · 코 · 입술
-  for (const ex of [13, 18]) { K.R(ex, 13, 2, 1, '#2a1a10'); K.R(ex, 14, 2, 2, '#2e8a52'); K.P(ex + 1, 15, '#0e2a18'); K.P(ex, 14, '#c8ffe0'); }
-  K.P(12, 13, '#2a1a10'); K.P(20, 13, '#2a1a10');
-  K.P(12, 17, '#f0a0a0'); K.P(21, 17, '#f0a0a0');
-  K.P(16, 16, skinD);
-  K.R(15, 18, 3, 1, '#c84a5a'); K.P(16, 19, '#e07080');
+  K.E(16.5, 11.8, 3.4, 3.8, skin, (x, y, dx, dy) => dx > 0.5 || dy > 0.65 ? skinD : skin);
+  K.R(13, 6, 7, 3, hair); K.P(13, 9, hair); K.P(19, 9, hair); K.P(18, 9, hair);
+  K.R(14, 6, 3, 1, hairL); K.P(14, 7, hairL);
+  K.P(15, 10, '#2a1a10'); K.P(18, 10, '#2a1a10');
+  K.R(15, 11, 1, 2, '#2e8a52'); K.R(18, 11, 1, 2, '#2e8a52');
+  K.P(14, 13, '#e89a9a'); K.P(19, 13, '#e89a9a');
+  K.R(16, 14, 2, 1, '#c84a5a');
   K.outline('#140c06');
 }
 
@@ -816,7 +806,7 @@ function makeChar(kind, team) {
   for (const ch of body.children) ch.visible = false;
   const token = makeToken(kind, team, G ? 0.62 : 0.68);
   body.add(token);
-  const pix = makeBody(kind, team, 0.74);
+  const pix = makeBody(kind, team, 0.6);
   body.add(pix);
   badge.visible = false;
   return {g, token, pix, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
@@ -1023,7 +1013,7 @@ function makeWumpus() {
   for (const ch of body.children) ch.visible = false;
   const token = makeToken('W', -1, 0.95);
   body.add(token);
-  const pix = makeBody('W', -1, 0.9);
+  const pix = makeBody('W', -1, 0.72);
   body.add(pix);
   for (const ch of g.children) if (ch.isGroup && ch !== live && ch !== dead && ch !== hp) ch.visible = false;
   dead.traverse(o => { if (o.isMesh) o.visible = false; });
@@ -1547,6 +1537,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     } else if (moving && ev.mine.has(id)) st = 'mine';
     if (!show(o, x, y, u[1] === team)) continue;
     if (o.face !== null) o.g.rotation.y = lerpAng(o.g.rotation.y, o.face, 0.3);
+    { const th = o.g.rotation.y, off = 0.3 / CH; o.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); o.token.position.set(-Math.sin(th) * off * 0.6, 0, Math.cos(th) * off * 0.6); }
     pose(o, st, a, now, id);
     for (const fl of o.flames) fl.scale.set(1, 1 + Math.sin(now * 17 + id) * 0.18, 1);
     const sc = moving && !p ? elastic(Math.min(1, a * 1.3)) : 1;
@@ -1984,7 +1975,7 @@ function frame(f, g, a, fi, team, vis, seen) {
   const canSee = (x, y) => !vis || vis[y * W + x] === 1;
   fxBegin();
   { const d = camera.position.distanceTo(controls.target); NEAR = Math.min(1, Math.max(0, (15 - d) / 4)); }
-  if (world.wum) world.wum.forEach(w => lod(w));
+  if (world.wum) world.wum.forEach(w => { lod(w); const th = w.g.rotation.y, off = 0.3 / 1.7; w.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); w.token.position.copy(w.pix.position).multiplyScalar(0.6); });
   applyFog(fi, team, vis, seen);
   updateStatic(fi, team, seen, now);
   updateBases(fi, g, a, moving, seen, vis, now);
