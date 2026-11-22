@@ -1281,7 +1281,7 @@ function build() {
   wall.castShadow = cap.castShadow = true; wall.receiveShadow = cap.receiveShadow = true;
   const wBase = new Float32Array(wallCells.length * 3), cBase = new Float32Array(wallCells.length * 3);
   wallCells.forEach(([x, y], k) => {
-    const r = hash(x, y), ruin = hash(y + 17, x + 3) < 0.2, h = ruin ? 0.5 : 1;
+    const r = hash(x, y), ruin = hash(y + 17, x + 3) < 0.2, h = ruin ? 0.5 + r * 0.15 : 0.88 + r * 0.3;   // 높이를 조금씩 달리해 바위답게
     const rot = Q.identity();
     COL.setHSL(0.08 + r * 0.02, 0.14, 0.36 + r * 0.08);
     if (SHEETS.wall_side) COL.setRGB(0.9 + r * 0.1, 0.9 + r * 0.1, 0.9 + r * 0.1);

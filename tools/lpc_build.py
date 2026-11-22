@@ -230,10 +230,19 @@ def build_cave(cav):
             fp[x, y] = (min(255, int(r * k)), min(255, int(g * k)), min(255, int(b_ * k)), a_)
     floor.save(os.path.join(OUT, 'floor.png'))
     out['floor'] = {'cols': 1, 'rows': 1, 'cell': T, 'tile': True}
-    side = tile(2, 8)                                    # 회색 석벽 (벽돌)
+    def stone(p, sat, bright, tint=(1.0, 1.0, 1.0)):     # 바위 질감: 채도를 빼고 밝기를 맞춘다 (판석 칸 · 줄눈 없음)
+        p = p.convert('RGBA'); px = p.load()
+        for y in range(p.height):
+            for x in range(p.width):
+                r, g, b, a = px[x, y]
+                l = 0.3 * r + 0.59 * g + 0.11 * b
+                c = [min(255, int((l + (v - l) * sat) * bright * t)) for v, t in zip((r, g, b), tint)]
+                px[x, y] = (c[0], c[1], c[2], a)
+        return p
+    side = stone(tile(13, 1), 0.35, 0.95, (1.0, 0.97, 0.92))       # 옆면: 결이 세로로 난 회갈색 바위
     side.save(os.path.join(OUT, 'wall_side.png'))
     out['wall_side'] = {'cols': 1, 'rows': 1, 'cell': 32, 'tile': True}
-    top = Image.eval(tile(11, 9).convert('RGB'), lambda v: min(255, int(v * 1.1))).convert('RGBA')   # 회색 판석 덮개
+    top = stone(tile(19, 1), 0.15, 1.05, (1.0, 0.98, 0.95))        # 윗면: 울퉁불퉁한 밝은 회색 바위
     top.save(os.path.join(OUT, 'wall_top.png'))
     out['wall_top'] = {'cols': 1, 'rows': 1, 'cell': 32, 'tile': True}
     tile(13, 3).save(os.path.join(OUT, 'pit.png'))      # 칸 하나짜리 낭떠러지 (금빛 테두리 · 갈색 절벽 · 검은 구멍)
