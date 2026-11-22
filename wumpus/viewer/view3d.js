@@ -1984,7 +1984,8 @@ function frame(f, g, a, fi, team, vis, seen) {
   const now = performance.now() / 1000, moving = g !== f;
   const canSee = (x, y) => !vis || vis[y * W + x] === 1;
   fxBegin();
-  { const d = camera.position.distanceTo(controls.target); NEAR = Math.min(1, Math.max(0, (15 - d) / 4)); }
+  { const d = camera.position.distanceTo(controls.target), s0 = Math.max(W, H);   // 처음 화면 (지도 전체) 부터 도트, 더 멀어지면 아이콘
+    NEAR = Math.min(1, Math.max(0, (s0 * 1.6 - d) / (s0 * 0.25))); }
   if (world.wum) world.wum.forEach(w => { lod(w); const th = w.g.rotation.y, off = 0.3 / 1.7; w.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); w.token.position.copy(w.pix.position).multiplyScalar(0.6); });
   applyFog(fi, team, vis, seen);
   updateStatic(fi, team, seen, now);
