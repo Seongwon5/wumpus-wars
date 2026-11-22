@@ -1,6 +1,9 @@
 """LPC (Liberated Pixel Cup) 레이어를 합성해 뷰어용 캐릭터 시트를 만든다.
 
-python -X utf8 tools/lpc_build.py <LPC 저장소 폴더>
+python -X utf8 tools/lpc_build.py <LPC 저장소 폴더> [<decoration_medieval 폴더>]
+
+야영지 (천막 · 모닥불 · 팀 깃발) 는 bluecarrot16 의 "[LPC] Medieval Village Decorations" (CC-BY-SA 3.0+) 에서 가져온다:
+https://opengameart.org/content/lpc-medieval-village-decorations
 
 LPC 저장소: https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator
 (spritesheets/, sheet_definitions/ 만 있으면 된다). 그림 라이선스는 레이어마다 다르며 (CC-BY-SA 3.0, GPL 3.0, OGA-BY 3.0, CC0 등),
@@ -129,6 +132,38 @@ def build(name, layers, attack, extra=None):
     return {'cols': cols, 'rows': len(rows), **meta}
 
 
+def build_camp(deco, t):
+    """야영지 시트: 살아 있는 5칸 (모닥불이 타오름) + 무너진 5칸 (검게 탄 천막이 불탐). 칸 160×160."""
+    im = Image.open(os.path.join(deco, 'decorations-medieval.png')).convert('RGBA')
+    tent = im.crop((384, 1728, 512, 1888))
+    banner = im.crop((96, 1216, 128, 1312) if t == 0 else (32, 1216, 64, 1312))
+    fires = [im.crop((256 + 32 * k, 1504, 288 + 32 * k, 1568)) for k in range(5)]
+    burnt = tent.copy()
+    px = burnt.load()
+    for y in range(burnt.height):
+        for x in range(burnt.width):
+            r, g, b, a = px[x, y]
+            if a:
+                v = int((r + g + b) / 3 * 0.32)
+                px[x, y] = (v + 10, v + 4, v, a)
+    C = 160
+    sheet = Image.new('RGBA', (C * 10, C))
+    for k in range(5):
+        f = Image.new('RGBA', (C, C))
+        f.alpha_composite(banner, (2, 44))
+        f.alpha_composite(tent, (24, 0))
+        f.alpha_composite(fires[k], (122, 94))
+        sheet.alpha_composite(f, (k * C, 0))
+        d = Image.new('RGBA', (C, C))
+        d.alpha_composite(burnt.resize((128, 120), Image.NEAREST), (24, 40))
+        d.alpha_composite(fires[k], (44, 92))
+        d.alpha_composite(fires[(k + 2) % 5], (86, 84))
+        d.alpha_composite(fires[(k + 4) % 5], (64, 70))
+        sheet.alpha_composite(d, ((5 + k) * C, 0))
+    sheet.save(os.path.join(OUT, 'camp_%d.png' % t), optimize=True)
+    return {'cols': 10, 'rows': 1, 'cell': C, 'foot': 152, 'alive': [0, 5], 'dead': [5, 5]}
+
+
 def defs(src):
     out = {}
     for f in glob.glob(os.path.join(src, 'sheet_definitions', '**', '*.json'), recursive=True):
@@ -186,6 +221,10 @@ def main():
         L('heads_troll.json', 'head/heads/troll/adult', 100, ramp='green'),
     ]
     meta['sheets']['wumpus'] = build('wumpus', wumpus, 'slash')
+    deco = sys.argv[2] if len(sys.argv) > 2 else None
+    if deco:
+        for t in (0, 1):
+            meta['sheets']['camp_%d' % t] = build_camp(deco, t)
     json.dump(meta, open(os.path.join(OUT, 'sprites.json'), 'w', encoding='utf-8'), indent=1)
 
     # 만든 사람 표기
@@ -202,6 +241,10 @@ def main():
             seen.add(key)
             lines.append('- `%s` — %s. 라이선스: %s. %s %s' % (c.get('file'), ', '.join(c.get('authors', [])), ', '.join(c.get('licenses', [])),
                                                        ' '.join(c.get('urls', [])), ('(' + c['notes'] + ')') if c.get('notes') else ''))
+    if deco:
+        lines += ['', '## 야영지: [LPC] Medieval Village Decorations (bluecarrot16 외)', '',
+                  'https://opengameart.org/content/lpc-medieval-village-decorations — CC-BY-SA 3.0+. 원본 CREDITS 파일 전문:', '', '```',
+                  open(os.path.join(deco, 'CREDITS-decorations-medieval.txt'), encoding='utf-8', errors='replace').read().strip(), '```']
     open(os.path.join(OUT, 'CREDITS.md'), 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
     print('ok', {k: (v['cols'], v['rows']) for k, v in meta['sheets'].items()}, 'credits', len(seen))
 

@@ -1022,7 +1022,14 @@ function makeBase(t) {
   g.add(hp);
   g.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
   for (const ch of g.children) if (ch !== hp) ch.traverse(o => { if (o.isMesh) o.visible = false; });
-  const spr = pxSprite(campTex(t, false, 0), 1.35, 1.35, 0.1);
+  const CS = SHEETS['camp_' + t];
+  let spr;
+  if (CS) {                                     // LPC 야영지 시트 (천막 · 팀 깃발 · 모닥불)
+    const tx = CS.tex.clone(); tx.repeat.set(1 / CS.m.cols, 1); tx.needsUpdate = true;
+    spr = new THREE.Sprite(new THREE.SpriteMaterial({map: tx, transparent: true, alphaTest: 0.5}));
+    spr.center.set(0.5, (CS.m.cell - CS.m.foot) / CS.m.cell); spr.scale.set(1.55, 1.55, 1); spr.renderOrder = 5;
+    spr.userData.camp = CS.m;
+  } else spr = pxSprite(campTex(t, false, 0), 1.35, 1.35, 0.1);
   g.add(spr);
   return {g, spr, core, flag, fire, light, tent, pile, hp, flash: [stone, cloth], team: t};
 }
@@ -1597,7 +1604,8 @@ function updateBases(fi, g, a, moving, seen, vis, now) {
     b.g.position.x = wx(x) + Math.sin(now * 70) * shake;
     for (const m of b.flash) m.emissive.setRGB(shake * 12, 0, 0);
     { const fr = Math.floor(now * 5 + t) % 2, key = (dead ? 1 : 0) + ':' + fr;
-      if (b._k !== key) { b._k = key; b.spr.material.map = campTex(t, dead, dead ? 0 : fr); b.spr.material.needsUpdate = true; }
+      if (b.spr.userData.camp) { const cm = b.spr.userData.camp, k5 = Math.floor(now * 9 + t * 2) % 5; b.spr.material.map.offset.set(((dead ? cm.dead[0] : cm.alive[0]) + k5) / cm.cols, 0); }
+      else if (b._k !== key) { b._k = key; b.spr.material.map = campTex(t, dead, dead ? 0 : fr); b.spr.material.needsUpdate = true; }
       const kk = Math.min(1, shake * 14); b.spr.material.color.setRGB(1, 1 - kk * 0.6, 1 - kk * 0.6); }
     if (t === 0) for (const [k, br] of world.braziers.entries()) { const f2 = 1 + Math.sin(now * 11 + k * 2) * 0.1 + Math.sin(now * 19 + k) * 0.06; br.fl.scale.set(1, f2, 1); br.L.intensity = 9 * f2; const bf = Math.floor(now * 6 + k) % 2; if (br._f !== bf) { br._f = bf; br.spr.material.map = brazierTex(bf); br.spr.material.needsUpdate = true; } }
     setHp(b.hp, hp / R.const.hp.B, TC[t].c);
