@@ -279,7 +279,8 @@ function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 �
   gr.addColorStop(0, '#5c4a36'); gr.addColorStop(1, '#1c140c');
   disc(60, gr);
   g.save(); g.beginPath(); g.arc(80, 80, 60, 0, 7); g.clip();
-  drawPix(g, kind === 'W' ? 'W' : kind === 'G' ? 'G' : 'E', team, 20, 26, 6);
+  { const bc = bodyCanvas(kind, team, 0);          // 서 있는 도트 캐릭터의 얼굴 부분을 크게
+    if (kind === 'W') g.drawImage(bc, 2, 0, 36, 36, 20, 22, 120, 120); else g.drawImage(bc, 4, 1, 24, 24, 20, 22, 120, 120); }
   g.restore();
   const chip = (cx, cy, fill, txt, ink) => {
     g.beginPath(); g.arc(cx, cy, 25, 0, 7); g.fillStyle = '#0b0705'; g.fill();
@@ -294,52 +295,300 @@ function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 �
   _tok.set(key, t);
   return t;
 }
-// 가까이에서 보이는 서 있는 도트 캐릭터 (16×24). 다리 줄만 바꿔 걷는 두 장을 만든다.
-const BODY = {
-  E: ['................', '.....oooooo.....', '....ohhhhhho.....', '....ohhhhhho....', '...obbbbbbbbo...', '..ohhhhhhhhhho..',
-      '...oossssssoo...', '....osesseso.iI.', '....ossssSsoiIIi', '....otsmmstow.i.', '.....otttto.w...', '....onnnnnnow...',
-      '...ovvcnncvvow..', '..ovvvccccvvvs..', '..osvvccccvvoo..', '...oVVggggVVo...', '...oppppppppo...', '...opppoopppo...'],
-  G: ['................', '.....oooooo.....', '....oyyyyyyo....', '...oyyyyyyyyo...', '...oyYyyyyYyoo..', '...oyssssssyyYo.',
-      '...oysessesyyYo.', '...oykssssksyYo.', '...oyssppssyoYo.', '.w..ossssssooYo.', 'w.l..ossssoqqo..', 'w.l.oqqcccqqqqo.',
-      'w.lsvvcccvvqqqo.', 'w.l.ovvcccvvqqo.', 'w.l.ovvcccvvqqo.', 'w.l.oVggggVVqqo.', '.w..oqqqqqqqqqo.', '.w..oqqqqqqqqqo.'],
-};
-const LEGS = {
-  E: [['...oppo..oppo...', '...oppo..oppo...', '...oPPo..oPPo...', '..oBBBo..oBBBo..', '..oBBBo..oBBBo..', '...ooo....ooo...'],
-      ['...oppo..oppo...', '..oppo....oppo..', '..oPPo....oPPo..', '.oBBBo....oBBBo.', '.oBBBo.....ooo..', '..ooo...........'],
-      ['...oppo..oppo...', '....oppo..oppo..', '....oPPo..oPPo..', '...oBBBo.oBBBo..', '....ooo..oBBBo..', '...........ooo..']],
-  G: [['....oqqqqqqqqqo.', '.....oppo.oppo..', '.....oppo.oppo..', '.....oppo.oppo..', '....oBBBo.oBBBo.', '.....ooo...ooo..'],
-      ['....oqqqqqqqqqo.', '....oppo...oppo.', '....oppo...oppo.', '...oBBBo...oppo.', '....ooo...oBBBo.', '...........ooo..'],
-      ['....oqqqqqqqqqo.', '......oppo.oppo.', '......oppo.oppo.', '......oppo.oBBBo', '.....oBBBo..ooo.', '......ooo.......']],
-};
-const BPAL = {o: '#1a120a', h: '#6b4423', H: '#3e2512', s: '#e8b48a', S: '#b57f5a', e: '#15120e', t: '#8a6a50', m: '#7a3a2a',
-  c: '#efe4cc', v: '#7a4c26', V: '#4a2c14', g: '#ffc63a', p: '#4a3a2a', P: '#2e2218', B: '#2a1a10', w: '#8a5a2a', i: '#d0d8e0',
-  I: '#7a8290', y: '#f0c058', Y: '#b07a2a', k: '#f2a0a0', l: '#f4f0e0'};
-const _body = new Map();
-function bodyTex(kind, team, fr) {
-  const key = kind + team + ':' + fr;
-  if (_body.has(key)) return _body.get(key);
-  const c = document.createElement('canvas');
-  const g = c.getContext('2d');
-  if (kind === 'W') { c.width = c.height = 20; drawPix(g, 'W', -1, 0, 0, 1); }
-  else {
-    c.width = 16; c.height = 24;
-    const rows = BODY[kind].concat(LEGS[kind][fr]), col = TC[team].css, dark = '#' + TC[team].d.toString(16).padStart(6, '0');
-    for (let y = 0; y < 24; y++) for (let x = 0; x < 16; x++) {
-      const ch = (rows[y] || '')[x] || '.';
-      if (ch === '.') continue;
-      let cc = BPAL[ch];
-      if (ch === 'b' || ch === 'n') cc = col;
-      if (ch === 'q') cc = (x + y) % 4 === 0 ? dark : col;
-      if (kind === 'G' && ch === 'p') cc = '#3a2a36';
-      if (kind === 'G' && ch === 'p' && y < 18) cc = '#d89070';
-      g.fillStyle = cc; g.fillRect(x, y, 1, 1);
-    }
-  }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-  t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
-  _body.set(key, t);
+// ---------------- 도트 그림 도구 ----------------
+const HEXC = new Map();
+function rgbOf(c) { if (Array.isArray(c)) return c; let v = HEXC.get(c); if (!v) { const n = parseInt(c.slice(1), 16); v = [n >> 16 & 255, n >> 8 & 255, n & 255]; HEXC.set(c, v); } return v; }
+function shade(c, k) { const [r, g, b] = rgbOf(c); return (k >= 0 ? [r + (255 - r) * k, g + (255 - g) * k, b + (255 - b) * k] : [r * (1 + k), g * (1 + k), b * (1 + k)]).map(v => Math.max(0, Math.min(255, Math.round(v)))); }
+function teamHex(team, which) { return '#' + TC[team][which].toString(16).padStart(6, '0'); }
+function pxCanvas(w, h, draw, seed = 1) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'), img = ctx.createImageData(w, h), D = img.data, rn = rnd(seed);
+  const K = {
+    w, h, rn,
+    P(x, y, col) { x = Math.floor(x); y = Math.floor(y); if (!col || x < 0 || y < 0 || x >= w || y >= h) return; const v = rgbOf(col), i = (y * w + x) * 4; D[i] = v[0]; D[i + 1] = v[1]; D[i + 2] = v[2]; D[i + 3] = 255; },
+    R(x, y, ww, hh, col) { for (let j = 0; j < hh; j++) for (let i = 0; i < ww; i++) K.P(x + i, y + j, col); },
+    E(cx, cy, rx, ry, col, fn) {
+      for (let y = Math.floor(cy - ry - 1); y <= cy + ry + 1; y++) for (let x = Math.floor(cx - rx - 1); x <= cx + rx + 1; x++) {
+        const dx = (x + 0.5 - cx) / rx, dy = (y + 0.5 - cy) / ry;
+        if (dx * dx + dy * dy <= 1) K.P(x, y, fn ? fn(x, y, dx, dy) : col);
+      }
+    },
+    L(x0, y0, x1, y1, col, t = 1) {
+      const n = Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * 2) + 1;
+      for (let i = 0; i <= n; i++) { const x = x0 + (x1 - x0) * i / n, y = y0 + (y1 - y0) * i / n; K.R(Math.round(x - (t - 1) / 2), Math.round(y - (t - 1) / 2), t, t, col); }
+    },
+    A(x, y) { if (x < 0 || y < 0 || x >= w || y >= h) return 0; return D[(y * w + x) * 4 + 3]; },
+    C(x, y) { const i = (y * w + x) * 4; return [D[i], D[i + 1], D[i + 2]]; },
+    clear(x, y) { if (x >= 0 && y >= 0 && x < w && y < h) D[(y * w + x) * 4 + 3] = 0; },
+    noise(x, y, ww, hh, base, amp) { for (let j = 0; j < hh; j++) for (let i = 0; i < ww; i++) { const d = Math.round((rn() - 0.5) * 2 * amp); K.P(x + i, y + j, rgbOf(base).map(v => Math.max(0, Math.min(255, v + d)))); } },
+    outline(col) {
+      const a = new Uint8Array(w * h); for (let i = 0; i < w * h; i++) a[i] = D[i * 4 + 3];
+      const on = (x, y) => x >= 0 && y >= 0 && x < w && y < h && a[y * w + x];
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (!a[y * w + x] && (on(x - 1, y) || on(x + 1, y) || on(x, y - 1) || on(x, y + 1))) K.P(x, y, col);
+    },
+  };
+  draw(K);
+  ctx.putImageData(img, 0, 0);
+  return c;
+}
+function pxTex(c, mip = false) {
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter;
+  if (mip) { t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 8; } else { t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; }
   return t;
 }
+const _pxc = new Map();
+function pxMemo(key, make) { let v = _pxc.get(key); if (!v) { v = make(); _pxc.set(key, v); } return v; }
+function pxSprite(tex, w, h, cy = 0.04) {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: tex, transparent: true, alphaTest: 0.5}));
+  sp.center.set(0.5, cy); sp.scale.set(w, h, 1); sp.renderOrder = 5;
+  return sp;
+}
+
+// ---------------- 도트 캐릭터 (32×48) ----------------
+function drawExplorer(K, team, fr) {
+  const T = teamHex(team, 'c'), Td = teamHex(team, 'd');
+  const pants = '#4a3a2a', pantsD = '#33271b', boot = '#2a1a10', bootL = '#55361e';
+  const shirt = '#ece0c4', shirtD = '#c4b28c', vest = '#7a4c26', vestD = '#54301a', vestL = '#9a6438';
+  const skin = '#e8b48a', skinD = '#c48a64', hair = '#3b2414', hat = '#6b4423', hatD = '#45291a', hatL = '#8c5c32';
+  const iron = '#9aa4b0', ironL = '#e8eef4', ironD = '#5a6270', wood = '#8a5a2a', woodL = '#b07a40';
+  // 다리: 걸을 때 한쪽을 들어 올리고 벌린다
+  const up = fr === 1 ? [2, 0] : fr === 2 ? [0, 2] : [0, 0], sp = fr ? 1 : 0;
+  [[11 - sp, up[0], pants], [18 + sp, up[1], pantsD]].forEach(([x, u, c], i) => {
+    K.R(x, 35, 4, 8 - u, c); K.R(x + (i ? 3 : 0), 35, 1, 8 - u, i ? shade(pantsD, -0.2) : shade(pants, 0.15));
+    K.R(x - 1 + i, 42 - u, 5, 4, boot); K.R(x - 1 + i, 42 - u, 5, 1, bootL); K.R(x - 1 + i, 45 - u, 5, 1, '#140a04');
+  });
+  // 몸통: 셔츠 · 조끼 · 단추 · 허리띠
+  K.R(10, 22, 13, 13, shirt);
+  K.R(10, 22, 4, 13, vest); K.R(19, 22, 4, 13, vestD); K.R(10, 22, 1, 13, vestL); K.R(13, 23, 1, 11, vestD);
+  K.R(18, 23, 1, 11, shirtD);
+  for (let y = 25; y < 33; y += 3) K.P(16, y, shirtD);
+  K.R(10, 33, 13, 2, '#3a2414'); K.R(15, 33, 3, 2, '#ffc63a'); K.P(16, 33, '#fff0a0');
+  // 금 가방과 끈
+  K.L(11, 22, 21, 32, '#5a3418');
+  K.R(19, 31, 6, 6, '#8a5a2a'); K.R(19, 31, 6, 2, '#a87040'); K.R(24, 32, 1, 5, '#6a4020'); K.P(21, 34, '#ffc63a'); K.P(22, 34, '#fff0a0');
+  // 왼팔
+  const sw = fr === 1 ? 1 : fr === 2 ? -1 : 0;
+  K.R(7, 23 + sw, 3, 9, shirt); K.R(7, 23 + sw, 1, 9, shirtD); K.R(7, 31 + sw, 3, 3, skin); K.P(9, 33 + sw, skinD);
+  // 곡괭이: 자루 → 쇠머리 → 쥔 손
+  K.L(25, 37, 27, 5, wood, 2); K.L(25, 37, 26.5, 6, woodL, 1);
+  K.L(27, 5, 22, 6, iron, 3); K.L(22, 6, 19, 10, iron, 2); K.L(27, 5, 30, 6, iron, 3); K.L(30, 6, 31, 9, iron, 2);
+  K.L(21, 5, 29, 4, ironL, 1); K.L(22, 8, 20, 10, ironD, 1); K.R(26, 4, 3, 3, ironD); K.P(26, 4, ironL);
+  K.R(23, 23, 3, 5, shirt); K.R(25, 23, 1, 5, shirtD); K.R(24, 27, 4, 3, skin); K.R(24, 29, 4, 1, skinD);
+  // 목수건
+  K.R(12, 21, 9, 2, T); K.R(12, 21, 9, 1, shade(T, 0.3)); K.R(13, 23, 7, 1, T); K.R(15, 24, 3, 1, Td); K.P(16, 25, Td);
+  // 머리: 목 · 얼굴 · 귀 · 구레나룻 · 눈썹 · 눈 · 코 · 입 · 수염
+  K.R(14, 19, 5, 2, skinD);
+  K.E(16.5, 14.5, 5.5, 6.2, skin, (x, y, dx, dy) => dx > 0.5 || dy > 0.62 ? skinD : skin);
+  K.R(10, 13, 1, 3, skinD); K.R(22, 13, 1, 3, skinD);
+  K.R(11, 10, 2, 6, hair); K.R(21, 10, 2, 6, hair);
+  K.R(13, 12, 3, 1, hair); K.R(18, 12, 3, 1, hair);
+  K.P(13, 13, '#ffffff'); K.R(14, 13, 1, 2, '#1a120a'); K.P(18, 13, '#ffffff'); K.R(19, 13, 1, 2, '#1a120a');
+  K.P(16, 15, skinD); K.P(17, 16, skinD);
+  for (let x = 12; x <= 21; x++) for (let y = 17; y <= 20; y++) if ((x + y) % 2 === 0 && K.A(x, y) && K.C(x, y)[0] > 180) K.P(x, y, '#a88262');
+  K.R(15, 18, 3, 1, '#8a3a2a');
+  // 중절모
+  K.E(16.5, 9.5, 11, 2.4, hat, (x, y, dx, dy) => dy < -0.35 ? hatL : dy > 0.4 ? hatD : hat);
+  K.R(10, 2, 13, 7, hat); K.clear(10, 2); K.clear(22, 2);
+  K.R(10, 3, 2, 5, hatL); K.R(20, 3, 3, 5, hatD); K.R(14, 2, 5, 1, hatD);
+  K.R(10, 7, 13, 2, T); K.R(10, 7, 13, 1, shade(T, 0.25));
+  K.outline('#140c06');
+}
+
+function drawArcher(K, team, fr) {
+  const T = teamHex(team, 'c'), Td = teamHex(team, 'd'), Tl = teamHex(team, 'l');
+  const skin = '#f2cbb0', skinD = '#d8a88a', hair = '#f0c058', hairL = '#ffe496', hairD = '#b07a2a';
+  const blouse = '#f4ead6', blouseD = '#cfc2a6', cors = '#6a3c1c', corsL = '#8a5430', boot = '#3a2414', bootL = '#5e3c22', wood = '#8a5a2a', woodL = '#c08a48';
+  // 망토 (뒤)
+  for (let y = 21; y <= 43; y++) { const half = 6 + (y - 21) / 22 * 5, x0 = Math.round(16 - half), x1 = Math.round(16 + half); K.R(x0, y, x1 - x0 + 1, 1, y > 41 ? Td : T); K.P(x0, y, Td); K.P(x1, y, Td); }
+  // 화살통 (오른 어깨 뒤)
+  K.R(22, 12, 4, 13, '#6a4020'); K.R(22, 12, 1, 13, '#8a5430'); K.R(22, 15, 4, 1, '#ffc63a'); K.R(22, 21, 4, 1, '#ffc63a');
+  K.R(22, 8, 1, 4, '#f4f0e0'); K.R(24, 7, 1, 5, T); K.R(25, 9, 1, 3, '#f4f0e0');
+  // 다리 · 장화
+  const up = fr === 1 ? [2, 0] : fr === 2 ? [0, 2] : [0, 0], sp = fr ? 1 : 0;
+  [[12 - sp, up[0]], [17 + sp, up[1]]].forEach(([x, u], i) => {
+    K.R(x, 37, 3, 4 - u, '#3a2a36');
+    K.R(x - (i ? 0 : 1), 41 - u, 4, 5, boot); K.R(x - (i ? 0 : 1), 41 - u, 4, 1, bootL); K.R(x - (i ? 0 : 1), 45 - u, 4, 1, '#140a04');
+  });
+  // 치마 (주름)
+  for (let y = 31; y <= 38; y++) { const half = 5 + (y - 31) * 0.6, x0 = Math.round(16 - half); K.R(x0, y, Math.round(half * 2) + 1, 1, y === 38 ? Td : T); }
+  for (const x of [13, 16, 19]) K.L(x, 33, x + (x - 16) * 0.35, 37, Td);
+  // 몸통: 블라우스 · 코르셋 · 금 끈
+  K.R(11, 22, 11, 10, blouse); K.R(20, 22, 2, 10, blouseD);
+  K.R(12, 26, 9, 6, cors); K.R(12, 26, 1, 6, corsL);
+  for (let y = 27; y < 31; y += 2) { K.P(15, y, '#ffc63a'); K.P(17, y, '#ffc63a'); }
+  // 팔
+  const sw = fr === 1 ? 1 : fr === 2 ? -1 : 0;
+  K.R(8, 23, 3, 8, blouse); K.R(8, 23, 1, 8, blouseD);
+  K.R(22, 23 - sw, 3, 8, blouse); K.R(24, 23 - sw, 1, 8, blouseD); K.R(22, 30 - sw, 3, 3, skin);
+  // 활 (왼손): 휜 활대와 곧은 시위
+  for (let y = 10; y <= 44; y++) { const t = (y - 10) / 34, x = Math.round(7 - Math.sin(Math.PI * t) * 4.5); K.R(x, y, 2, 1, t < 0.07 || t > 0.93 ? '#e0c070' : wood); K.P(x, y, woodL); }
+  K.L(8, 11, 8, 43, '#f4f0e0');
+  K.R(7, 30, 3, 3, skin); K.P(9, 32, skinD);
+  // 목 · 머리카락 (뒤) · 꽁지머리
+  K.R(14, 19, 4, 3, skinD);
+  K.E(16.5, 11, 7.5, 6, hair);
+  K.E(24.5, 11, 3, 4, hair); K.E(25.5, 17, 2.3, 4, hair, (x, y, dx) => dx > 0.3 ? hairD : hair); K.E(25, 22, 1.5, 2.5, hairD);
+  K.R(22, 8, 2, 2, T);
+  K.R(9, 12, 2, 9, hair); K.R(22, 12, 2, 8, hair); K.R(9, 18, 2, 3, hairD); K.R(23, 17, 1, 3, hairD);
+  // 얼굴
+  K.E(16.5, 14.5, 5.3, 6, skin, (x, y, dx, dy) => dx > 0.5 || dy > 0.65 ? skinD : skin);
+  // 앞머리
+  K.R(11, 7, 11, 4, hair); for (const x of [12, 13, 15, 19, 20, 21]) K.P(x, 11, hair);
+  K.R(12, 7, 5, 1, hairL); K.P(13, 8, hairL); K.P(14, 8, hairL); K.R(18, 9, 3, 1, hairD);
+  // 눈 (속눈썹 · 초록 눈동자 · 빛) · 볼 · 코 · 입술
+  for (const ex of [13, 18]) { K.R(ex, 13, 2, 1, '#2a1a10'); K.R(ex, 14, 2, 2, '#2e8a52'); K.P(ex + 1, 15, '#0e2a18'); K.P(ex, 14, '#c8ffe0'); }
+  K.P(12, 13, '#2a1a10'); K.P(20, 13, '#2a1a10');
+  K.P(12, 17, '#f0a0a0'); K.P(21, 17, '#f0a0a0');
+  K.P(16, 16, skinD);
+  K.R(15, 18, 3, 1, '#c84a5a'); K.P(16, 19, '#e07080');
+  K.outline('#140c06');
+}
+
+function drawWumpus(K, dead) {
+  const bone = '#e4dcc2', boneD = '#a89e82';
+  if (dead) {                                     // 해골과 갈비뼈
+    for (let k = 0; k < 5; k++) { K.L(8 + k * 5, 37, 10 + k * 5, 30, '#d8d0b6', 2); K.P(10 + k * 5, 30, boneD); }
+    K.L(6, 34, 36, 34, boneD, 2);
+    K.E(21, 26, 8, 6.5, bone, (x, y, dx, dy) => dy > 0.4 ? boneD : bone);
+    K.L(14, 22, 7, 13, bone, 3); K.L(28, 22, 35, 13, bone, 3);
+    K.E(18, 26, 1.8, 1.8, '#140e08'); K.E(24.5, 26, 1.8, 1.8, '#140e08');
+    for (const x of [16, 19, 22, 25]) K.R(x, 31, 2, 2, bone);
+    K.outline('#1a1408');
+    return;
+  }
+  const fur = '#5f8a2e', furD = '#3c5a1c', furL = '#86b04a', belly = '#c2b46a', bellyD = '#9a8c4c';
+  K.E(6, 30, 4, 6, furD); K.E(34, 30, 4, 6, furD);                                   // 팔 (뒤)
+  for (let i = 0; i < 3; i++) { K.P(3 + i * 2, 36, bone); K.P(32 + i * 2, 36, bone); }
+  K.E(20, 25, 14, 13, fur, (x, y, dx, dy) => { const s = dx * 0.6 + dy * 0.8; return s > 0.55 ? furD : s < -0.5 ? furL : (K.rn() < 0.08 ? furD : fur); });
+  K.E(12, 38, 5, 2, furD); K.E(28, 38, 5, 2, furD);                                   // 발
+  for (const x of [9, 11, 13, 25, 27, 29]) K.P(x, 39, bone);
+  K.E(20, 30, 8.5, 7, belly, (x, y, dx, dy) => (y % 3 === 0 ? bellyD : dy > 0.55 ? bellyD : belly));
+  K.L(10, 15, 5, 4, bone, 3); K.L(5, 4, 3, 1, bone, 2); K.L(30, 15, 35, 4, bone, 3); K.L(35, 4, 37, 1, bone, 2);   // 뿔
+  K.L(11, 15, 6, 5, boneD, 1); K.L(31, 15, 36, 5, boneD, 1);
+  K.R(10, 16, 8, 2, furD); K.R(23, 16, 8, 2, furD);                                   // 눈썹
+  K.E(14, 19.5, 3, 2, '#e8ff50'); K.E(26, 19.5, 3, 2, '#e8ff50'); K.R(14, 18, 1, 3, '#140e08'); K.R(26, 18, 1, 3, '#140e08');
+  K.R(11, 23, 19, 5, '#3a0a08'); K.R(12, 24, 17, 3, '#6a1810');                        // 입과 이빨
+  for (const x of [12, 15, 18, 21, 24, 27]) { K.R(x, 23, 2, 1, bone); K.P(x, 24, bone); }
+  for (const x of [13, 17, 22, 26]) { K.R(x, 27, 2, 1, bone); K.P(x, 26, bone); }
+  K.outline('#0e1408');
+}
+
+function bodyCanvas(kind, team, fr) {
+  return pxMemo('bc' + kind + team + ':' + fr, () => kind === 'W' ? pxCanvas(40, 40, K => drawWumpus(K, fr === 9), 5)
+    : pxCanvas(32, 48, K => kind === 'G' ? drawArcher(K, team, fr) : drawExplorer(K, team, fr), 3));
+}
+function bodyTex(kind, team, fr) { return pxMemo('bt' + kind + team + ':' + fr, () => pxTex(bodyCanvas(kind, team, fr))); }
+
+// ---------------- 도트 게임판 ----------------
+function floorTex() {                       // 바닥 판석: 네 조각 돌, 줄눈, 금, 자갈 (칸마다 색은 인스턴스 색으로)
+  return pxMemo('floor', () => pxTex(pxCanvas(32, 32, K => {
+    K.noise(0, 0, 32, 32, [200, 194, 184], 9);
+    const dark = [118, 108, 96], light = [232, 226, 214];
+    for (let i = 0; i < 32; i++) { K.P(i, 31, dark); K.P(31, i, dark); K.P(i, 15, dark); K.P(15, i, dark); K.P(i, 0, light); K.P(0, i, light); K.P(i, 16, light); K.P(16, i, light); }
+    K.L(4, 5, 8, 9, [150, 140, 128]); K.L(8, 9, 7, 12, [150, 140, 128]); K.L(22, 20, 27, 24, [156, 146, 134]);
+    for (const [x, y] of [[24, 6], [6, 24], [27, 27], [10, 20]]) { K.R(x, y, 2, 2, [168, 158, 146]); K.P(x, y, [226, 220, 206]); }
+  }, 7), true));
+}
+function wallSideTex() {                    // 벽 옆면: 엇갈려 쌓은 벽돌
+  return pxMemo('wside', () => pxTex(pxCanvas(32, 32, K => {
+    K.R(0, 0, 32, 32, [78, 68, 58]);
+    for (let r = 0; r < 4; r++) {
+      const y0 = r * 8, off = r % 2 ? 8 : 0;
+      for (let bx = -16; bx < 32; bx += 16) {
+        const x0 = bx + off + 1;
+        K.noise(x0, y0 + 1, 14, 6, [184, 170, 150], 10);
+        K.R(x0, y0 + 1, 14, 1, [214, 202, 182]); K.R(x0, y0 + 6, 14, 1, [130, 118, 100]); K.R(x0, y0 + 1, 1, 6, [204, 192, 172]);
+      }
+    }
+  }, 11), true));
+}
+function wallTopTex() {                     // 벽 윗면: 밝은 덮개돌
+  return pxMemo('wtop', () => pxTex(pxCanvas(32, 32, K => {
+    K.noise(0, 0, 32, 32, [226, 218, 204], 8);
+    for (let i = 0; i < 32; i++) { K.P(i, 0, [250, 246, 236]); K.P(0, i, [250, 246, 236]); K.P(i, 31, [140, 130, 116]); K.P(31, i, [140, 130, 116]); }
+    K.L(9, 11, 14, 15, [170, 160, 146]); K.L(20, 22, 24, 21, [170, 160, 146]);
+  }, 13), true));
+}
+function rockPxTex() {
+  return pxMemo('rock', () => pxTex(pxCanvas(32, 32, K => { K.noise(0, 0, 32, 32, [150, 136, 118], 26); for (let k = 0; k < 6; k++) { const x = Math.floor(K.rn() * 28), y = Math.floor(K.rn() * 28); K.L(x, y, x + 4, y + 3, [96, 86, 74]); } }, 17), true));
+}
+function pitTex() {                         // 구덩이: 무너진 돌 테두리와 끝없이 어두운 속
+  return pxMemo('pit', () => pxTex(pxCanvas(32, 32, K => {
+    K.noise(0, 0, 32, 32, [92, 82, 70], 10);
+    K.E(16, 16, 14.5, 13.5, null, () => { const v = 118 + Math.round((K.rn() - 0.5) * 30); return [v, v - 10, v - 24]; });
+    K.E(16, 16.5, 12, 11, [46, 34, 24]); K.E(16, 17, 9.5, 9, [24, 16, 10]); K.E(16, 17.5, 7, 6.5, [8, 5, 3]); K.E(16, 18, 4, 3.5, [0, 0, 0]);
+    for (let k = 0; k < 9; k++) { const a = k / 9 * Math.PI * 2, x = Math.round(16 + Math.cos(a) * 13), y = Math.round(16 + Math.sin(a) * 12.5); K.R(x - 1, y - 1, 3, 2, [150, 138, 120]); K.P(x - 1, y - 1, [196, 184, 166]); }
+  }, 19)));
+}
+function oreTex(n) {                        // 금맥: 바위 둔덕 위로 남은 양만큼 금 결정
+  return pxMemo('ore' + n, () => pxTex(pxCanvas(32, 32, K => {
+    K.E(16, 26, 13.5, 5.5, null, (x, y, dx, dy) => dy < -0.35 ? '#6a5642' : dy > 0.4 ? '#2e241c' : (K.rn() < 0.15 ? '#3c3026' : '#4a3c30'));
+    const spots = [[16, 25, 15], [10, 26, 11], [22, 26, 11], [13, 28, 7], [20, 28, 8], [6, 28, 6], [26, 28, 6]];
+    for (let k = 0; k < n; k++) {
+      const [cx, by, hh] = spots[k], y0 = by - hh;
+      K.R(cx - 1, y0 + 2, 4, hh - 2, '#ffc63a'); K.R(cx, y0, 2, 2, '#ffc63a');
+      K.R(cx - 1, y0 + 2, 1, hh - 2, '#fff0a0'); K.P(cx, y0, '#fff6c8'); K.R(cx + 2, y0 + 2, 1, hh - 2, '#c08010'); K.P(cx + 1, y0 + 1, '#e0a020');
+    }
+    K.outline('#1a1008');
+  }, 23)));
+}
+function campTex(team, dead, fr) {          // 야영지: 팀 색 천막 · 깃발 · 울타리 · 모닥불 · 금 더미
+  return pxMemo('camp' + team + dead + fr, () => pxTex(pxCanvas(48, 48, K => {
+    const T = teamHex(team, 'c'), Td = teamHex(team, 'd'), Tl = teamHex(team, 'l');
+    K.E(24, 40, 22, 7, null, (x, y, dx, dy) => dy < -0.45 ? '#8a765c' : dy > 0.5 ? '#4a3c2c' : (K.rn() < 0.12 ? '#5a4a38' : '#6b5a44'));
+    for (let i = 0; i < 9; i++) { const x = 4 + i * 5; K.R(x, 29, 2, 8, '#6a4522'); K.P(x, 28, '#8a6038'); K.P(x + 1, 29, '#4a2e14'); }
+    K.R(4, 31, 42, 1, '#4a2e14');
+    if (!dead) {
+      for (let y = 8; y <= 40; y++) { const half = (y - 8) * 0.56, x0 = Math.round(24 - half), x1 = Math.round(24 + half); for (let x = x0; x <= x1; x++) K.P(x, y, x < 24 ? T : Td); }
+      K.L(24, 8, 15, 40, Tl); K.L(24, 8, 33, 40, shade(Td, -0.2));
+      for (let y = 25; y <= 40; y++) { const half = (y - 25) * 0.42; K.R(Math.round(24 - half), y, Math.round(half * 2) + 1, 1, '#1a0f08'); }
+      K.R(23, 1, 2, 8, '#6a4522');
+      for (let x = 25; x <= 34; x++) { const y0 = 2 + Math.round(Math.sin((x - 25) * 0.7 + fr * 1.7) * 1.2); K.R(x, y0, 1, 5, x === 34 ? Td : Tl); K.P(x, y0, '#ffffff'); }
+      K.R(35, 41, 9, 2, '#5a3414'); K.L(35, 43, 43, 40, '#7a4c26', 2);
+      if (fr) { K.E(39.5, 35, 3, 5, '#ff6a14'); K.E(39.5, 37, 1.8, 3, '#ffe08a'); K.P(41, 28, '#ffb040'); }
+      else { K.E(39.5, 35.5, 3.3, 4.5, '#ff7a1a'); K.E(40, 37, 2, 2.6, '#ffe08a'); K.P(38, 29, '#ffb040'); }
+      K.E(9, 41, 5, 2.5, '#c08a10'); K.E(9, 40, 4, 2, '#ffc63a'); K.P(8, 39, '#fff0a0'); K.P(11, 40, '#fff0a0'); K.E(9, 38.5, 2, 1, '#ffd24a');
+    } else {
+      for (let y = 28; y <= 40; y++) { const half = Math.min(16, (y - 28) * 1.4), x0 = Math.round(24 - half); for (let x = x0; x <= x0 + half * 2; x++) if (K.rn() > 0.12) K.P(x, y, (x + y) % 5 ? shade(Td, -0.35) : shade(T, -0.3)); }
+      K.L(18, 40, 30, 24, '#4a2e14', 2); K.E(39, 40, 4, 1.5, '#3a3430'); K.P(38, 39, '#5a5048');
+    }
+    K.outline('#140c06');
+  }, 29 + team)));
+}
+function lootTex(big) {                     // 떨어진 금: 자루 (작은 양) · 보물 상자 (큰 양)
+  return pxMemo('loot' + big, () => pxTex(big ? pxCanvas(28, 24, K => {
+    K.R(3, 11, 22, 11, '#6a4020'); for (const y of [14, 18]) K.R(3, y, 22, 1, '#4a2a12');
+    K.R(3, 7, 22, 4, '#7a4c26'); K.R(3, 7, 22, 1, '#9a6438');
+    K.E(14, 7, 8, 3, '#ffc63a', (x, y, dx, dy) => dy < -0.3 ? '#fff0a0' : (K.rn() < 0.2 ? '#c08a10' : '#ffc63a'));
+    K.R(6, 7, 2, 15, '#3a3a3e'); K.R(20, 7, 2, 15, '#3a3a3e'); K.R(13, 12, 3, 3, '#ffc63a'); K.P(14, 13, '#2a1600');
+    K.outline('#140c06');
+  }, 31) : pxCanvas(20, 20, K => {
+    K.E(10, 13.5, 7, 5.5, null, (x, y, dx, dy) => dx < -0.35 && dy < 0 ? '#a87040' : dx > 0.4 || dy > 0.5 ? '#6a4020' : '#8a5a2a');
+    K.R(8, 5, 4, 4, '#8a5a2a'); K.R(7, 4, 6, 1, '#6a4020'); K.R(8, 8, 4, 1, '#ffc63a');
+    K.R(15, 17, 3, 2, '#ffc63a'); K.P(16, 17, '#fff0a0'); K.R(2, 17, 3, 1, '#ffc63a');
+    K.outline('#140c06');
+  }, 37)));
+}
+function garrowTex() {                      // 바닥에 비스듬히 꽂힌 화살
+  return pxMemo('garrow', () => pxTex(pxCanvas(16, 20, K => {
+    K.L(5, 17, 11, 5, '#d8c08a'); K.L(6, 17, 12, 5, '#a8884a');
+    K.L(10, 2, 11, 6, '#f4f0e0'); K.L(12, 1, 13, 5, '#f4f0e0'); K.P(11, 1, '#e04030'); K.P(13, 4, '#e04030');
+    K.R(3, 18, 5, 1, '#3a2a1a');
+    K.outline('#140c06');
+  }, 41)));
+}
+function brazierTex(fr) {                   // 모서리 화로 기둥
+  return pxMemo('braz' + fr, () => pxTex(pxCanvas(16, 40, K => {
+    K.R(3, 36, 10, 4, '#5a4632'); K.R(3, 36, 10, 1, '#7a6448');
+    K.R(5, 14, 6, 22, '#7d6648'); K.R(5, 14, 1, 22, '#a08868'); K.R(10, 14, 1, 22, '#5a4632');
+    for (let y = 18; y < 36; y += 6) K.R(5, y, 6, 1, '#5a4632');
+    K.R(2, 11, 12, 3, '#8a6a3a'); K.R(2, 11, 12, 1, '#c09858'); K.R(3, 14, 10, 1, '#6a4a2a');
+    if (fr) { K.E(8, 6, 3.5, 5.5, '#ff6a14'); K.E(8, 8, 2, 3, '#ffe08a'); K.P(10, 0, '#ffb040'); }
+    else { K.E(8, 6.5, 4, 5, '#ff7a1a'); K.E(7.5, 8, 2.3, 2.8, '#ffe08a'); K.P(5, 1, '#ffb040'); }
+    K.outline('#140c06');
+  }, 43)));
+}
+
 function makeBody(kind, team, h) {
   const w = kind === 'W' ? h : h * 16 / 24;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: bodyTex(kind, team, 0), transparent: true, alphaTest: 0.5}));
@@ -685,7 +934,10 @@ function makeBase(t) {
   hp.position.y = 1.55;
   g.add(hp);
   g.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
-  return {g, core, flag, fire, light, tent, pile, hp, flash: [stone, cloth], team: t};
+  for (const ch of g.children) if (ch !== hp) ch.traverse(o => { if (o.isMesh) o.visible = false; });
+  const spr = pxSprite(campTex(t, false, 0), 1.35, 1.35, 0.1);
+  g.add(spr);
+  return {g, spr, core, flag, fire, light, tent, pile, hp, flash: [stone, cloth], team: t};
 }
 
 // ---------------- 웜퍼스 ----------------
@@ -773,6 +1025,9 @@ function makeWumpus() {
   body.add(token);
   const pix = makeBody('W', -1, 0.9);
   body.add(pix);
+  for (const ch of g.children) if (ch.isGroup && ch !== live && ch !== dead && ch !== hp) ch.visible = false;
+  dead.traverse(o => { if (o.isMesh) o.visible = false; });
+  const dsp = makeBody('W', -1, 0.75); dsp.material.map = bodyTex('W', -1, 9); dead.add(dsp);
   return {g, token, pix, live, dead, body, head, jaw, eyes, eyeL, arms, hp, aura, flash: [fur, fur2, belly]};
 }
 
@@ -800,7 +1055,9 @@ function makeLoot() {
   const lbl = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true, depthTest: false, sizeAttenuation: false}));
   lbl.position.set(0, 0.75, 0); lbl.scale.set(0.045, 0.0235, 1); lbl.renderOrder = 14;
   g.add(lbl);
-  g.traverse(o => { if (o.isMesh && o !== glow) o.castShadow = true; });
+  g.traverse(o => { if (o.isMesh && o !== glow) o.visible = false; });
+  sack.add(pxSprite(lootTex(false), 0.5, 0.5, 0.05));
+  chest.add(pxSprite(lootTex(true), 0.62, 0.53, 0.05));
   return {g, sack, chest, glow, coins, lbl, amt: -1};
 }
 
@@ -813,14 +1070,14 @@ function build() {
   scene.add(root);
   const n = W * H, rows = R.map.rows;
 
-  const ground = new THREE.InstancedMesh(new RoundedBoxGeometry(0.97, 0.24, 0.97, 2, 0.05), std(0xffffff, {roughness: 0.95, map: slabTex()}), n);
+  const ground = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.24, 1), std(0xffffff, {roughness: 1, map: floorTex()}), n);
   ground.receiveShadow = true;
   const gBase = new Float32Array(n * 3);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x, r = hash(x, y);
-    COL.setHSL(0.08 + r * 0.03, 0.12 + r * 0.08, 0.16 + r * 0.07);
+    COL.setHSL(0.08 + r * 0.03, 0.12 + r * 0.06, 0.25 + r * 0.06);
     gBase.set([COL.r, COL.g, COL.b], i * 3);
-    M4.makeTranslation(wx(x), -0.12 - r * 0.025, wz(y));
+    M4.makeTranslation(wx(x), -0.12, wz(y));
     ground.setMatrixAt(i, M4);
     ground.setColorAt(i, COL);
   }
@@ -832,7 +1089,7 @@ function build() {
   mesh(root, new THREE.BoxGeometry(0.8, 2, H), frameM, -W / 2 - 0.4, -1.25, 0, false);
   mesh(root, new THREE.BoxGeometry(0.8, 2, H), frameM, W / 2 + 0.4, -1.25, 0, false);
   mesh(root, new THREE.PlaneGeometry(W, H).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({color: 0x000000}), 0, -2.2, 0, false);
-  const curbM = std(0x5a4632, {roughness: 0.9});
+  const curbM = std(0x9a8670, {roughness: 1, map: wallSideTex()});
   for (let i = -1; i <= W; i++) for (const j of [-1, H]) mesh(root, new RoundedBoxGeometry(0.96, 0.22 + hash(i, j) * 0.12, 0.6, 2, 0.04), curbM, wx(i), 0, wz(j) + (j < 0 ? 0.2 : -0.2));
   for (let j = 0; j < H; j++) for (const i of [-1, W]) mesh(root, new RoundedBoxGeometry(0.6, 0.22 + hash(i, j) * 0.12, 0.96, 2, 0.04), curbM, wx(i) + (i < 0 ? 0.2 : -0.2), 0, wz(j));
   // 네 모서리 화로 기둥
@@ -851,21 +1108,25 @@ function build() {
     const L = new THREE.PointLight(0xff9a40, 9, 14, 1.4);
     L.position.y = 2.3;
     b.add(L);
+    b.traverse(o => { if (o.isMesh) o.visible = false; });
+    const bs = pxSprite(brazierTex(0), 0.9, 2.25, 0.02);
+    b.add(bs);
     root.add(b);
-    braziers.push({fl, L});
+    braziers.push({fl, L, spr: bs});
   }
 
   const wallCells = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (rows[y][x] === '#') wallCells.push([x, y]);
   const nW = Math.max(1, wallCells.length);
-  const wall = new THREE.InstancedMesh(new RoundedBoxGeometry(0.9, 1, 0.9, 2, 0.05), std(0xffffff, {roughness: 0.9, map: brickTex()}), nW);
+  const wSide = std(0xffffff, {roughness: 1, map: wallSideTex()}), wTop = std(0xffffff, {roughness: 1, map: wallTopTex()});
+  const wall = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), [wSide, wSide, wTop, wTop, wSide, wSide], nW);
   const cap = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 0.14, 1, 2, 0.04), std(0xffffff, {roughness: 0.85, map: slabTex()}), nW);
   wall.castShadow = cap.castShadow = true; wall.receiveShadow = cap.receiveShadow = true;
   const wBase = new Float32Array(wallCells.length * 3), cBase = new Float32Array(wallCells.length * 3);
   wallCells.forEach(([x, y], k) => {
-    const r = hash(x, y), ruin = hash(y + 17, x + 3) < 0.25, h = ruin ? 0.35 + r * 0.3 : 0.85 + r * 0.6;
-    const rot = Q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), (r - 0.5) * (ruin ? 0.6 : 0.12));
-    COL.setHSL(0.08 + r * 0.02, 0.1, 0.45 + r * 0.15);
+    const r = hash(x, y), ruin = hash(y + 17, x + 3) < 0.2, h = ruin ? 0.5 : 1;
+    const rot = Q.identity();
+    COL.setHSL(0.08 + r * 0.02, 0.14, 0.36 + r * 0.08);
     wBase.set([COL.r, COL.g, COL.b], k * 3);
     M4.compose(V3.set(wx(x), h / 2, wz(y)), rot, S3.set(1, h, 1));
     wall.setMatrixAt(k, M4); wall.setColorAt(k, COL);
@@ -875,6 +1136,7 @@ function build() {
     cap.setMatrixAt(k, M4); cap.setColorAt(k, COL);
   });
   wall.count = cap.count = wallCells.length;
+  cap.visible = false;
   root.add(wall, cap);
   // 무너진 돌 조각: 벽 칸 둘레 (안개 때 그 칸 색을 따른다)
   const rubCells = [];
@@ -894,13 +1156,14 @@ function build() {
     }
   });
   rubble.count = rubCells.length;
+  rubble.visible = false;
   root.add(rubble);
   // 동굴 벽: 맵을 둘러싼 큰 바위와 종유석
   const rocks = [], spikes = [];
   const pad = 2.2, perim = (x0, z0, x1, z1, step) => { const pts = []; for (let x = x0; x <= x1; x += step) pts.push([x, z0], [x, z1]); for (let z = z0 + step; z < z1; z += step) pts.push([x0, z], [x1, z]); return pts; };
   perim(-W / 2 - pad, -H / 2 - pad, W / 2 + pad, H / 2 + pad, 1.5).forEach(([x, z], i) => rocks.push([x, z, i, 0]));
   perim(-W / 2 - pad - 2.5, -H / 2 - pad - 2.5, W / 2 + pad + 2.5, H / 2 + pad + 2.5, 2.2).forEach(([x, z], i) => rocks.push([x, z, i + 500, 1]));
-  const rockM = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), std(0xffffff, {roughness: 0.95, flatShading: true, map: brickTex()}), rocks.length);
+  const rockM = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), std(0xffffff, {roughness: 1, map: rockPxTex()}), rocks.length);
   rocks.forEach(([x, z, i, ring], k) => {
     const h = hash(i, 3), sx = 1.1 + hash(i, 7) * 1.2, sy = (ring ? 2.6 : 1.2) + h * (ring ? 3.2 : 1.6);
     M4.compose(V3.set(x + (hash(i, 9) - 0.5) * 0.8, sy * 0.35 - 0.3, z + (hash(i, 11) - 0.5) * 0.8), Q.setFromEuler(new THREE.Euler(h, i, h * 2)), S3.set(sx, sy, sx * (0.8 + h * 0.4)));
@@ -909,7 +1172,7 @@ function build() {
     if (hash(i, 17) < 0.35) spikes.push([x + (hash(i, 19) - 0.5) * 1.4, z + (hash(i, 23) - 0.5) * 1.4, i]);
   });
   rockM.castShadow = true; rockM.receiveShadow = true;
-  const spikeM = new THREE.InstancedMesh(new THREE.ConeGeometry(0.35, 1, 6), std(0x4a3a2a, {roughness: 0.9, flatShading: true}), Math.max(1, spikes.length));
+  const spikeM = new THREE.InstancedMesh(new THREE.BoxGeometry(0.5, 1, 0.5), std(0x8a7a66, {roughness: 1, map: rockPxTex()}), Math.max(1, spikes.length));
   spikes.forEach(([x, z, i], k) => { const h = 1.2 + hash(i, 29) * 2.4; M4.compose(V3.set(x, h / 2 - 0.1, z), Q.identity(), S3.set(0.6 + hash(i, 31) * 0.6, h, 0.6 + hash(i, 31) * 0.6)); spikeM.setMatrixAt(k, M4); });
   spikeM.count = spikes.length;
   root.add(rockM, spikeM);
@@ -957,6 +1220,11 @@ function build() {
     const lbl = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true, depthTest: false, sizeAttenuation: false}));
     lbl.position.set(0, 0.8, 0); lbl.scale.set(0.045, 0.0235, 1); lbl.renderOrder = 14; lbl.material.opacity = 0.8;
     grp.add(lbl);
+    grp.traverse(o => { if (o.isMesh && o !== glow) o.visible = false; });
+    cs.forEach(c => grp.remove(c));
+    const osp = pxSprite(oreTex(7), 0.95, 0.95, 0.08);
+    grp.add(osp);
+    grp.userData.spr = osp;
     grp.userData.cs = cs; grp.userData.glint = glint; grp.userData.glow = glow; grp.userData.lbl = lbl;
     root.add(grp);
     ore.set(x + ',' + y, grp);
@@ -982,8 +1250,11 @@ function build() {
       const ch = mesh(rev, new THREE.DodecahedronGeometry(0.05 + h * 0.04), rimM, Math.sin(a + 0.6) * 0.5, 0.01, Math.cos(a + 0.6) * 0.5);
       ch.scale.y = 0.55; ch.rotation.set(i, h * 6, 0);
     }
+    rev.traverse(o => { if (o.isMesh) o.visible = false; });
+    const pm = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), std(0xffffff, {roughness: 1, map: pitTex()}));
+    pm.position.y = 0.004; pm.receiveShadow = true; rev.add(pm);
     root.add(hidden, rev);
-    traps.set(x + ',' + y, {hidden, rev, gi: y * W + x, gy: -0.12 - hash(x, y) * 0.025});
+    traps.set(x + ',' + y, {hidden, rev, gi: y * W + x, gy: -0.12});
   }
 
   // 야영지
@@ -1033,7 +1304,7 @@ function build() {
 }
 
 function resetCam() {
-  const s = Math.max(W, H), d = s * 1.12;
+  const s = Math.max(W, H), d = s * 1.28;
   controls.target.set(0, 0, 0.6);
   camera.position.set(0, d * Math.cos(PHI), 0.6 + d * Math.sin(PHI));
   controls.update();
@@ -1102,6 +1373,7 @@ function updateStatic(fi, team, seen, now) {
     const cs = grp.userData.cs, n = Math.max(1, Math.ceil(Math.min(1, amt / 16) * cs.length));
     if (grp.userData.amt !== amt) { grp.userData.amt = amt; grp.userData.lbl.material.map = numTex(amt); grp.userData.lbl.material.needsUpdate = true; }
     cs.forEach((c, i) => c.visible = i < n);
+    if (grp.userData.n !== n) { grp.userData.n = n; grp.userData.spr.material.map = oreTex(n); grp.userData.spr.material.needsUpdate = true; }
     grp.scale.setScalar(0.85 + Math.min(1, amt / 16) * 0.25);
     grp.userData.glow.material.opacity = 0.35 + 0.2 * Math.sin(now * 1.6 + x + y);
     const tw = Math.max(0, Math.sin(now * 2.2 + x * 1.7 + y * 2.3));
@@ -1141,13 +1413,10 @@ function updateStatic(fi, team, seen, now) {
     const [x, y] = k.split(',').map(Number);
     if (seen && !seen[y * W + x]) continue;
     for (let i = 0; i < Math.min(n, 4); i++) {
-      const m = fx('garrow', () => { const a2 = makeArrow(); a2.userData.trail.visible = false; a2.userData.glow.visible = false; return a2; });
-      m.userData.trail.visible = false; m.userData.glow.visible = false; m.scale.setScalar(0.9);
-      const ox = (hash(x + i, y * 3) - 0.5) * 0.5, oz = (hash(x * 5, y + i) - 0.5) * 0.5, ang = hash(i, x + y) * Math.PI * 2;
-      m.position.set(wx(x) + ox, 0.2, wz(y) + oz);
-      m.lookAt(wx(x) + ox + Math.cos(ang) * 0.5, -0.6, wz(y) + oz + Math.sin(ang) * 0.5);
-      m.userData.head.material.color.setHex(0xe8e8e8);
-      for (const f of m.userData.fl) f.material.color.setHex(0xf2ead8);
+      const m = fx('garrow2', () => pxSprite(garrowTex(), 0.34, 0.42, 0.05));
+      const ox = (hash(x + i, y * 3) - 0.5) * 0.5, oz = (hash(x * 5, y + i) - 0.5) * 0.5;
+      m.position.set(wx(x) + ox, 0, wz(y) + oz);
+      m.scale.set(hash(i, x + y) < 0.5 ? -0.34 : 0.34, 0.42, 1);
     }
     if (n > 1) { const s2 = textSprite('×' + n, '#e8f2ff'); s2.position.set(wx(x) + 0.3, 0.55, wz(y) + 0.3); s2.scale.set(0.5, 0.25, 1); s2.material.opacity = 0.9; }
   }
@@ -1226,7 +1495,10 @@ function updateBases(fi, g, a, moving, seen, vis, now) {
     if (hit && a > 0.45) shake = (1 - a) * 0.05;
     b.g.position.x = wx(x) + Math.sin(now * 70) * shake;
     for (const m of b.flash) m.emissive.setRGB(shake * 12, 0, 0);
-    if (t === 0) for (const [k, br] of world.braziers.entries()) { const f2 = 1 + Math.sin(now * 11 + k * 2) * 0.1 + Math.sin(now * 19 + k) * 0.06; br.fl.scale.set(1, f2, 1); br.L.intensity = 9 * f2; }
+    { const fr = Math.floor(now * 5 + t) % 2, key = (dead ? 1 : 0) + ':' + fr;
+      if (b._k !== key) { b._k = key; b.spr.material.map = campTex(t, dead, dead ? 0 : fr); b.spr.material.needsUpdate = true; }
+      const kk = Math.min(1, shake * 14); b.spr.material.color.setRGB(1, 1 - kk * 0.6, 1 - kk * 0.6); }
+    if (t === 0) for (const [k, br] of world.braziers.entries()) { const f2 = 1 + Math.sin(now * 11 + k * 2) * 0.1 + Math.sin(now * 19 + k) * 0.06; br.fl.scale.set(1, f2, 1); br.L.intensity = 9 * f2; const bf = Math.floor(now * 6 + k) % 2; if (br._f !== bf) { br._f = bf; br.spr.material.map = brazierTex(bf); br.spr.material.needsUpdate = true; } }
     setHp(b.hp, hp / R.const.hp.B, TC[t].c);
     billboard(b.hp, b.g);
   });
