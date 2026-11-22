@@ -699,6 +699,15 @@ function rimTex(mask, v) {                       // 벽 윗면 한 칸: 바위 �
     return t;
   });
 }
+function perceptStrip(keys) {                    // 지각 아이콘 여러 개를 한 줄 띠로
+  return pxMemo('ps_' + keys.join(','), () => {
+    const c = document.createElement('canvas'); c.width = 15 * keys.length + 1; c.height = 15;
+    const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+    keys.forEach((k, i) => g.drawImage(perceptTex(k).image, 1 + i * 15, 0));
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+    return t;
+  });
+}
 function perceptTex(k) {                       // 지각 도트 아이콘 (머리 위)
   return pxMemo('pc_' + k, () => pxTex(pxCanvas(14, 14, K => {
     K.E(7, 7, 6.6, 6.6, '#120c08');
@@ -1864,14 +1873,16 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.hp.visible = false;                          // 멀리서는 아이콘 고리, 가까이서는 머리 위 도트 막대
     o.bar.visible = NEAR > 0.5; o.bar.position.set(o.pix.position.x, 0.84, o.pix.position.z);
     o.pool.visible = AGENT(); o.pool.scale.set(1 / CH, 1, 1 / CH);
-    { const pv = A.get(id), hurt = moving && pv && u[5] < pv[5];     // 지금 느끼는 것: 바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔
+    { const pv = A.get(id), hurt = moving && pv && u[5] < pv[5];     // 지금 느끼는 것: 바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔 → 머리 위 작은 아이콘 띠 (확대와 상관없이 같은 크기)
       const on = AGENT() ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', u[12] && 'steps', hurt && 'hurt'].filter(Boolean) : [];
-      o.icons.forEach((ic, k) => {
-        ic.visible = k < on.length && NEAR > 0.3;
-        if (!ic.visible) return;
-        if (ic.userData.k !== on[k]) { ic.userData.k = on[k]; ic.material.map = perceptTex(on[k]); ic.material.needsUpdate = true; }
-        ic.position.set(o.pix.position.x + (k - (on.length - 1) / 2) * 0.21, 1.0, o.pix.position.z);
-      }); }
+      const ic = o.icons[0]; o.icons.forEach((x, k) => { if (k) x.visible = false; });
+      ic.visible = on.length > 0;
+      if (ic.visible) {
+        const key = on.join(',');
+        if (ic.userData.k !== key) { ic.userData.k = key; ic.material.map = perceptStrip(on); ic.material.needsUpdate = true; ic.material.sizeAttenuation = false; }
+        ic.scale.set(0.022 * on.length, 0.022, 1);
+        ic.center.set(0.5, 0); ic.position.set(o.pix.position.x, NEAR > 0.5 ? 1.0 : 0.72, o.pix.position.z);
+      } }
     if (o._hk !== hp10) { o._hk = hp10; o.bar.material.map = hpTex(hp10, o.team); o.bar.material.needsUpdate = true; }
     setHp(o.hp, src[5] / mx, TC[u[1]].c);
     billboard(o.hp, o.g);
@@ -1896,7 +1907,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
       x = u[3] + (d[2] - u[3]) * e; y = u[4] + (d[3] - u[4]) * e;
     }
     if (!show(o, x, y, u[1] === team)) continue;
-    o.hp.visible = false; o.disc.visible = o.badge.visible = false; o.bar.visible = false; o.glow.visible = false;
+    o.hp.visible = false; o.disc.visible = o.badge.visible = false; o.bar.visible = false; o.glow.visible = false; o.icons.forEach(x => x.visible = false);
     o._fade = Math.max(0, 1 - Math.max(0, a - 0.55) / 0.45);
     lod(o);
     if (o.pix.userData.lpc) lpcFrame(o.pix, 'hurt', 0, Math.floor(Math.min(0.999, a * 1.4) * 6));   // 쓰러지는 동작

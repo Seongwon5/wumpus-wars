@@ -758,6 +758,7 @@ def archer_turn(me, view, memory):
 
 # ---------------- 시안 3 (agent): 자기 칸만 느끼는 모험가 ----------------
 last_target = None      # 지난 차례에 들어가려던 칸 (부딪힘이면 벽인지 판단)
+bumps = {}              # 칸 -> 연달아 부딪힌 횟수
 atk_i = 0               # 발소리만 날 때 옆 칸을 차례로 쳐 본다
 
 
@@ -781,9 +782,13 @@ def agent_turn(me, view, memory):
     if K.enemy_base is None:
         K._found_enemy(eb)
     # 1. 부딪힘: 발소리가 없는데 막혔으면 그 칸은 벽이다 (발소리가 있으면 모험가일 수도 있다)
-    if view.bump and last_target is not None and view.footsteps == 0 and last_target not in (K.base, eb):
-        K.walls.add(last_target)
-        K.safe.discard(last_target)
+    if view.bump and last_target is not None and last_target not in (K.base, eb):
+        bumps[last_target] = bumps.get(last_target, 0) + 1
+        if view.footsteps == 0 or bumps[last_target] >= 3:    # 세 번 연달아 막히면 모험가가 아니라 벽이다
+            K.walls.add(last_target)
+            K.safe.discard(last_target)
+    elif last_target is not None:
+        bumps.pop(last_target, None)
     last_target = None
     mates = mates_from(memory, me)
     adj = [n for n in K.nb4(pos) if n not in K.walls and n not in mates and n != K.base and n not in K.trap and n not in K.wump]

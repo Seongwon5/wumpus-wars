@@ -1,117 +1,137 @@
-"""시작용 봇 (starter).
+"""시작용 봇 (starter) — 웜퍼스 월드의 모험가.
 
 이 파일을 복사해 자기 봇을 만든다:   python -m wumpus new 내봇이름
 
-규칙
+규칙 요약 (자세히는 docs/RULES.md · docs/API.md)
 - 이 파일에는 turn(me, view, memory) 함수가 꼭 있어야 한다.
-- 유닛 (야영지 · 탐험가 · 궁수) 마다 이 파일이 따로 실행된다.
-  그래서 아래 전역 변수 (visited 등) 는 그 유닛 혼자만의 기억이다.
-- 팀끼리 나눌 정보는 memory (정수 64칸) 에 적는다.
-- turn 은 행동 하나 (Move · Mine · Shoot · Push · Spawn) 나 None (쉬기) 를 돌려준다.
+- 모험가 · 야영지마다 이 파일이 따로 실행된다. 아래 전역 변수는 그 모험가 혼자만의 기억이다.
+- 모험가는 **자기 칸만** 느낀다. 옆 칸의 벽 · 구덩이 · 금 · 웜퍼스 · 다른 모험가는 보이지 않는다.
+  지각: view.breeze 바람 · view.stench 악취 · view.glitter 반짝임 · view.bump 부딪힘
+        view.footsteps 발소리 · view.hurt 아픔 · view.screams 비명
+- 한 턴에 행동 하나: Move(d) · Mine() · Attack(x, y) (상하좌우 옆 칸) · None (쉬기)
+- 팀끼리 나눌 정보는 memory (32비트 정수 64칸) 에 적는다.
 
-지금은 아주 단순하게 움직인다. TODO 표시가 있는 곳부터 고쳐 보자.
+이 봇이 하는 일 (기본 동작은 다 한다)
+1. "바람도 악취도 없는 칸의 상하좌우는 안전하다" 로 안전한 칸을 넓히며 탐험한다.
+2. 반짝이면 캔다. 가득 차면 아는 길로 야영지에 돌아가 바친다.
+3. 부딪혔는데 발소리가 없으면 그 칸을 벽으로 기억한다.
+4. 아프면 옆 칸을 차례로 쳐서 반격한다.
+
+TODO 표시가 있는 곳부터 고쳐 보자.
 """
-import random
+from collections import deque
 
-from wumpus.api import (Move, Mine, Shoot, Push, Spawn, debug, DIRS, cheb,
-                        EXPLORER, ARCHER, CAMP, WALL, GOLD, PIT, CARRY_MAX, COST, ARROW_RANGE)
+from wumpus.api import (Move, Mine, Attack, Spawn, debug, DIRS,
+                        EXPLORER, CAMP, WALL, CARRY_MAX, COST, MAX_ROUNDS)
 
-visited = set()          # 이 유닛이 서 본 칸
-breezy = set()           # 이 유닛이 바람을 느낀 칸
+# ---------------- 이 모험가의 기억 (지식 베이스) ----------------
+visited = set()      # 서 본 칸 (살아서 서 봤으니 안전하다)
+safe = set()         # 안전하다고 추론한 칸 (구덩이도 웜퍼스도 없다)
+walls = set()        # 부딪혀서 알아낸 벽
+danger = set()       # 바람 · 악취를 느낀 칸 (그 옆 어딘가가 위험하다)
+last_target = None   # 지난 차례에 들어가려던 칸
+bumps = {}           # 칸 -> 연달아 부딪힌 횟수
+swing = 0            # 반격할 때 다음에 칠 방향 번호
 
 
 def turn(me, view, memory):
     if me.kind == CAMP:
         return camp_turn(me, view, memory)
-    if me.kind == EXPLORER:
-        return explorer_turn(me, view, memory)
-    return archer_turn(me, view, memory)
+    return adventurer_turn(me, view, memory)
 
 
 # ---------------- 야영지 ----------------
 def camp_turn(me, view, memory):
-    # TODO: 탐험가와 궁수를 몇 기씩, 언제 만들지 정해 보자.
-    kind = EXPLORER if view.unit_count < 6 else ARCHER
-    if me.bank < COST[kind] or view.unit_count >= 10:
+    # TODO: 언제, 몇 명을 만들지 정해 보자 (금고를 아껴 둘 수도 있다)
+    if me.bank < COST[EXPLORER] or view.unit_count >= 10:
         return None
+    taken = {(u.x, u.y) for u in view.units()}
     for d, (dx, dy) in DIRS.items():
-        x, y = me.x + dx, me.y + dy
-        if view.tile(x, y) not in (None, WALL) and not occupied(view, x, y):
-            return Spawn(kind, d)
+        c = (me.x + dx, me.y + dy)
+        if view.tile(*c) not in (None, WALL) and c not in taken:   # 야영지는 옆 칸까지 본다
+            return Spawn(EXPLORER, d)
     return None
 
 
-# ---------------- 탐험가 ----------------
-def explorer_turn(me, view, memory):
-    visited.add((me.x, me.y))
-    if view.breeze:
-        breezy.add((me.x, me.y))
-        debug.mark(me.x, me.y, 'yellow')          # 뷰어의 "머릿속" 에 보인다
+# ---------------- 모험가 ----------------
+def neighbors(c, w, h):
+    for dx, dy in DIRS.values():
+        n = (c[0] + dx, c[1] + dy)
+        if 0 <= n[0] < w and 0 <= n[1] < h:
+            yield n
 
-    # 금을 다 채웠으면 야영지로 돌아간다 (야영지 옆에 서면 저절로 바쳐진다)
-    if me.carry >= CARRY_MAX:
-        return step_toward(me, view, *view.my_camp)
 
-    # 바로 옆 적 뒤가 드러난 구덩이면 밀어 떨어뜨린다
-    for u in view.units():
-        if u.team != me.team and u.kind != CAMP and abs(u.x - me.x) + abs(u.y - me.y) == 1:
-            if view.tile(2 * u.x - me.x, 2 * u.y - me.y) == PIT:
-                return Push(next(d for d, (dx, dy) in DIRS.items() if (me.x + dx, me.y + dy) == (u.x, u.y)))
+def adventurer_turn(me, view, memory):
+    global last_target, swing
+    pos = (me.x, me.y)
+    w, h = view.width, view.height
 
-    # 금 칸 위에 서 있거나 떨어진 금이 있으면 캔다 (줍는다)
-    if view.tile(me.x, me.y) == GOLD or view.loot(me.x, me.y):
+    # 1. 지각을 지식 베이스에 더한다
+    if view.bump and last_target is not None:
+        bumps[last_target] = bumps.get(last_target, 0) + 1
+        # 발소리 없이 막혔다 → 벽. 발소리가 있으면 모험가일 수도 있지만, 세 번 연달아 막히면 벽이다 (모험가는 비켜 간다)
+        if view.footsteps == 0 or bumps[last_target] >= 3:
+            walls.add(last_target)
+    elif last_target is not None:
+        bumps.pop(last_target, None)
+    last_target = None
+    visited.add(pos)
+    safe.add(pos)
+    if view.breeze or view.stench:
+        danger.add(pos)
+        debug.mark(*pos, 'yellow')
+    else:
+        for n in neighbors(pos, w, h):              # 명제 논리: ¬바람 ∧ ¬악취 → 상하좌우는 안전
+            safe.add(n)
+    # TODO: 바람 칸 둘레에서 "후보가 하나뿐이면 그 칸이 구덩이" 같은 추론을 더해 보자
+    # TODO: memory 로 팀원과 벽 · 안전한 칸 지도를 나눠 보자
+
+    # 2. 아프면 반격한다 (누가 어디서 쳤는지는 모른다 → 옆 칸을 차례로 쳐 본다)
+    # TODO: 발소리 · 팀원 위치로 적이 있는 칸을 추론해 보자
+    if view.hurt:
+        cand = [n for n in neighbors(pos, w, h) if n not in walls and n != view.my_camp]
+        if cand:
+            t = cand[swing % len(cand)]
+            swing += 1
+            debug.say('아프다 → (%d,%d) 반격' % t)
+            return Attack(*t)
+
+    # 3. 반짝이면 캔다 (떨어진 금은 들어서면 저절로 줍는다)
+    if view.glitter and (view.gold(*pos) or 0) > 0 and me.carry < CARRY_MAX:
+        debug.say('반짝임 → 채굴')
         return Mine()
-    # TODO: 악취 (view.stench) 가 나면 근처에 웜퍼스 굴이 있다. 굴로 들어가면 잡아먹힌다.
 
-    # 보이는 금 중 가장 가까운 곳으로 간다
-    golds = [(x, y) for (x, y) in view.visible_cells() if view.tile(x, y) == GOLD and not occupied(view, x, y)]
-    if golds:
-        gx, gy = min(golds, key=lambda c: abs(c[0] - me.x) + abs(c[1] - me.y))
-        debug.path([(me.x, me.y), (gx, gy)], 'white')
-        return step_toward(me, view, gx, gy)
+    # 4. 가득 차면 (또는 경기 끝이 가까우면) 야영지 옆 칸으로 돌아간다
+    home = set(neighbors(view.my_camp, w, h)) - walls
+    if me.carry >= CARRY_MAX or (me.carry > 0 and me.round > MAX_ROUNDS - 60):
+        return go(me, pos, home, w, h, '귀환')
 
-    # TODO: 바람으로 구덩이를 추론해 안전한 칸만 골라 탐사하자 (지금은 무작위).
-    return wander(me, view)
-
-
-# ---------------- 궁수 ----------------
-def archer_turn(me, view, memory):
-    # 같은 줄 · 같은 열의 적이 사거리 안에 있으면 그쪽으로 쏜다 (화살이 있을 때)
-    # TODO: 사이에 벽이나 우리 편이 있으면 화살이 막힌다. 화살이 떨어지면 야영지 옆에서 채우자 (me.arrows).
-    for u in view.units():
-        if u.team != me.team and me.arrows > 0 and (u.x == me.x or u.y == me.y) and 0 < abs(u.x - me.x) + abs(u.y - me.y) <= ARROW_RANGE:
-            d = ('E' if u.x > me.x else 'W') if u.y == me.y else ('S' if u.y > me.y else 'N')
-            return Shoot(d)
-    # TODO: 적 야영지가 어디인지 대칭으로 추론해 그쪽으로 가자.
-    return wander(me, view)
+    # 5. 탐험: 안전하다고 추론했지만 아직 안 가 본 칸 → 없으면 위험을 감수한다
+    # TODO: 적 야영지 (view.enemy_camp) 를 치러 가는 때를 정해 보자
+    frontier = safe - visited - walls - {view.my_camp, view.enemy_camp}
+    if frontier:
+        return go(me, pos, frontier, w, h, '탐험 (안전)')
+    unknown = {n for c in danger for n in neighbors(c, w, h)} - visited - walls - {view.my_camp, view.enemy_camp}
+    return go(me, pos, unknown, w, h, '탐험 (위험 감수)')
 
 
-# ---------------- 도우미 ----------------
-def occupied(view, x, y):
-    return any(u.x == x and u.y == y for u in view.units())
-
-
-def safe_moves(me, view):
-    """벽 · 드러난 구덩이 · 다른 유닛이 없는 방향들."""
-    out = []
-    for d, (dx, dy) in DIRS.items():
-        x, y = me.x + dx, me.y + dy
-        t = view.tile(x, y)
-        if t is not None and t not in (WALL, PIT) and not occupied(view, x, y):
-            out.append(d)
-    return out
-
-
-def step_toward(me, view, tx, ty):
-    moves = safe_moves(me, view)
-    if not moves:
+def go(me, pos, goals, w, h, label):
+    """아는 안전한 칸으로만 걸어 goals 중 가장 가까운 칸으로 한 걸음 (너비 우선 탐색)."""
+    global last_target
+    if not goals:
         return None
-    best = min(moves, key=lambda d: abs(me.x + DIRS[d][0] - tx) + abs(me.y + DIRS[d][1] - ty))
-    return Move(best)
-
-
-def wander(me, view):
-    moves = safe_moves(me, view)
-    fresh = [d for d in moves if (me.x + DIRS[d][0], me.y + DIRS[d][1]) not in visited]
-    pick = fresh or moves
-    return Move(random.choice(pick)) if pick else None
+    prev = {pos: None}
+    q = deque([pos])
+    while q:
+        c = q.popleft()
+        if c in goals:
+            while prev[c] != pos and prev[c] is not None:
+                c = prev[c]
+            last_target = c
+            debug.say('%s → (%d,%d)' % (label, c[0], c[1]))
+            return Move(next(d for d, (dx, dy) in DIRS.items() if (pos[0] + dx, pos[1] + dy) == c))
+        for n in neighbors(c, w, h):
+            if n not in prev and n not in walls and (n in safe or n in goals):
+                prev[n] = c
+                q.append(n)
+    return None
