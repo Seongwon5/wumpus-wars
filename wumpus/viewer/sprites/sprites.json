@@ -149,6 +149,30 @@
     5,
     5
    ]
+  },
+  "floor": {
+   "cols": 1,
+   "rows": 1,
+   "cell": 32,
+   "tile": true
+  },
+  "wall_side": {
+   "cols": 1,
+   "rows": 1,
+   "cell": 64,
+   "tile": true
+  },
+  "wall_top": {
+   "cols": 1,
+   "rows": 1,
+   "cell": 64,
+   "tile": true
+  },
+  "ore": {
+   "cols": 8,
+   "rows": 1,
+   "cell": 64,
+   "foot": 62
   }
  }
 }

@@ -472,7 +472,14 @@ function bodyCanvas(kind, team, fr) {
 function bodyTex(kind, team, fr) { return pxMemo('bt' + kind + team + ':' + fr, () => pxTex(bodyCanvas(kind, team, fr))); }
 
 // ---------------- 도트 게임판 ----------------
+function tileTex(name) {                     // LPC 동굴 타일 (있으면): 가까이선 도트 그대로, 멀리선 부드럽게
+  const S = typeof SHEETS !== 'undefined' && SHEETS[name];
+  if (!S) return null;
+  return pxMemo('lpc_' + name, () => { const t = new THREE.Texture(S.img); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter;
+    t.minFilter = THREE.LinearMipmapLinearFilter; t.anisotropy = 8; t.needsUpdate = true; return t; });
+}
 function floorTex() {                       // 바닥 판석: 네 조각 돌, 줄눈, 금, 자갈 (칸마다 색은 인스턴스 색으로)
+  const lt = tileTex('floor'); if (lt) return lt;
   return pxMemo('floor', () => pxTex(pxCanvas(32, 32, K => {
     K.noise(0, 0, 32, 32, [200, 194, 184], 9);
     const dark = [118, 108, 96], light = [232, 226, 214];
@@ -482,6 +489,7 @@ function floorTex() {                       // 바닥 판석: 네 조각 돌, �
   }, 7), true));
 }
 function wallSideTex() {                    // 벽 옆면: 엇갈려 쌓은 벽돌
+  const lt = tileTex('wall_side'); if (lt) return lt;
   return pxMemo('wside', () => pxTex(pxCanvas(32, 32, K => {
     K.R(0, 0, 32, 32, [78, 68, 58]);
     for (let r = 0; r < 4; r++) {
@@ -495,6 +503,7 @@ function wallSideTex() {                    // 벽 옆면: 엇갈려 쌓은 벽�
   }, 11), true));
 }
 function wallTopTex() {                     // 벽 윗면: 밝은 덮개돌
+  const lt = tileTex('wall_top'); if (lt) return lt;
   return pxMemo('wtop', () => pxTex(pxCanvas(32, 32, K => {
     K.noise(0, 0, 32, 32, [226, 218, 204], 8);
     for (let i = 0; i < 32; i++) { K.P(i, 0, [250, 246, 236]); K.P(0, i, [250, 246, 236]); K.P(i, 31, [140, 130, 116]); K.P(31, i, [140, 130, 116]); }
@@ -1172,6 +1181,7 @@ function build() {
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const i = y * W + x, r = hash(x, y);
     COL.setHSL(0.08 + r * 0.03, 0.12 + r * 0.06, 0.25 + r * 0.06);
+    if (SHEETS.floor) COL.setRGB(0.9 + r * 0.1, 0.9 + r * 0.1, 0.9 + r * 0.1);
     gBase.set([COL.r, COL.g, COL.b], i * 3);
     M4.makeTranslation(wx(x), -0.12, wz(y));
     ground.setMatrixAt(i, M4);
@@ -1223,6 +1233,7 @@ function build() {
     const r = hash(x, y), ruin = hash(y + 17, x + 3) < 0.2, h = ruin ? 0.5 : 1;
     const rot = Q.identity();
     COL.setHSL(0.08 + r * 0.02, 0.14, 0.36 + r * 0.08);
+    if (SHEETS.wall_side) COL.setRGB(0.9 + r * 0.1, 0.9 + r * 0.1, 0.9 + r * 0.1);
     wBase.set([COL.r, COL.g, COL.b], k * 3);
     M4.compose(V3.set(wx(x), h / 2, wz(y)), rot, S3.set(1, h, 1));
     wall.setMatrixAt(k, M4); wall.setColorAt(k, COL);
@@ -1318,7 +1329,12 @@ function build() {
     grp.add(lbl);
     grp.traverse(o => { if (o.isMesh && o !== glow) o.visible = false; });
     cs.forEach(c => grp.remove(c));
-    const osp = pxSprite(oreTex(7), 0.95, 0.95, 0.08);
+    let osp;
+    if (SHEETS.ore) {                              // LPC 금맥: 바위 위 금빛 수정
+      const tx = SHEETS.ore.tex.clone(); tx.repeat.set(1 / 8, 1); tx.offset.set(7 / 8, 0); tx.needsUpdate = true;
+      osp = new THREE.Sprite(new THREE.SpriteMaterial({map: tx, transparent: true, alphaTest: 0.5}));
+      osp.center.set(0.5, 2 / 64); osp.scale.set(1.05, 1.05, 1); osp.renderOrder = 5; osp.userData.lpc = true; osp.material.color.setScalar(0.78);
+    } else osp = pxSprite(oreTex(7), 0.95, 0.95, 0.08);
     grp.add(osp);
     const clk = pxSprite(clockTex(0, 12), 0.78, 0.15, 0.5);
     clk.position.y = 1.0; clk.renderOrder = 13; clk.material.depthTest = false;
@@ -1479,7 +1495,9 @@ function updateStatic(fi, team, seen, now) {
       if (!full && clk.userData.st !== st) { clk.userData.st = st; clk.material.map = clockTex(st, RG); clk.material.needsUpdate = true; } }
     if (grp.userData.amt !== amt) { grp.userData.amt = amt; grp.userData.lbl.material.map = numTex(amt); grp.userData.lbl.material.needsUpdate = true; }
     cs.forEach((c, i) => c.visible = i < n);
-    if (grp.userData.n !== n) { grp.userData.n = n; grp.userData.spr.material.map = oreTex(n); grp.userData.spr.material.needsUpdate = true; }
+    if (grp.userData.n !== n) { grp.userData.n = n;
+      if (grp.userData.spr.userData.lpc) grp.userData.spr.material.map.offset.set(n / 8, 0);
+      else { grp.userData.spr.material.map = oreTex(n); grp.userData.spr.material.needsUpdate = true; } }
     grp.scale.setScalar(0.85 + Math.min(1, amt / 16) * 0.25);
     grp.userData.glow.material.opacity = 0.35 + 0.2 * Math.sin(now * 1.6 + x + y);
     const tw = Math.max(0, Math.sin(now * 2.2 + x * 1.7 + y * 2.3));

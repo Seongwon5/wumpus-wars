@@ -35,6 +35,7 @@ RAMPS = {
     'pants': ['#1a1410', '#2e241a', '#463626', '#5e4a34'],
     'leather': ['#1a0e06', '#2e1c10', '#4a3020', '#6a4830'],
     'green': ['#10200a', '#264216', '#3e6a22', '#5e8e30', '#94c454'],
+    'gold': ['#3a2000', '#6a4004', '#a86c10', '#d89a20', '#f0c040', '#ffe080'],
 }
 
 
@@ -164,6 +165,46 @@ def build_camp(deco, t):
     return {'cols': 10, 'rows': 1, 'cell': C, 'foot': 152, 'alive': [0, 5], 'dead': [5, 5]}
 
 
+def build_cave(cav):
+    """동굴 타일 (LPC Cavern and Ruin Tiles, CC-BY-SA 3.0 / GPL): 바닥 · 벽 옆면 · 벽 윗면 · 금맥 (파란 수정을 금색으로)."""
+    im = Image.open(os.path.join(cav, 'cavern_ruins.png')).convert('RGBA')
+    T = 32
+    tile = lambda c, r, w=1, h=1: im.crop((c * T, r * T, (c + w) * T, (r + h) * T))
+    out = {}
+    floor = tile(0, 0)                                   # 어두운 동굴 바닥: 밝혀서 잘 보이게
+    floor = Image.eval(floor.convert('RGB'), lambda v: min(255, int(v * 2.5 + 8))).convert('RGBA')
+    fp = floor.load()                                   # 칸 경계: 아래 · 오른쪽은 어두운 줄, 위 · 왼쪽은 밝은 줄
+    for i in range(T):
+        for (x, y), k in (((i, T - 1), 0.55), ((T - 1, i), 0.55), ((i, 0), 1.25), ((0, i), 1.25)):
+            r, g, b_, a_ = fp[x, y]
+            fp[x, y] = (min(255, int(r * k)), min(255, int(g * k)), min(255, int(b_ * k)), a_)
+    floor.save(os.path.join(OUT, 'floor.png'))
+    out['floor'] = {'cols': 1, 'rows': 1, 'cell': T, 'tile': True}
+    side = tile(12, 0, 2, 2)                             # 갈색 암벽
+    side.save(os.path.join(OUT, 'wall_side.png'))
+    out['wall_side'] = {'cols': 1, 'rows': 1, 'cell': 64, 'tile': True}
+    top = Image.eval(side.convert('RGB'), lambda v: min(255, int(v * 1.15))).convert('RGBA')
+    top.save(os.path.join(OUT, 'wall_top.png'))
+    out['wall_top'] = {'cols': 1, 'rows': 1, 'cell': 64, 'tile': True}
+    rock = tile(12, 9)
+    small, cluster, tall = tile(9, 10), tile(9, 11), tile(10, 10, 1, 2)
+    gold = lambda p: recolor(p, 'gold')
+    small, cluster, tall = gold(small), gold(cluster), gold(tall)
+    C = 64
+    sheet = Image.new('RGBA', (C * 8, C))
+    plan = [[], [(small, 16, 32)], [(cluster, 16, 32)], [(cluster, 6, 32), (small, 28, 34)], [(tall, 16, 0)],
+            [(tall, 10, 0), (small, 30, 34)], [(tall, 8, 0), (cluster, 26, 32)], [(cluster, 0, 30), (tall, 16, 0), (small, 34, 34)]]
+    for k, parts in enumerate(plan):
+        f = Image.new('RGBA', (C, C))
+        f.alpha_composite(rock.resize((40, 40), Image.NEAREST), (12, 26))
+        for p, x, y in parts:
+            f.alpha_composite(p, (x, y))
+        sheet.alpha_composite(f, (k * C, 0))
+    sheet.save(os.path.join(OUT, 'ore.png'), optimize=True)
+    out['ore'] = {'cols': 8, 'rows': 1, 'cell': C, 'foot': 62}
+    return out
+
+
 def defs(src):
     out = {}
     for f in glob.glob(os.path.join(src, 'sheet_definitions', '**', '*.json'), recursive=True):
@@ -225,6 +266,9 @@ def main():
     if deco:
         for t in (0, 1):
             meta['sheets']['camp_%d' % t] = build_camp(deco, t)
+    cav = sys.argv[3] if len(sys.argv) > 3 else None
+    if cav:
+        meta['sheets'].update(build_cave(cav))
     json.dump(meta, open(os.path.join(OUT, 'sprites.json'), 'w', encoding='utf-8'), indent=1)
 
     # 만든 사람 표기
@@ -245,6 +289,10 @@ def main():
         lines += ['', '## 야영지: [LPC] Medieval Village Decorations (bluecarrot16 외)', '',
                   'https://opengameart.org/content/lpc-medieval-village-decorations — CC-BY-SA 3.0+. 원본 CREDITS 파일 전문:', '', '```',
                   open(os.path.join(deco, 'CREDITS-decorations-medieval.txt'), encoding='utf-8', errors='replace').read().strip(), '```']
+    if cav:
+        lines += ['', '## 동굴 바닥 · 벽 · 금맥: LPC Cavern and Ruin Tiles (Tuomo Untinen 외)', '',
+                  'https://opengameart.org/content/lpc-cavern-and-ruin-tiles — CC-BY-SA 3.0, GPL 2.0, GPL 3.0. 원본 credits.txt 전문:', '', '```',
+                  open(os.path.join(cav, 'credits.txt'), encoding='utf-8', errors='replace').read().strip(), '```']
     open(os.path.join(OUT, 'CREDITS.md'), 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
     print('ok', {k: (v['cols'], v['rows']) for k, v in meta['sheets'].items()}, 'credits', len(seen))
 
