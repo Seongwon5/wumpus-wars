@@ -2528,5 +2528,12 @@ function look(x, y, z, tx, ty, tz) {          // 확인용: 카메라를 칸 좌
   camera.position.set(wx(x), y, wz(z)); controls.target.set(wx(tx), ty, wz(tz)); controls.update();
 }
 
-window.View3D = {build, frame, resize, resetCam, focus, setSpectate, look};
+function legend() {                          // 오른쪽 '표시' 칸에 쓸 그림: 화면에 실제로 그리는 것과 같은 도트 아이콘
+  const u = t => t.image.toDataURL(), o = {};
+  for (const k of ['breeze', 'stench', 'glitter', 'bump', 'steps', 'hurt']) o[k] = u(perceptTex(k));
+  o.hp = u(hpTex(10, 0)); o.hpLow = u(hpTex(3, 0)); o.token = u(tokenTex('E', 0));
+  return o;
+}
+
+window.View3D = {build, frame, resize, resetCam, focus, setSpectate, look, legend};
 if (window.onView3DReady) window.onView3DReady();

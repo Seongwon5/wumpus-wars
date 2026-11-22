@@ -275,6 +275,11 @@ def defs(src):
     return out
 
 
+LEGACY = '--legacy' in sys.argv
+if LEGACY:
+    sys.argv.remove('--legacy')
+
+
 def main():
     src = sys.argv[1]
     os.makedirs(OUT, exist_ok=True)
@@ -302,7 +307,8 @@ def main():
         ]
         tb = Image.open(os.path.join(src, 'spritesheets/tools/pickaxe/bg.png')).convert('RGBA')
         tf = Image.open(os.path.join(src, 'spritesheets/tools/pickaxe/fg.png')).convert('RGBA')
-        meta['sheets']['explorer_%d' % t] = build('explorer_%d' % t, explorer, 'tool', (tb, tf))
+        if LEGACY:                                         # 옛 규칙 (시안 1 · 2) 의 탐험가 · 궁수 시트는 --legacy 때만
+            meta['sheets']['explorer_%d' % t] = build('explorer_%d' % t, explorer, 'tool', (tb, tf))
         archer = [
             L('weapon_ranged_bow_normal.json', 'weapon/ranged/bow/normal/universal/background', 1, variant='light'),
             L('cape_solid.json', 'cape/solid/bg', 5, ramp=team),
@@ -319,7 +325,8 @@ def main():
             L('hair_ponytail.json', 'hair/ponytail/adult/fg', 120, ramp='blonde'),
             L('weapon_ranged_bow_normal.json', 'weapon/ranged/bow/normal/universal/foreground', 140, variant='light'),
         ]
-        meta['sheets']['archer_%d' % t] = build('archer_%d' % t, archer, 'shoot')
+        if LEGACY:
+            meta['sheets']['archer_%d' % t] = build('archer_%d' % t, archer, 'shoot')
         adventurer = [                                    # 시안 3 모험가: 단검을 든 탐험가 (팀 색 두건)
             L('weapon_sword_dagger.json', 'weapon/sword/dagger/behind', 9, variant='dagger'),
             L('body.json', 'body/bodies/male', 10),
@@ -340,7 +347,7 @@ def main():
     ]
     meta['sheets']['wumpus'] = build('wumpus', wumpus, 'slash')
     af = os.path.join(src, 'spritesheets', 'weapon', 'ranged', 'bow', 'arrow', 'shoot', 'arrow.png')
-    if os.path.isfile(af):                               # 날아가는 화살: 활시위에 걸린 화살 (오른쪽 줄 7번 칸) 을 잘라 쓴다
+    if LEGACY and os.path.isfile(af):                    # 날아가는 화살: 활시위에 걸린 화살 (오른쪽 줄 7번 칸) 을 잘라 쓴다
         used.append('weapon_ranged_bow_arrow.json')
         a_ = Image.open(af).convert('RGBA').crop((64 * 7 + 28, 64 * 3 + 26, 64 * 7 + 61, 64 * 3 + 33))
         a_.save(os.path.join(OUT, 'arrow.png'))

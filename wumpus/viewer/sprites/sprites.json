@@ -2,54 +2,6 @@
  "cell": 128,
  "foot": 94,
  "sheets": {
-  "explorer_0": {
-   "cols": 8,
-   "rows": 13,
-   "idle": {
-    "row": 0,
-    "n": 1,
-    "dirs": 4
-   },
-   "walk": {
-    "row": 4,
-    "n": 8,
-    "dirs": 4
-   },
-   "attack": {
-    "row": 8,
-    "n": 6,
-    "dirs": 4
-   },
-   "hurt": {
-    "row": 12,
-    "n": 6,
-    "dirs": 1
-   }
-  },
-  "archer_0": {
-   "cols": 13,
-   "rows": 13,
-   "idle": {
-    "row": 0,
-    "n": 1,
-    "dirs": 4
-   },
-   "walk": {
-    "row": 4,
-    "n": 8,
-    "dirs": 4
-   },
-   "attack": {
-    "row": 8,
-    "n": 13,
-    "dirs": 4
-   },
-   "hurt": {
-    "row": 12,
-    "n": 6,
-    "dirs": 1
-   }
-  },
   "adventurer_0": {
    "cols": 8,
    "rows": 13,
@@ -66,54 +18,6 @@
    "attack": {
     "row": 8,
     "n": 6,
-    "dirs": 4
-   },
-   "hurt": {
-    "row": 12,
-    "n": 6,
-    "dirs": 1
-   }
-  },
-  "explorer_1": {
-   "cols": 8,
-   "rows": 13,
-   "idle": {
-    "row": 0,
-    "n": 1,
-    "dirs": 4
-   },
-   "walk": {
-    "row": 4,
-    "n": 8,
-    "dirs": 4
-   },
-   "attack": {
-    "row": 8,
-    "n": 6,
-    "dirs": 4
-   },
-   "hurt": {
-    "row": 12,
-    "n": 6,
-    "dirs": 1
-   }
-  },
-  "archer_1": {
-   "cols": 13,
-   "rows": 13,
-   "idle": {
-    "row": 0,
-    "n": 1,
-    "dirs": 4
-   },
-   "walk": {
-    "row": 4,
-    "n": 8,
-    "dirs": 4
-   },
-   "attack": {
-    "row": 8,
-    "n": 13,
     "dirs": 4
    },
    "hurt": {
@@ -169,11 +73,6 @@
     "n": 7,
     "dirs": 1
    }
-  },
-  "arrow": {
-   "cols": 1,
-   "rows": 1,
-   "cell": 33
   },
   "camp_0": {
    "cols": 10,

@@ -124,6 +124,10 @@ aside{border-left:1px solid var(--line);background:linear-gradient(#150f0a,#110c
 #mind .line{font-size:13px;margin:2px 0}
 #mind .k{color:var(--dim)}
 #legend{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;font-size:12px;color:var(--dim);align-items:center}
+#legend img{width:22px;height:22px;image-rendering:pixelated;object-fit:contain;justify-self:center}
+#legend img.wide{width:30px;height:8px}
+#legend b{color:#f3e2b8;font-weight:600}
+#legend .lg-h{grid-column:1/-1;color:#c8a868;font-size:11px;letter-spacing:.06em;margin-top:4px;border-bottom:1px dashed #3b2b1a;padding-bottom:2px}
 .sw{width:12px;height:12px;border-radius:2px;display:inline-block}
 #log{font-size:12px;max-height:170px;overflow-y:auto;color:#d8c8aa}
 #log div{padding:2px 0;border-bottom:1px dashed #3b2b1a}
@@ -210,14 +214,7 @@ input[type=checkbox]{accent-color:#c79a55}
       <div class="card"><h3>바친 금 추이</h3><canvas id="chart"></canvas></div>
       <div class="card" id="mind" style="display:none"><h3>봇의 머릿속</h3><div id="mindbody" class="hint">유닛이나 야영지를 누르면 그 유닛이 아는 것과 추론한 것이 보입니다.</div></div>
       <div class="card"><h3>표시</h3>
-        <div id="legend">
-          <span class="sw" style="background:#000;border:2px solid #d8a840"></span><span>구덩이 (봇은 바람으로만 안다)</span>
-          <span class="sw" style="border:2px solid #bfe9ff;border-radius:50%;border-left-color:transparent"></span><span>바람을 느끼는 유닛 (구덩이 옆)</span>
-          <span class="sw" style="background:radial-gradient(circle,#c8ff5a,#3a5a10)"></span><span>웜퍼스 굴 · 초록 안개는 악취</span>
-          <span class="sw" style="background:radial-gradient(circle,#ffe27a,#7a4a10);border-radius:40%"></span><span>떨어진 금 (밟으면 주움)</span>
-          <span class="sw" style="background:linear-gradient(90deg,#ffc63a 60%,#3a2e22 60%)"></span><span>금맥 위 막대: 다시 자라는 시계</span>
-          <span class="sw" style="background:#120c08;border:2px solid #bfe9ff"></span><span>머리 위 지각: 바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔</span>
-        </div>
+        <div id="legend"></div>
       </div>
       <div class="card"><h3>이번 라운드 사건</h3><div id="log"></div></div>
     </aside>
@@ -747,6 +744,48 @@ function face(k,t){
     im.src=SPRITES.img[nm];}
   return f.url?`<img class="face" src="${f.url}" alt="${nmK}" title="${nmK}">`:nmK;
 }
+// '표시' 칸: 화면에 실제로 그리는 그림 그대로. 모험가가 느끼는 지각이 먼저, 관전자에게만 보이는 것이 나중
+function sheetCrop(nm,col,row,sx,sy,sw,sh,cb){
+  if(!window.SPRITES||!SPRITES.img[nm])return cb(null);
+  const m=SPRITES.meta.sheets[nm],C=m.cell||SPRITES.meta.cell,im=new Image();
+  im.onload=()=>{const c=document.createElement('canvas');c.width=sw;c.height=sh;const g=c.getContext('2d');g.imageSmoothingEnabled=false;
+    g.drawImage(im,col*C+sx,row*C+sy,sw,sh,0,0,sw,sh);
+    const d=g.getImageData(0,0,sw,sh).data;let x0=sw,y0=sh,x1=-1,y1=-1;          // 빈 테두리를 잘라 그림만 크게
+    for(let y=0;y<sh;y++)for(let x=0;x<sw;x++)if(d[(y*sw+x)*4+3]>20){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;}
+    if(x1<0)return cb(c.toDataURL());
+    const n=Math.max(x1-x0,y1-y0)+1,q=document.createElement('canvas');q.width=q.height=n;const gq=q.getContext('2d');gq.imageSmoothingEnabled=false;
+    gq.drawImage(c,x0,y0,x1-x0+1,y1-y0+1,Math.floor((n-x1+x0-1)/2),Math.floor((n-y1+y0-1)/2),x1-x0+1,y1-y0+1);cb(q.toDataURL());};
+  im.onerror=()=>cb(null);im.src=SPRITES.img[nm];
+}
+function buildLegend(){
+  const el=$('legend');if(!el)return;
+  const L=(window.View3D&&View3D.legend)?View3D.legend():{};
+  const img=(u,cls)=>u?`<img src="${u}"${cls?` class="${cls}"`:''}>`:'<span></span>';
+  const P=[['breeze','바람','상하좌우에 구덩이가 있다'],['stench','악취','상하좌우에 웜퍼스 굴이 있다'],['glitter','반짝임','이 칸에 금맥이나 떨어진 금'],
+    ['bump','부딪힘','지난 이동이 막혔다 (벽 · 맵 끝 · 다른 모험가)'],['steps','발소리','상하좌우에 다른 모험가 (적 · 팀원 구분 없음)'],['hurt','아픔','지난 차례 뒤 피해를 받았다']];
+  let h='<div class="lg-h">머리 위: 모험가가 지금 느끼는 것</div>';
+  for(const [k,n,d] of P)h+=`${img(L[k])}<span><b>${n}</b> · ${d}</span>`;
+  h+=`<span style="font-size:15px;text-align:center;color:#d8ff6a">!</span><span><b>비명</b> · 웜퍼스가 쓰러짐 (맵 전체가 듣는다, 화면 가운데 글자)</span>`;
+  h+='<div class="lg-h">모험가</div>';
+  h+=`<span id="lg_adv"></span><span>모험가. 멀리서는 둥근 패, 가까이서는 도트 캐릭터</span>`;
+  h+=`${img(L.hp,'wide')}<span>체력 (30% 이하면 주황)</span>`;
+  h+=`<span class="sw" style="background:radial-gradient(circle,rgba(255,210,140,.9),rgba(255,170,80,.15) 70%,transparent);width:18px;height:18px;border-radius:50%;justify-self:center"></span><span>발밑 등불: 모험가가 느끼는 범위는 자기 칸뿐</span>`;
+  h+='<div class="lg-h">동굴 (관전자만 보임 · 봇은 지각으로만 안다)</div>';
+  h+=`<span id="lg_pit"></span><span><b>구덩이</b> · 빠지면 죽는다. 봇에게는 바람으로만</span>`;
+  h+=`<span id="lg_wum"></span><span><b>웜퍼스</b> · 잠든 골렘. 치면 깨어나 옆을 친다. 봇에게는 악취로만</span>`;
+  h+=`<span id="lg_ore"></span><span><b>금맥</b> · 숫자는 남은 금, 막대는 다시 자라는 시계</span>`;
+  h+=`<span id="lg_loot"></span><span><b>떨어진 금</b> · 들어서면 줍는다</span>`;
+  h+=`<span id="lg_camp"></span><span><b>야영지</b> · 위치는 모두가 안다. 옆에서 금을 바친다</span>`;
+  el.innerHTML=h;
+  const put=(id,u)=>{const e=$(id);if(e&&u)e.outerHTML=`<img src="${u}">`;};
+  const C=window.SPRITES?SPRITES.meta.cell:128;
+  sheetCrop('adventurer_0',0,2,32+18,32+10,28,28,u=>put('lg_adv',u||L.token));
+  sheetCrop('pit',0,0,0,0,32,32,u=>put('lg_pit',u));
+  sheetCrop('wumpus',0,2,0,0,C,C,u=>put('lg_wum',u));
+  sheetCrop('ore',7,0,0,0,64,64,u=>put('lg_ore',u));
+  sheetCrop('loot',0,0,0,0,32,32,u=>put('lg_loot',u));
+  sheetCrop('camp_0',0,0,0,0,160,160,u=>put('lg_camp',u));
+}
 function faceImg(k,t){const f=face(k,t);return f.startsWith('<img')?f+' ':'';}   // 얼굴 그림만 (글자로 대신하지 않음)
 function hudCost(){return (R.const&&R.const.cost)||{E:10,G:15};}
 function buildHud(){
@@ -1031,7 +1070,7 @@ $('bCam').onclick=()=>{if(window.View3D){View3D.setSpectate(false);$('bSpec').cl
 $('bSpec').onclick=()=>{if(!window.View3D)return;const on=!$('bSpec').classList.contains('on');$('bSpec').classList.toggle('on',on);View3D.setSpectate(on);};
 window.onSpectateOff=()=>$('bSpec').classList.remove('on');
 $('bSnd').onclick=()=>{snd.init();snd.on=!snd.on;$('bSnd').classList.toggle('on',snd.on);$('bSnd').textContent=snd.on?'소리 켬':'소리 끔';};
-window.onView3DReady=()=>{ if(R)View3D.build(); applyMode();
+window.onView3DReady=()=>{ if(R)View3D.build(); applyMode(); buildLegend();
   const q=new URLSearchParams(location.hash.slice(1));   // 예: #cam=12,18,9 (칸 x,y 와 거리)
   if(R&&q.has('cam')){const [x,y,d]=q.get('cam').split(',').map(Number);View3D.focus(x,y,d||10);}
   };   // 2D 화면은 없앴다 (3D 를 못 불러올 때만 비상용으로 쓴다)
