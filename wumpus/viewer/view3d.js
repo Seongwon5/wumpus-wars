@@ -674,6 +674,30 @@ function decoTex(v) {                            // 바닥 장식: 작은 돌 ·
     else { K.L(11, 18, 19, 15, '#8a8270', 1); K.E(10, 18, 1.2, 1.2, '#9a927e'); K.E(20, 15, 1.2, 1.2, '#9a927e'); }
   }, 61 + v), true));
 }
+function rimTex(mask, v) {                       // 벽 윗면 한 칸: 바위 질감 + 열린 가장자리의 들쭉날쭉한 테두리 (위 · 왼쪽 밝게, 아래 · 오른쪽 어둡게)
+  return pxMemo('rim' + mask + ':' + v, () => {
+    const c = document.createElement('canvas'); c.width = c.height = 32;
+    const g = c.getContext('2d'); g.drawImage(SHEETS.wall_top.img, 0, 0, 32, 32);
+    const d = g.getImageData(0, 0, 32, 32), a = d.data, rn = rnd(131 + mask * 17 + v * 5);
+    const open = [!(mask & 1), !(mask & 2), !(mask & 4), !(mask & 8)];     // 북 · 동 · 남 · 서 가장자리가 바닥과 닿는가
+    const jag = [0, 1, 2, 3].map(() => Array.from({length: 32}, () => 1 + Math.floor(rn() * 2.6)));
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+      const i = (y * 32 + x) * 4, dist = [y, 31 - x, 31 - y, x], along = [x, y, x, y];
+      let best = null;
+      for (let k = 0; k < 4; k++) if (open[k] && dist[k] <= jag[k][along[k]] + 1) { if (!best || dist[k] < best[1]) best = [k, dist[k], jag[k][along[k]]]; }
+      // 두 열린 가장자리가 만나는 모서리는 둥글게 깎는다
+      const cn = (open[0] && open[3] && x + y < 4) || (open[0] && open[1] && (31 - x) + y < 4) || (open[2] && open[1] && (31 - x) + (31 - y) < 4) || (open[2] && open[3] && x + (31 - y) < 4);
+      if (cn || (best && best[1] === 0)) { a[i] = 26; a[i + 1] = 22; a[i + 2] = 18; continue; }   // 바깥 테두리 (어두운 선)
+      if (!best) continue;
+      const [k, dd, dep] = best, lit = k === 0 || k === 3;
+      const f = dd <= dep ? (lit ? 1.45 : 0.62) : (lit ? 1.18 : 0.8);
+      a[i] = Math.min(255, a[i] * f); a[i + 1] = Math.min(255, a[i + 1] * f); a[i + 2] = Math.min(255, a[i + 2] * f);
+    }
+    g.putImageData(d, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
+    return t;
+  });
+}
 function coinTex() {                              // 도트 금화
   return pxMemo('coin', () => pxTex(pxCanvas(10, 10, K => {
     K.E(5, 5, 4.2, 4.2, '#e8a820'); K.E(4.6, 4.6, 3, 3, '#ffd24a'); K.P(3, 3, '#fff6c0'); K.P(4, 3, '#fff6c0'); K.R(5, 4, 1, 3, '#b07810');
@@ -1275,13 +1299,23 @@ function build() {
   const wallCells = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (rows[y][x] === '#') wallCells.push([x, y]);
   const nW = Math.max(1, wallCells.length);
+  // 이어진 벽 덩어리마다 같은 높이 (덩어리끼리는 다르게) — 붙은 벽이 한 바위처럼 보이게
+  const isWall = (x, y) => x >= 0 && y >= 0 && x < W && y < H && rows[y][x] === '#';
+  const comp = new Map(); let nc = 0;
+  for (const [x0, y0] of wallCells) {
+    if (comp.has(x0 + ',' + y0)) continue;
+    const st = [[x0, y0]]; comp.set(x0 + ',' + y0, nc);
+    while (st.length) { const [x, y] = st.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k2 = (x + dx) + ',' + (y + dy); if (isWall(x + dx, y + dy) && !comp.has(k2)) { comp.set(k2, nc); st.push([x + dx, y + dy]); } } }
+    nc++;
+  }
+  const compH = c => 0.85 + hash(c * 13 + 7, 29) * 0.3;
   const wSide = std(0xffffff, {roughness: 1, map: wallSideTex()}), wTop = std(0xffffff, {roughness: 1, map: wallTopTex()});
   const wall = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), [wSide, wSide, wTop, wTop, wSide, wSide], nW);
   const cap = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 0.14, 1, 2, 0.04), std(0xffffff, {roughness: 0.85, map: slabTex()}), nW);
   wall.castShadow = cap.castShadow = true; wall.receiveShadow = cap.receiveShadow = true;
   const wBase = new Float32Array(wallCells.length * 3), cBase = new Float32Array(wallCells.length * 3);
   wallCells.forEach(([x, y], k) => {
-    const r = hash(x, y), ruin = hash(y + 17, x + 3) < 0.2, h = ruin ? 0.5 + r * 0.15 : 0.88 + r * 0.3;   // 높이를 조금씩 달리해 바위답게
+    const r = hash(x, y), ruin = false, h = SHEETS.wall_top ? compH(comp.get(x + ',' + y)) : (hash(y + 17, x + 3) < 0.2 ? 0.5 : 1);   // 덩어리마다 높이
     const rot = Q.identity();
     COL.setHSL(0.08 + r * 0.02, 0.14, 0.36 + r * 0.08);
     if (SHEETS.wall_side) COL.setRGB(0.9 + r * 0.1, 0.9 + r * 0.1, 0.9 + r * 0.1);
@@ -1296,6 +1330,15 @@ function build() {
   wall.count = cap.count = wallCells.length;
   cap.visible = false;
   root.add(wall, cap);
+  if (SHEETS.wall_top) {                           // 윗면: 바닥과 닿는 가장자리에만 들쭉날쭉한 바위 테두리
+    const tg = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mats = {};
+    for (const [x, y] of wallCells) {
+      const mask = (isWall(x, y - 1) ? 1 : 0) | (isWall(x + 1, y) ? 2 : 0) | (isWall(x, y + 1) ? 4 : 0) | (isWall(x - 1, y) ? 8 : 0);
+      const key = mask + ':' + ((x * 7 + y * 3) % 4);
+      const mt = mats[key] || (mats[key] = std(0xffffff, {roughness: 1, map: rimTex(mask, (x * 7 + y * 3) % 4)}));
+      const m = new THREE.Mesh(tg, mt); m.position.set(wx(x), compH(comp.get(x + ',' + y)) + 0.002, wz(y)); m.receiveShadow = true; root.add(m);
+    }
+  }
   // 무너진 돌 조각: 벽 칸 둘레 (안개 때 그 칸 색을 따른다)
   const rubCells = [];
   const rubble = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), std(0xffffff, {roughness: 0.95, flatShading: true, map: brickTex()}), Math.max(1, wallCells.length * 3));
