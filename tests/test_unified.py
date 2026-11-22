@@ -22,7 +22,7 @@ def blank(w=20, h=20, walls=(), ore=None):
 
 
 def game(gmap, s0=IDLE, s1=IDLE):
-    g = Game(gmap, [s0, s1], ['a', 'b'], rules={'unified': True})
+    g = Game(gmap, [s0, s1], ['a', 'b'], rules={'unified': True, 'agent': False})
     for u in list(g.units):
         g.at.pop((u.x, u.y), None)
     g.units = []
@@ -151,7 +151,7 @@ def test_dead_unit_drops_all_gold():
 def test_logic_bot_plays_unified_match():
     from wumpus.engine import run_match
     from wumpus.maps import generate
-    r = run_match(generate(3), ['logic', 'logic'], seed=1)
+    r = run_match(generate(3), ['logic', 'logic'], seed=1, rules={'agent': False})
     kinds = {e[0] for fr in r['frames'] for e in fr['e']}
     assert r['const']['rules']['unified'] and 'atk' in kinds and 'mine' in kinds
 
@@ -163,3 +163,65 @@ def test_pits_stay_hidden_after_someone_falls():
     u = put(g, 0, EXPLORER, 5, 5)
     g._apply(u, Move('E'))
     assert not u.alive and g.public_tile(6, 5) != PIT and g.breeze_at(5, 5)
+
+
+def test_wumpus_boss_strikes_one_in_range_regen_hoard_respawn():
+    from wumpus.api import WUMPUS_HP_U, WUMPUS_ROAR_DMG, WUMPUS_HOARD_U, WUMPUS_RESPAWN
+    m = blank()
+    m.wumpus = [(10, 10)]
+    g = game(m)
+    a = put(g, 0, ARCHER, 10, 13)                    # 맨해튼 3: 가장 가까운 유닛 → 맞는다
+    b = put(g, 1, EXPLORER, 13, 10)                  # 맨해튼 3, 체력 더 많음 → 이번엔 안 맞는다
+    far = put(g, 1, ARCHER, 14, 10)                  # 맨해튼 4: 거리 밖
+    g._wumpus_phase(1)
+    assert a.hp == HP_UNIFIED[ARCHER] - WUMPUS_ROAR_DMG and b.hp == HP_UNIFIED[EXPLORER] and far.hp == HP_UNIFIED[ARCHER]
+    g.at.pop((13, 10)); b.x = 11; g.at[(11, 10)] = b
+    g._apply(b, Attack(10, 10))                      # 붙어서 치면 그 라운드엔 회복 없음
+    g._wumpus_phase(2)
+    assert g.wumpus[(10, 10)] == WUMPUS_HP_U - ATTACK_DAMAGE
+    g._wumpus_phase(3)
+    assert g.wumpus[(10, 10)] == WUMPUS_HP_U - ATTACK_DAMAGE + 1
+    g.wumpus[(10, 10)] = 1
+    g._apply(b, Attack(10, 10))
+    assert g.wumpus[(10, 10)] == 0 and g.loot[(10, 10)] == WUMPUS_HOARD_U
+    g._wumpus_phase(10)
+    g._wumpus_phase(10 + WUMPUS_RESPAWN)
+    assert g.wumpus[(10, 10)] == WUMPUS_HP_U
+
+
+def _agent_game(gmap):
+    g = Game(gmap, [IDLE, IDLE], ['a', 'b'], rules={'agent': True})
+    for u in list(g.units):
+        g.at.pop((u.x, u.y), None)
+    g.units = []
+    return g
+
+
+def test_agent_sees_only_own_cell_and_percepts():
+    from wumpus.engine import View
+    m = GameMap(20, 20, 'H', {(6, 5)}, {(5, 5): 3}, {(5, 6)}, [(2, 2), (17, 2)], 0, 'test')
+    m.wumpus = [(4, 5)]
+    g = _agent_game(m)
+    a = put(g, 0, EXPLORER, 5, 5)
+    e = put(g, 1, EXPLORER, 5, 4)
+    v = View(g, a)
+    assert v.visible_cells() == [(5, 5)] and v.tile(6, 5) is None and [u.id for u in v.units()] == [a.id]
+    assert v.breeze and v.stench and v.glitter and v.footsteps == 1 and v.enemy_camp == (17, 2)
+    assert a.hp == HP_UNIFIED[ARCHER] + 2 or a.hp == 10      # 모험가 체력 10
+
+
+def test_agent_bump_one_action_and_sleeping_wumpus():
+    from wumpus.engine import View
+    from wumpus.api import WUMPUS_STRIKE_A
+    m = GameMap(20, 20, 'H', {(6, 5)}, {}, set(), [(2, 2), (17, 2)], 0, 'test')
+    m.wumpus = [(10, 10)]
+    g = _agent_game(m)
+    a = put(g, 0, EXPLORER, 5, 5)
+    g._apply(a, Move('E'))                           # 벽에 부딪힘
+    assert (a.x, a.y) == (5, 5) and a.bump
+    b = put(g, 1, EXPLORER, 10, 11)                  # 웜퍼스 옆: 자는 동안엔 안 맞는다
+    g._wumpus_phase(1)
+    assert b.hp == 10
+    g._apply(b, Attack(10, 10))                      # 치면 깨어나서 반격
+    g._wumpus_phase(2)
+    assert b.hp == 10 - WUMPUS_STRIKE_A

@@ -35,7 +35,8 @@ controls.touches = {ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN};
 controls.minDistance = 4;
 controls.maxDistance = 90;
 
-scene.add(new THREE.HemisphereLight(0xffe0b0, 0x1a1008, 0.42));
+const hemi = new THREE.HemisphereLight(0xffe0b0, 0x1a1008, 0.42);
+scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffd59a, 1.3);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -698,6 +699,17 @@ function rimTex(mask, v) {                       // 벽 윗면 한 칸: 바위 �
     return t;
   });
 }
+function perceptTex(k) {                       // 지각 도트 아이콘 (머리 위)
+  return pxMemo('pc_' + k, () => pxTex(pxCanvas(14, 14, K => {
+    K.E(7, 7, 6.6, 6.6, '#120c08');
+    if (k === 'breeze') { K.L(3, 5, 10, 5, '#bfe9ff'); K.L(4, 8, 11, 8, '#8fd0ff'); K.L(3, 11, 8, 11, '#bfe9ff'); K.P(10, 4, '#bfe9ff'); K.P(11, 7, '#8fd0ff'); }
+    else if (k === 'stench') { for (const x of [4, 7, 10]) { K.L(x, 11, x + 1, 8, '#9adf3a'); K.L(x + 1, 8, x, 4, '#c8ff6a'); } }
+    else if (k === 'glitter') { K.L(7, 2, 7, 12, '#ffe070'); K.L(2, 7, 12, 7, '#ffe070'); K.R(6, 6, 3, 3, '#fff8d0'); K.P(4, 4, '#ffc63a'); K.P(10, 10, '#ffc63a'); K.P(10, 4, '#ffc63a'); K.P(4, 10, '#ffc63a'); }
+    else if (k === 'bump') { K.R(6, 2, 2, 7, '#ff9a40'); K.R(6, 10, 2, 2, '#ff9a40'); }
+    else if (k === 'steps') { K.E(5, 5, 1.6, 2.2, '#e8dcc4'); K.E(9, 9, 1.6, 2.2, '#e8dcc4'); K.P(5, 8, '#e8dcc4'); K.P(9, 12, '#e8dcc4'); }
+    else if (k === 'hurt') { K.E(5, 6, 2.2, 2.2, '#ff4a3a'); K.E(9, 6, 2.2, 2.2, '#ff4a3a'); K.L(3, 7, 7, 11, '#ff4a3a', 2); K.L(11, 7, 7, 11, '#ff4a3a', 2); }
+  })));
+}
 function coinTex() {                              // 도트 금화
   return pxMemo('coin', () => pxTex(pxCanvas(10, 10, K => {
     K.E(5, 5, 4.2, 4.2, '#e8a820'); K.E(4.6, 4.6, 3, 3, '#ffd24a'); K.P(3, 3, '#fff6c0'); K.P(4, 3, '#fff6c0'); K.R(5, 4, 1, 3, '#b07810');
@@ -730,7 +742,8 @@ function frameSprite(name, col, w, h, cy) {     // 한 줄짜리 LPC 시트의 �
   sp.center.set(0.5, cy); sp.scale.set(w, h, 1); sp.renderOrder = 5; sp.userData.cols = S.m.cols;
   return sp;
 }
-function sheetName(kind, team) { return kind === 'E' ? 'explorer_' + team : kind === 'G' ? 'archer_' + team : kind === 'W' ? 'wumpus' : null; }
+const AGENT = () => typeof R !== 'undefined' && R && R.const && R.const.rules && R.const.rules.agent;   // 시안 3 (모험가) 리플레이인가
+function sheetName(kind, team) { return kind === 'E' ? (AGENT() && SHEETS['adventurer_' + team] ? 'adventurer_' : 'explorer_') + team : kind === 'G' ? 'archer_' + team : kind === 'W' ? 'wumpus' : null; }
 function lpcFrame(sp, anim, dir, col) {        // 시트의 한 칸 (동작 · 방향 · 칸 번호) 을 보이게
   const L = sp.userData.lpc; if (!L) return;
   const A = L.m[anim], row = A.row + (A.dirs > 1 ? dir : 0), c = Math.max(0, Math.min(A.n - 1, col));
@@ -978,6 +991,10 @@ function makeChar(kind, team) {
   const token = makeToken(kind, team, G ? 0.62 : 0.68);
   body.add(token);
   const shadow = makeShadow(0.5, 0.3); g.add(shadow);
+  const pool = new THREE.Mesh(shadowG, new THREE.MeshBasicMaterial({map: softTex(), color: 0xffc070, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending}));
+  pool.scale.set(1.0, 1, 1.0); pool.position.y = 0.008; pool.renderOrder = 2; pool.visible = false; g.add(pool);   // 시안 3: 자기 칸만 비추는 등불
+  const icons = [];
+  for (let k = 0; k < 6; k++) { const ic = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true, depthTest: false})); ic.scale.set(0.2, 0.2, 1); ic.renderOrder = 16; ic.visible = false; body.add(ic); icons.push(ic); }
   const pix = makeBody(kind, team, 0.6);
   body.add(pix);
   const glow = pix.userData.lpc ? lpcSprite(sheetName(kind, team), pix.userData.w, true)
@@ -986,7 +1003,7 @@ function makeChar(kind, team) {
   const bar = new THREE.Sprite(new THREE.SpriteMaterial({map: hpTex(10, team), transparent: true, depthTest: false}));
   bar.scale.set(0.36, 0.063, 1); bar.renderOrder = 14; body.add(bar);
   badge.visible = false;
-  return {g, shadow, token, pix, glow, bar, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
+  return {g, shadow, pool, icons, token, pix, glow, bar, body, hipL, hipR, shL: L.sh, shR: Rr.sh, head, tail, dagger, pips, flames, quiver, hp, disc, badge, flash: [mTeam, mDark, mSkin], kind, team, face: null, x: 0, y: 0};
 }
 
 function setFlash(o, k) {
@@ -1522,6 +1539,8 @@ function build() {
   root.add(sel);
 
   const oreMax = new Map(R.map.ore.map(o => [o[0] + ',' + o[1], o[2]]));
+  if (AGENT()) { hemi.intensity = 0.1; sun.intensity = 0.28; renderer.toneMappingExposure = 0.78; for (const b of braziers) b.L.distance = 6; }
+  else { hemi.intensity = 0.42; sun.intensity = 1.3; renderer.toneMappingExposure = 1.05; }
   world = {oreMax, revN: -1, root, ground, gBase, wall, cap, wallCells, wBase, cBase, braziers, rubble, rubCells, rBase, torchL, dust, ore, traps, bases, wum, loot: new Map(), mind, paths, sel, units: new Map(), fogKey: '', mindKey: ''};
   scene.fog.near = s0 * 1.4; scene.fog.far = s0 * 3.6;
   const s = Math.max(W, H);
@@ -1664,6 +1683,15 @@ function updateStatic(fi, team, seen, now) {
     w.g.visible = team < 0 || (!alive && seen && seen[w.y * W + w.x] === 1);
     if (!w.g.visible) return;
     w.dead.visible = !alive; w.live.visible = alive; w.hp.visible = alive; w.aura.visible = alive; if (w.bar) w.bar.visible = alive;
+    if (R.const.wumpus_respawn) {                  // 쓰러진 굴: 다시 나타날 때까지 차오르는 시계
+      if (!w.clk) { w.clk = new THREE.Sprite(new THREE.SpriteMaterial({transparent: true, depthTest: false})); w.clk.scale.set(0.5, 0.1, 1); w.clk.renderOrder = 14; w.g.add(w.clk); w.clk.position.set(0, 0.62, 0); }
+      w.clk.visible = !alive;
+      if (!alive) {
+        let d0 = fi; while (d0 > 0 && wumAt[d0 - 1][i] <= 0) d0--;
+        const RS = R.const.wumpus_respawn, st = Math.min(RS, fi - d0), k12 = Math.floor(st / RS * 12);
+        if (w._ck !== k12) { w._ck = k12; w.clk.material.map = clockTex(k12, 12); w.clk.material.needsUpdate = true; }
+      }
+    }
     if (w.den) w.den.visible = alive; if (w.wsh) w.wsh.position.set(w.pix.position.x, 0.006, w.pix.position.z);
     if (!alive) return;
     w.aura.material.opacity = 0.12 + 0.06 * Math.sin(now * 2.2 + i);
@@ -1835,6 +1863,15 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     const mx = R.const.hp[u[2]];
     o.hp.visible = false;                          // 멀리서는 아이콘 고리, 가까이서는 머리 위 도트 막대
     o.bar.visible = NEAR > 0.5; o.bar.position.set(o.pix.position.x, 0.84, o.pix.position.z);
+    o.pool.visible = AGENT(); o.pool.scale.set(1 / CH, 1, 1 / CH);
+    { const pv = A.get(id), hurt = moving && pv && u[5] < pv[5];     // 지금 느끼는 것: 바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔
+      const on = AGENT() ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', u[12] && 'steps', hurt && 'hurt'].filter(Boolean) : [];
+      o.icons.forEach((ic, k) => {
+        ic.visible = k < on.length && NEAR > 0.3;
+        if (!ic.visible) return;
+        if (ic.userData.k !== on[k]) { ic.userData.k = on[k]; ic.material.map = perceptTex(on[k]); ic.material.needsUpdate = true; }
+        ic.position.set(o.pix.position.x + (k - (on.length - 1) / 2) * 0.21, 1.0, o.pix.position.z);
+      }); }
     if (o._hk !== hp10) { o._hk = hp10; o.bar.material.map = hpTex(hp10, o.team); o.bar.material.needsUpdate = true; }
     setHp(o.hp, src[5] / mx, TC[u[1]].c);
     billboard(o.hp, o.g);
@@ -2257,6 +2294,27 @@ function effects(g, a, canSee) {
         if (!blocked) burst(wx(fx0), wz(fy0), 0.05, 8, 0xb89a70, q, 1.2, id * 7 + g, 2, 1.2);
       }
       if (a < 0.75) { const s2 = bigText(blocked ? '밀치기 (막힘)' : '밀치기!', '#fff1a0', 0.42); s2.position.set(wx(fx0), 1.45 + a * 0.4, wz(fy0)); s2.material.opacity = Math.min(1, (0.75 - a) * 3); }
+    } else if (k === 'roar') {                      // 웜퍼스의 일격: 맨해튼 3 안의 한 명에게 강한 피해
+      const [, x, y, ids] = e;
+      if (!canSee(x, y)) continue;
+      const rr = R.const.wumpus_roar || 2;
+      ring(wx(x), wz(y), 0.06, 0.3 + a * (rr + 0.4), 0xb8ff4a, 0.8 * (1 - a));
+      ring(wx(x), wz(y), 0.08, 0.2 + Math.max(0, a - 0.15) * (rr + 0.4), 0x5a8a2a, 0.6 * (1 - a));
+      for (const tid of ids) {
+        const u2 = umap[g].get(tid) || umap[Math.max(0, g - 1)].get(tid); if (!u2 || a < 0.35) continue;
+        if (a < 0.8) lane(wx(x), wz(y), wx(u2[3]), wz(u2[4]), 0xb8ff4a, 0.7 * (1 - a));   // 굴에서 맞은 한 명에게 초록 공격 줄기
+        burst(wx(u2[3]), wz(u2[4]), 0.5, 12, 0xb8ff4a, Math.max(0, (a - 0.35) / 0.65), 1.6, tid * 7 + g, 3, 1.2);
+        const q = (a - 0.35) / 0.65, s3 = textSprite('-' + (R.const.wumpus_roar_dmg || 6), '#c8ff5a');
+        s3.position.set(wx(u2[3]), 1.2 + q * 0.5, wz(u2[4])); s3.scale.set(0.56, 0.28, 1); s3.material.opacity = 1 - q * q;
+      }
+      const wi = (R.map.wumpus || []).findIndex(c => c[0] === x && c[1] === y);
+      if (wi >= 0 && world.wum[wi] && world.wum[wi].pix) lpcFrame(world.wum[wi].pix, 'attack', 2, Math.floor(Math.min(0.999, a) * 7));
+    } else if (k === 'wrespawn') {                  // 웜퍼스가 다시 나타난다
+      const [, x, y] = e;
+      const b = fx('beam', () => new THREE.Sprite(new THREE.SpriteMaterial({map: beamTex(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending})));
+      b.center.set(0.5, 0); b.position.set(wx(x), 0, wz(y)); b.scale.set(1.2 * (1 - a * 0.4), 3.4, 1); b.material.color.setHex(0xb8ff4a); b.material.opacity = 1 - a; b.renderOrder = 17;
+      burst(wx(x), wz(y), 0.2, 26, 0x8fdc3a, a, 2, x * 31 + y + g, -1.2, 1.6);
+      const s2 = bigText('웜퍼스 부활!', '#c8ff5a', 0.7); s2.position.set(wx(x), 2.6 + a * 0.5, wz(y)); s2.material.opacity = Math.min(1, (1 - a) * 2);
     } else if (k === 'eaten') {
       const [, id, x, y] = e;
       if (!canSee(x, y)) continue;

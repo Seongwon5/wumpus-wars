@@ -190,9 +190,10 @@ class Knowledge:
     def cost(self, c):
         if c in self.walls or c in self.trap or c == self.base or c == self.enemy_base or self.wsuspect(c):
             return None
+        near_w = any(abs(c[0] - w[0]) + abs(c[1] - w[1]) <= 3 for w in self.wump)   # 웜퍼스 공격 거리 (맨해튼 3): 되도록 피한다
         if c in self.safe:
-            return 1
-        return 40 if self.suspect(c) else 8
+            return 12 if near_w else 1
+        return 40 if self.suspect(c) else (20 if near_w else 8)
 
     def find_path(self, start, goals, occupied=()):
         goals = set(goals)
@@ -297,6 +298,8 @@ def turn(me, view, memory):
     K.observe(me, view, memory)
     if me.kind == CAMP:
         return base_turn(me, view, memory)
+    if getattr(view, 'rules', {}).get('agent'):            # 시안 3: 자기 칸만 느끼는 모험가
+        return agent_turn(me, view, memory)
     if getattr(view, 'rules', {}).get('unified'):          # 시안 2: 누구나 캐고 싸운다
         return miner_turn(me, view, memory) if me.kind == EXPLORER else archer_turn(me, view, memory)
     if me.kind == EXPLORER:
@@ -309,7 +312,7 @@ PLAN = [EXPLORER, ARCHER, EXPLORER, ARCHER, ARCHER, EXPLORER, ARCHER, ARCHER]
 
 def base_turn(me, view, memory):
     global plan_i
-    kind = PLAN[plan_i % len(PLAN)]
+    kind = EXPLORER if getattr(view, 'rules', {}).get('agent') else PLAN[plan_i % len(PLAN)]
     debug.say(f'다음 생산: {"탐험가" if kind == EXPLORER else "궁수"} (금고 {me.bank}/{COST[kind]})')
     if view.unit_count >= 10 or me.bank < COST[kind]:
         return None
@@ -618,6 +621,8 @@ def miner_turn(me, view, memory):
     if not foes:
         for c in sorted(K.wump):
             if abs(c[0] - me.x) + abs(c[1] - me.y) == 1:
+                if me.hp <= 6:
+                    break
                 show_mind(None, '웜퍼스 치기 (%d,%d)' % c)
                 return Attack(*c)
     # 5. 캐고 나르기 (이동한 칸이 금이면 같은 턴에 캔다)
@@ -678,10 +683,10 @@ def archer_turn(me, view, memory):
     if t:
         show_mind(None, '활 → #%d' % t.id)
         return Attack(t.x, t.y)
-    # 2. 사거리 안의 웜퍼스 굴 (적이 안 보일 때)
+    # 2. 웜퍼스 굴: 포효가 닿지 않는 거리 3 에서만 쏜다 (적이 안 보일 때)
     if not foes:
         for c in sorted(K.wump):
-            if 1 <= abs(c[0] - me.x) + abs(c[1] - me.y) <= BOW_RANGE and los(pos, c):
+            if abs(c[0] - me.x) + abs(c[1] - me.y) == BOW_RANGE and los(pos, c) and me.hp > 6:   # 웜퍼스 한 방 (6) 을 버틸 체력일 때만
                 show_mind(None, '웜퍼스 사냥 (%d,%d)' % c)
                 return Attack(*c)
     # 3. 짐이 차면 바치러
@@ -703,6 +708,15 @@ def archer_turn(me, view, memory):
         show_mind(None, '금맥 사격 (%d,%d)' % c)
         return Attack(*c)
     rally = memory[3] < RALLY and me.round < 150
+    # 웜퍼스 사냥: 아는 굴이 가까우면 거리 3 자리로 (집결 뒤에도)
+    if K.wump and not foes and me.carry < cap and me.hp > 6:
+        goals = set()
+        for c in K.wump:
+            goals |= range_goals(c, occupied, lo=BOW_RANGE)
+        path = K.find_path(pos, goals, occupied)
+        if path and len(path) <= (12 if rally else 9):
+            show_mind(path, '웜퍼스 사냥 자리로 (거리 3)')
+            return step_along(me, path, occupied)
     # 6. 집결하는 동안: 가까운 웜퍼스 사냥, 아니면 가까운 금을 캔다
     if rally:
         if K.wump:
@@ -740,3 +754,82 @@ def archer_turn(me, view, memory):
     path = K.find_path(pos, goals, occupied)
     show_mind(path, label)
     return step_along(me, path, occupied)
+
+
+# ---------------- 시안 3 (agent): 자기 칸만 느끼는 모험가 ----------------
+last_target = None      # 지난 차례에 들어가려던 칸 (부딪힘이면 벽인지 판단)
+atk_i = 0               # 발소리만 날 때 옆 칸을 차례로 쳐 본다
+
+
+def mates_from(memory, me):
+    """팀 공유 메모리 [8..55]: 모험가마다 (x+1)+64*(y+1) 와 그 라운드. 지난 라운드까지 적힌 팀원 위치."""
+    k = me.id % 24
+    memory[8 + 2 * k] = (me.x + 1) + 64 * (me.y + 1)
+    memory[9 + 2 * k] = me.round
+    out = set()
+    for j in range(24):
+        v, r = memory[8 + 2 * j], memory[9 + 2 * j]
+        if j != k and v and me.round - r <= 1:
+            out.add((v % 64 - 1, v // 64 - 1))
+    return out
+
+
+def agent_turn(me, view, memory):
+    global last_target, atk_i
+    pos = (me.x, me.y)
+    eb = view.enemy_camp
+    if K.enemy_base is None:
+        K._found_enemy(eb)
+    # 1. 부딪힘: 발소리가 없는데 막혔으면 그 칸은 벽이다 (발소리가 있으면 모험가일 수도 있다)
+    if view.bump and last_target is not None and view.footsteps == 0 and last_target not in (K.base, eb):
+        K.walls.add(last_target)
+        K.safe.discard(last_target)
+    last_target = None
+    mates = mates_from(memory, me)
+    adj = [n for n in K.nb4(pos) if n not in K.walls and n not in mates and n != K.base and n not in K.trap and n not in K.wump]
+
+    def go(goals, label):
+        global last_target
+        path = K.find_path(pos, goals, mates)
+        show_mind(path, label + (' → (%d,%d)' % path[-1] if path else ' (길 없음)'))
+        mv = step_along(me, path, mates)
+        if mv:
+            last_target = path[1]
+            k = me.id % 24                       # 움직인 뒤 자리를 미리 적어 둔다 (팀원이 헷갈리지 않게)
+            memory[8 + 2 * k] = (path[1][0] + 1) + 64 * (path[1][1] + 1)
+        return mv
+
+    # 2. 적 야영지가 바로 옆이면 친다
+    if abs(eb[0] - me.x) + abs(eb[1] - me.y) == 1 and me.carry == 0:
+        show_mind(None, '적 야영지 공격')
+        return Attack(*eb)
+    # 3. 싸움: 아프면 반드시, 발소리만 나면 짐이 없을 때 팀원이 아닌 옆 칸을 친다 (적이 어디인지 추론)
+    enemy_near = view.footsteps > sum(1 for n in K.nb4(pos) if n in mates)   # 발소리가 옆 팀원 수보다 많으면 적이 있다
+    if (view.hurt or enemy_near) and adj and (view.hurt or me.carry == 0):
+        cand = [n for n in adj if n != eb]
+        if cand:
+            t = cand[atk_i % len(cand)]
+            if not view.hurt:
+                atk_i += 1
+            show_mind(None, '검 → (%d,%d) (%s)' % (t[0], t[1], '아픔' if view.hurt else '발소리'))
+            return Attack(*t)
+    # 4. 반짝임: 이 칸의 금맥을 캔다 (떨어진 금은 들어서면 저절로 줍는다)
+    if view.glitter and (view.gold(me.x, me.y) or 0) > 0 and me.carry < CARRY_MAX:
+        show_mind(None, '반짝임 → 채굴')
+        return Mine()
+    home = {n for n in K.nb4(K.base) if n not in K.walls}
+    if me.carry >= CARRY_MAX or (me.carry > 0 and me.round > MAX_ROUNDS - 40):
+        return go(home - mates, '귀환 (짐 %d)' % me.carry)
+    # 5. 아는 금맥으로
+    ores = {c for c, t in K.tile.items() if t == GOLD} - {pos}
+    if ores:
+        return go(ores - mates, '아는 금맥')
+    # 6. 늦게는 적 야영지를 치러 간다
+    if me.round > 300:
+        return go({n for n in K.nb4(eb) if n not in K.walls} - mates, '적 야영지로')
+    # 7. 탐험: 안전이 증명된, 아직 서 보지 않은 칸 → 없으면 바람 옆의 모르는 칸 (위험 감수)
+    frontier = {c for c in K.safe if c not in K.vib and c not in K.walls and not K.wsuspect(c) and c not in (K.base, eb)} - mates
+    if frontier:
+        return go(frontier, '탐사 (안전 증명된 칸)')
+    risky = {n for c in K.vib for n in K.nb4(c) if n not in K.safe and n not in K.trap and n not in K.walls} - mates
+    return go(risky, '탐사 (위험 감수)')

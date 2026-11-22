@@ -7,7 +7,7 @@ from . import api
 from .api import (DIRS, EXPLORER, ARCHER, CAMP, EMPTY, WALL, GOLD, PIT, CAMP_TILE,
                   MAX_ROUNDS, MEMORY_SIZE, MAX_UNITS, START_BANK, INCOME_EVERY, COST, HP,
                   VISION_R2, ATTACK_DAMAGE, CAMP_ATTACK, CARRY_MAX, REGROW_EVERY, cheb, Move, Mine, Attack, Spawn,
-                  Shoot, Push, HP_UNIFIED, CARRY, MELEE_RANGE, BOW_RANGE, sight_cells, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
+                  Shoot, Push, AGENT_HP, AGENT_CARRY, WUMPUS_HP_A, WUMPUS_STRIKE_A, WUMPUS_WAKE_A, WUMPUS_HOARD_A, WUMPUS_HP_U, WUMPUS_ROAR, WUMPUS_ROAR_DMG, WUMPUS_REGEN, WUMPUS_HOARD_U, WUMPUS_RESPAWN, HP_UNIFIED, CARRY, MELEE_RANGE, BOW_RANGE, sight_cells, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
 
 TEAM_NAMES = ('붉은 원정대', '푸른 원정대')
 KIND_CODE = {EXPLORER: 'E', ARCHER: 'G', CAMP: 'B'}
@@ -30,6 +30,9 @@ class Unit:
         self.arrows = ARROWS_MAX if kind == ARCHER else 0
         self.alive = True
         self.ns = None          # 이 유닛 전용 봇 이름공간
+        self.bump = False       # 시안 3: 지난 이동이 막혔나
+        self.bumped = False     # 이번 라운드에 막혔나 (기록용)
+        self.prev_hp = None     # 지난 차례 끝 체력 (아픔 지각)
 
 
 class Me:
@@ -75,6 +78,12 @@ class View:
         # 비명: 지금까지 쓰러진 웜퍼스 수 (맵 어디서든 모두에게 들린다)
         self.screams = g.screams
         self.rules = dict(g.rules)      # 켜진 규칙 (봇이 규칙에 맞게 움직이도록)
+        # 시안 3 지각: 반짝임 · 부딪힘 · 발소리 · 아픔. 두 야영지 위치는 모두가 안다
+        self.glitter = u.kind != CAMP and (g.ore.get((u.x, u.y), 0) > 0 or g.loot.get((u.x, u.y), 0) > 0)
+        self.bump = u.bump
+        self.footsteps = g.footsteps_at(u) if u.kind != CAMP else 0
+        self.hurt = max(0, (u.prev_hp if u.prev_hp is not None else u.hp) - u.hp)
+        self.enemy_camp = g.bases[1 - u.team].x, g.bases[1 - u.team].y
 
     def visible(self, x, y):
         return (x, y) in self._vis
@@ -122,11 +131,16 @@ class Game:
         self.rules = dict(RULES)
         if rules:
             self.rules.update(rules)
+        self.rules.setdefault('agent', False)
+        if self.rules['agent']:
+            self.rules['unified'] = True
+            self.rules['push'] = False
         self.rules.setdefault('unified', False)
         self.rules.setdefault('hidden_pits', False)
         if self.rules['unified']:
             self.rules['line_shot'] = self.rules['arrows'] = False
-        self.HPT = HP_UNIFIED if self.rules['unified'] else HP
+        self.HPT = dict(HP_UNIFIED, **{EXPLORER: AGENT_HP}) if self.rules['agent'] else HP_UNIFIED if self.rules['unified'] else HP
+        self.WHP = WUMPUS_HP_A if self.rules['agent'] else WUMPUS_HP_U
         self.map = gmap
         self.w, self.h = gmap.w, gmap.h
         self.walls = set(gmap.walls)
@@ -143,7 +157,11 @@ class Game:
         self.screams = 0
         if self.rules['wumpus']:
             for c in wumpus_cells(gmap):
-                self.wumpus[c] = WUMPUS_HP
+                self.wumpus[c] = (WUMPUS_HP_A if self.rules['agent'] else WUMPUS_HP_U) if self.rules['unified'] else WUMPUS_HP
+        self.whit = set()               # 이번 라운드에 맞은 굴
+        self.wfoe = {}                  # 굴 -> 이번 라운드에 친 유닛 id (시안 3: 깨어나서 먼저 노림)
+        self.wawake = {}                # 굴 -> 깨어 있는 마지막 라운드
+        self.wdead = {}                 # 굴 -> 쓰러진 라운드
         self.seed = seed
         self.time_limit_ms = time_limit_ms
         self.tstat = [[0.0, 0.0, 0, 0], [0.0, 0.0, 0, 0]]   # 팀마다 [합 ms, 최대 ms, 차례 수, 시간 초과 수]
@@ -192,6 +210,15 @@ class Game:
             return GOLD
         return EMPTY
 
+    def footsteps_at(self, u):
+        """상하좌우의 다른 모험가 수 (팀 구분 없음, 야영지 빼고)."""
+        n = 0
+        for dx, dy in DIRS.values():
+            v = self.at.get((u.x + dx, u.y + dy))
+            if v is not None and v.alive and v.kind != CAMP:
+                n += 1
+        return n
+
     def breeze_at(self, x, y):
         return any((x + dx, y + dy) in self.traps for dx, dy in DIRS.values())
 
@@ -205,6 +232,10 @@ class Game:
             self.events.append(['drop', c[0], c[1], amt])
 
     def vision(self, u):
+        if self.rules.get('agent'):
+            if u.kind == CAMP:                  # 야영지는 상하좌우 옆 칸까지 본다 (생산할 자리)
+                return {(u.x + dx, u.y + dy) for dx, dy in [(0, 0)] + list(DIRS.values()) if self.inb(u.x + dx, u.y + dy)}
+            return {(u.x, u.y)}                 # 시안 3: 모험가는 자기 칸만
         return {(u.x + dx, u.y + dy) for dx, dy in OFFSETS[u.kind] if self.inb(u.x + dx, u.y + dy)}
 
     def _free_adjacent(self, b):
@@ -253,6 +284,8 @@ class Game:
         if u.ns is not None:
             me = Me(u, self)
             view = View(self, u)
+            u.bump = False                          # 지각은 한 번만 (다음 차례엔 새로)
+            u.prev_hp = u.hp
             random.seed(self.seed * 1000003 + self.round * 1009 + u.id)
             t0 = time.perf_counter()
             try:
@@ -272,7 +305,7 @@ class Game:
             self.debug[u.id] = d
         if isinstance(act, (list, tuple)):              # (이동, 행동): 광부만 둘 다, 나머지는 첫 행동만
             acts = [a for a in act if a is not None]
-            if self.rules['unified'] and u.kind == EXPLORER:
+            if self.rules['unified'] and u.kind == EXPLORER and not self.rules['agent']:
                 mv = next((a for a in acts if isinstance(a, Move)), None)
                 ot = next((a for a in acts if not isinstance(a, Move)), None)
                 if mv is not None:
@@ -389,6 +422,35 @@ class Game:
                 return
         self.events.append(['atk', u.id, u.x, u.y, x, y, 0 if hit is None else -2])   # 0 빗나감, -2 우리 편에 막힘
 
+    def _wumpus_phase(self, r):
+        """라운드 끝: 살아 있는 웜퍼스는 둘레에 포효 (피해), 안 맞았으면 회복. 쓰러진 웜퍼스는 때가 되면 다시 나타난다."""
+        for c in sorted(self.wumpus):
+            hp = self.wumpus[c]
+            agent = self.rules['agent']
+            if hp > 0:
+                awake = not agent or self.wawake.get(c, -1) >= r     # 시안 3: 공격받아 깨어 있을 때만 친다
+                near = [v for v in self.units if v.alive and v.kind != CAMP and awake and abs(v.x - c[0]) + abs(v.y - c[1]) <= (1 if agent else WUMPUS_ROAR)]
+                foes = self.wfoe.get(c, set())
+                if agent:
+                    near.sort(key=lambda v: (v.id not in foes, v.hp, v.id))   # 이번 라운드에 친 유닛을 먼저
+                hits = near[:1] if agent else sorted(near, key=lambda v: (abs(v.x - c[0]) + abs(v.y - c[1]), v.hp, v.id))[:1]   # 한 명에게만
+                if hits:
+                    self.events.append(['roar', c[0], c[1], [v.id for v in hits]])
+                for v in hits:
+                    v.hp -= WUMPUS_STRIKE_A if agent else WUMPUS_ROAR_DMG
+                    if v.hp <= 0:
+                        self._kill(v, 'roar')
+                if c not in self.whit and hp < self.WHP:
+                    self.wumpus[c] = min(self.WHP, hp + WUMPUS_REGEN)
+            else:
+                d0 = self.wdead.setdefault(c, r)
+                if r - d0 >= WUMPUS_RESPAWN and c not in self.at:
+                    self.wumpus[c] = self.WHP
+                    self.wdead.pop(c, None)
+                    self.events.append(['wrespawn', c[0], c[1]])
+        self.whit = set()
+        self.wfoe = {}
+
     def _hit(self, u, tx, ty):
         """시안 2 공격: 광부는 바로 옆, 궁수는 맨해튼 3 안 (벽이 가리면 안 됨). 야영지는 바로 옆에서만."""
         d = abs(tx - u.x) + abs(ty - u.y)
@@ -404,7 +466,7 @@ class Game:
             if t.hp <= 0:
                 self._kill(t, 'atk')
             return
-        if self.ore.get(c, 0) > 0:              # 금맥 공격 = 캐기: 금 1 (들 자리가 있을 때)
+        if self.ore.get(c, 0) > 0 and (d == 0 or not self.rules['agent']):   # 금맥 공격 = 캐기 (시안 3: 서 있는 칸만)
             if u.carry < CARRY[u.kind]:
                 self.ore[c] -= 1
                 u.carry += 1
@@ -414,12 +476,15 @@ class Game:
                     del self.ore[c]
             return
         if d and self.wumpus.get(c, 0) > 0:
+            self.whit.add(c)
+            self.wfoe.setdefault(c, set()).add(u.id)
+            self.wawake[c] = self.round + WUMPUS_WAKE_A          # 깨어난다
             self.wumpus[c] = max(0, self.wumpus[c] - ATTACK_DAMAGE)
             self.events.append(['atk', u.id, u.x, u.y, tx, ty, -1])
             if self.wumpus[c] == 0:
                 self.screams += 1
                 self.events.append(['scream', u.id, tx, ty, u.team])
-                self._drop(c, WUMPUS_HOARD)
+                self._drop(c, WUMPUS_HOARD_A if self.rules['agent'] else WUMPUS_HOARD_U)
             return
         t = self.at.get(c)
         if t is None or t.team == u.team or (t.kind == CAMP and d > 1):
@@ -454,6 +519,8 @@ class Game:
             dx, dy = DIRS[act.d]
             n = (u.x + dx, u.y + dy)
             if not self.inb(*n) or n in self.walls or n in self.at:
+                u.bump = u.bumped = True                # 부딪힘 (벽 · 맵 끝 · 다른 모험가 · 야영지)
+                self.events.append(['bump', u.id, u.x, u.y, n[0], n[1]])
                 return
             del self.at[(u.x, u.y)]
             u.x, u.y = n
@@ -518,7 +585,7 @@ class Game:
             if t.hp <= 0:
                 self._kill(t, 'atk')
         elif isinstance(act, Spawn) and u.kind == CAMP:
-            if act.kind not in COST or act.d not in DIRS:
+            if act.kind not in COST or act.d not in DIRS or (self.rules['agent'] and act.kind != EXPLORER):
                 return
             if self.bank[u.team] < COST[act.kind]:
                 return
@@ -551,7 +618,11 @@ class Game:
                 units.append([u.id, u.team, KIND_CODE[u.kind], u.x, u.y, u.hp, u.carry,
                               1 if self.breeze_at(u.x, u.y) else 0,
                               u.arrows if self.rules['arrows'] and u.kind == ARCHER else -1,
-                              1 if u.kind != CAMP and self.stench_at(u.x, u.y) else 0])
+                              1 if u.kind != CAMP and self.stench_at(u.x, u.y) else 0,
+                              1 if u.kind != CAMP and (self.ore.get((u.x, u.y), 0) > 0 or self.loot.get((u.x, u.y), 0) > 0) else 0,
+                              1 if u.bumped else 0,
+                              self.footsteps_at(u) if u.kind != CAMP else 0])
+                u.bumped = False
         fr = {
             'u': units,
             'o': [[x, y, self.ore.get((x, y), 0)] for (x, y) in sorted(self.ore_changed)],
@@ -589,6 +660,8 @@ class Game:
             for u in list(order) + sorted(self.units, key=lambda v: v.id):
                 if u.alive and not self.over:
                     self._take_turn(u)
+            if self.rules['unified'] and self.wumpus and not self.over:
+                self._wumpus_phase(r)
             self.units = [u for u in self.units if u.alive]
             self.frames.append(self._frame())
             if self.over:
@@ -628,7 +701,7 @@ class Game:
                 'cost': {'E': COST[EXPLORER], 'G': COST[ARCHER]},
                 'vision': {'E': VISION_R2[EXPLORER], 'G': VISION_R2[ARCHER], 'B': VISION_R2[CAMP]},
                 'arrows': ARROWS_MAX if self.rules['arrows'] else 0, 'arrow_range': ARROW_RANGE,
-                'wumpus_hp': WUMPUS_HP, 'archer_carry': ARCHER_CARRY, 'dagger': DAGGER_DAMAGE,
+                'wumpus_hp': self.WHP if self.rules['unified'] else WUMPUS_HP, 'agent_hp': AGENT_HP, 'wumpus_respawn': WUMPUS_RESPAWN, 'wumpus_roar': WUMPUS_ROAR, 'wumpus_roar_dmg': WUMPUS_ROAR_DMG, 'archer_carry': ARCHER_CARRY, 'dagger': DAGGER_DAMAGE,
                 'rules': dict(self.rules),
             },
             'map': {

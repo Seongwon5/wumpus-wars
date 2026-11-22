@@ -320,6 +320,20 @@ def main():
             L('weapon_ranged_bow_normal.json', 'weapon/ranged/bow/normal/universal/foreground', 140, variant='light'),
         ]
         meta['sheets']['archer_%d' % t] = build('archer_%d' % t, archer, 'shoot')
+        adventurer = [                                    # 시안 3 모험가: 단검을 든 탐험가 (팀 색 두건)
+            L('weapon_sword_dagger.json', 'weapon/sword/dagger/behind', 9, variant='dagger'),
+            L('body.json', 'body/bodies/male', 10),
+            L('legs_pants.json', 'legs/pants/male', 20, ramp='pants'),
+            L('feet_boots_basic.json', 'feet/boots/basic/male', 25, ramp='leather'),
+            L('torso_clothes_longsleeve.json', 'torso/clothes/longsleeve/longsleeve/male', 35, ramp='cream'),
+            L('torso_clothes_vest.json', 'torso/clothes/vest/male', 55, variant='brown'),
+            L('heads_human_male.json', 'head/heads/human/male', 100),
+            L('eyes_human.json', 'eyes/human/adult/default', 105),
+            L('hair_plain.json', 'hair/plain/adult', 120, ramp='brown_hair'),
+            L('hat_bandana2.json', 'hat/cloth/bandana2/adult', 130, ramp='team%d' % t),
+            L('weapon_sword_dagger.json', 'weapon/sword/dagger', 140, variant='dagger'),
+        ]
+        meta['sheets']['adventurer_%d' % t] = build('adventurer_%d' % t, adventurer, 'slash')
     wumpus = [
         L('body.json', 'body/bodies/muscular', 10, ramp='green'),
         L('heads_troll.json', 'head/heads/troll/adult', 100, ramp='green'),
