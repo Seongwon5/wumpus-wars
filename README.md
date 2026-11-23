@@ -2,7 +2,7 @@
 
 인공지능개론 배틀코드형 과제 게임이다. 수업의 **웜퍼스 월드 (Wumpus World)** 를 두 팀 대전으로 옮겼다. 학생은 **봇 코드**만 짠다. 경기 중에 사람은 아무것도 하지 않고, 봇의 판단만으로 승부가 난다.
 
-![경기 장면](docs/images/hero.jpg)
+![경기 장면 (움직이는 그림): 어두운 동굴에서 두 원정대의 모험가가 금을 캐고 싸운다](docs/images/hero.gif)
 
 ## 한눈에 보는 규칙
 
@@ -120,7 +120,7 @@ bots/              starter · random · logic
 maps/              맵 10개 (*.json)
 demo/              미리 만든 리플레이
 docs/              설명서, 그림 (images/), PDF (pdf/)
-tools/             PDF 조판 (md2thesis.py · proposal.py · thesis.py), LPC 그림 합성 (lpc_build.py), 재미 지표 (funstats.py)
+tools/             PDF 조판 (md2thesis.py · proposal.py · thesis.py), 그림 합성 (lpc_build.py), 대표 GIF (hero_gif.py), 재미 지표 (funstats.py)
 tests/             기본 점검 (python -m unittest discover tests)
 ```
 
