@@ -130,4 +130,4 @@ tests/             기본 점검 (python -m unittest discover tests)
 - 글꼴: Cinzel, Noto Serif KR (SIL Open Font License, Google Fonts).
 - 모험가: Calciumtrice 의 [4 Direction Animated Warrior](https://opengameart.org/content/4-direction-animated-warrior) (CC-BY 4.0). 초상화: pebonius 의 [64px portraits](https://opengameart.org/content/64px-portraits) (CC-BY 4.0).
 - 야영지 · 웜퍼스 · 금맥 그림: [Liberated Pixel Cup (LPC)](https://lpc.opengameart.org) 공개 그림 (CC-BY-SA 3.0 / 4.0, GPL, OGA-BY, CC-BY). 합성 도구 `tools/lpc_build.py`, 만든 사람 표기 [`wumpus/viewer/sprites/CREDITS.md`](wumpus/viewer/sprites/CREDITS.md).
-- 효과음은 코드로 만들었다.
+- 소리 (효과음 · 발소리 · 동굴 배경음) 는 녹음 파일 없이 코드로 만든다.

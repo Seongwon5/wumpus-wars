@@ -2652,6 +2652,16 @@ function focus(x, y, d) {
   controls.update();
 }
 
+const LV = new THREE.Vector3();
+function locate(x, y) {                        // 소리용: 그 칸이 화면 어디에 있나 → 좌우 (pan) 와 크기 (vol). 화면 밖 · 멀리 볼수록 작다
+  if (!world) return {pan: 0, vol: 1};
+  LV.set(wx(x), 0.5, wz(y)).project(camera);
+  const off = Math.max(Math.abs(LV.x), Math.abs(LV.y)), s0 = Math.max(W, H), d = camera.position.distanceTo(controls.target);
+  const zoom = Math.min(1.2, Math.max(0.55, Math.sqrt(s0 * 1.28 / Math.max(1, d)) * 0.8));     // 전체 화면 0.8, 확대하면 커진다
+  const edge = off <= 1 ? 1 : Math.max(0.15, 1 - (off - 1) * 0.9);                             // 화면 밖은 멀어질수록 작게
+  return {pan: Math.max(-0.85, Math.min(0.85, LV.x * 0.85)), vol: zoom * edge};
+}
+
 function look(x, y, z, tx, ty, tz) {          // 확인용: 카메라를 칸 좌표로 직접 놓는다
   camera.position.set(wx(x), y, wz(z)); controls.target.set(wx(tx), ty, wz(tz)); controls.update();
 }
@@ -2663,5 +2673,5 @@ function legend() {                          // 오른쪽 '표시' 칸에 쓸 �
   return o;
 }
 
-window.View3D = {build, frame, resize, resetCam, focus, setSpectate, look, legend, dbg: () => world};
+window.View3D = {build, frame, resize, resetCam, focus, setSpectate, look, legend, locate, dbg: () => world};
 if (window.onView3DReady) window.onView3DReady();
