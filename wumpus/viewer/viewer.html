@@ -735,6 +735,7 @@ const FACE={};
 function face(k,t){
   const nmK=k==='E'?(AG()?'모험가':'탐험가'):'궁수';
   if(!window.SPRITES)return nmK;
+  if(k==='E'&&AG()&&SPRITES.img['portrait_'+t])return `<img class="face" src="${SPRITES.img['portrait_'+t]}" alt="${nmK}" title="${nmK}">`;
   const nm=(k==='E'?((R&&R.const.rules&&R.const.rules.agent&&SPRITES.img['adventurer_'+t])?'adventurer_':'explorer_'):'archer_')+t;
   if(!SPRITES.img[nm])return nmK;
   let f=FACE[nm];
@@ -769,6 +770,7 @@ function buildLegend(){
   h+='<div class="lg-h">모험가</div>';
   h+=`<span id="lg_adv"></span><span>모험가. 멀리서는 둥근 패, 가까이서는 도트 캐릭터</span>`;
   h+=`${img(L.hp,'wide')}<span>체력 (30% 이하면 주황)</span>`;
+  h+=`<span id="lg_gold"></span><span><b>든 금</b> · 체력바 옆 금화의 숫자 (5 면 가득, 밝은 테)</span>`;
   h+=`<span class="sw" style="background:radial-gradient(circle,rgba(255,210,140,.9),rgba(255,170,80,.15) 70%,transparent);width:18px;height:18px;border-radius:50%;justify-self:center"></span><span>발밑 등불: 모험가가 느끼는 범위는 자기 칸뿐</span>`;
   h+='<div class="lg-h">동굴 (관전자만 보임 · 봇은 지각으로만 안다)</div>';
   h+=`<span id="lg_pit"></span><span><b>구덩이</b> · 빠지면 죽는다. 봇에게는 바람으로만</span>`;
@@ -779,8 +781,8 @@ function buildLegend(){
   el.innerHTML=h;
   const put=(id,u)=>{const e=$(id);if(e&&u)e.outerHTML=`<img src="${u}">`;};
   const C=window.SPRITES?SPRITES.meta.cell:128;
-  sheetCrop('adventurer_0',0,2,32+18,32+10,28,28,u=>put('lg_adv',u||L.token));
-  sheetCrop('pit',0,0,0,0,32,32,u=>put('lg_pit',u));
+  sheetCrop('adventurer_0',0,2,0,0,64,64,u=>put('lg_adv',u||L.token));
+  put('lg_pit',L.pit);put('lg_gold',L.gold);
   sheetCrop('wumpus',0,2,0,0,C,C,u=>put('lg_wum',u));
   sheetCrop('ore',7,0,0,0,64,64,u=>put('lg_ore',u));
   sheetCrop('loot',0,0,0,0,32,32,u=>put('lg_loot',u));

@@ -3,11 +3,14 @@
  "foot": 94,
  "sheets": {
   "adventurer_0": {
-   "cols": 8,
+   "cols": 14,
    "rows": 13,
+   "cell": 64,
+   "foot": 51,
+   "scale": 2.4,
    "idle": {
     "row": 0,
-    "n": 1,
+    "n": 12,
     "dirs": 4
    },
    "walk": {
@@ -22,16 +25,19 @@
    },
    "hurt": {
     "row": 12,
-    "n": 6,
+    "n": 14,
     "dirs": 1
    }
   },
   "adventurer_1": {
-   "cols": 8,
+   "cols": 14,
    "rows": 13,
+   "cell": 64,
+   "foot": 51,
+   "scale": 2.4,
    "idle": {
     "row": 0,
-    "n": 1,
+    "n": 12,
     "dirs": 4
    },
    "walk": {
@@ -46,7 +52,7 @@
    },
    "hurt": {
     "row": 12,
-    "n": 6,
+    "n": 14,
     "dirs": 1
    }
   },
@@ -149,6 +155,18 @@
    "rows": 1,
    "cell": 32,
    "foot": 118
+  },
+  "portrait_0": {
+   "cols": 1,
+   "rows": 1,
+   "cell": 64,
+   "portrait": true
+  },
+  "portrait_1": {
+   "cols": 1,
+   "rows": 1,
+   "cell": 64,
+   "portrait": true
   }
  }
 }

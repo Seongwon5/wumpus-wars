@@ -281,7 +281,9 @@ function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 �
   disc(60, gr);
   g.save(); g.beginPath(); g.arc(80, 80, 60, 0, 7); g.clip();
   const nmT = sheetName(kind, team), ST = nmT && SHEETS[nmT];
-  if (ST) { const C = SP.meta.cell, r = ST.m.idle.row + 2;                  // LPC 얼굴: 머리만 바짝 잘라 원을 꽉 채운다
+  const PT = kind === 'E' && team >= 0 && SHEETS['portrait_' + team];
+  if (PT) { g.fillStyle = team ? '#0e1a2c' : '#2a100c'; g.fillRect(0, 0, N, N); g.drawImage(PT.img, 0, 0, 64, 64, 18, 18, 124, 124); }   // 초상화 (64px) 를 원에 꽉 차게
+  else if (ST) { const C = SP.meta.cell, r = ST.m.idle.row + 2;                  // LPC 얼굴: 머리만 바짝 잘라 원을 꽉 채운다
     if (kind === 'W') g.drawImage(ST.img, 32 + 14, r * C + 32 + 2, 36, 36, 12, 14, 136, 136);
     else g.drawImage(ST.img, 32 + 18, r * C + 32 + 10, 28, 28, 16, 16, 128, 128); }   // 상반신 초상: 얼굴 전체 + 어깨 (버섯처럼 보이지 않게)
   else { const bc = bodyCanvas(kind, team, 0);          // 서 있는 도트 캐릭터의 얼굴 부분을 크게
@@ -293,7 +295,6 @@ function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 �
     g.fillStyle = ink; g.font = '800 30px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(txt, cx, cy + 2);
   };
-  if (carry > 0) chip(130, 130, '#f2b52e', String(carry), '#2a1600');
   if (arrows >= 0) chip(30, 130, arrows ? '#dfeeff' : '#ff6a3d', arrows ? '➶' + arrows : '🗡', '#1a2230');
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   t.magFilter = THREE.NearestFilter; t.anisotropy = 4;
@@ -719,6 +720,40 @@ function perceptTex(k) {                       // 지각 도트 아이콘 (머�
     else if (k === 'hurt') { K.E(5, 6, 2.2, 2.2, '#ff4a3a'); K.E(9, 6, 2.2, 2.2, '#ff4a3a'); K.L(3, 7, 7, 11, '#ff4a3a', 2); K.L(11, 7, 7, 11, '#ff4a3a', 2); }
   })));
 }
+let _ring = null;
+function footRingTex() {                         // 발밑 팀 표시: 그 칸이 팀 색으로 옅게 빛난다 (가장자리는 조금 더 밝게, 모서리는 둥글게)
+  if (_ring) return _ring;
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), d = g.createImageData(64, 64);
+  for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+    const e = Math.min(x, y, 63 - x, 63 - y), i = (y * 64 + x) * 4;           // 칸 가장자리까지 거리
+    const cx = Math.max(0, 5 - Math.min(x, 63 - x)), cy = Math.max(0, 5 - Math.min(y, 63 - y)), corner = Math.hypot(cx, cy) > 5;
+    const al = corner ? 0 : e < 2 ? 0.5 + e * 0.2 : 0.42 + 0.48 * Math.exp(-(e - 2) / 5);
+    d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; d.data[i + 3] = Math.round(255 * al);
+  }
+  g.putImageData(d, 0, 0);
+  _ring = new THREE.CanvasTexture(c); _ring.colorSpace = THREE.SRGBColorSpace;
+  return _ring;
+}
+const _gold = new Map();
+function goldTex(n, full) {                      // 든 금: 금화 한 닢 위에 숫자 (가득 차면 밝은 테)
+  const key = n + (full ? 'f' : '');
+  if (_gold.has(key)) return _gold.get(key);
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const disc = (r, f, dx = 0, dy = 0) => { g.beginPath(); g.arc(32 + dx, 32 + dy, r, 0, 7); g.fillStyle = f; g.fill(); };
+  disc(31, '#0b0705');                           // 검은 테: 어떤 바탕 위에서도 또렷하게
+  disc(27, full ? '#fff3b0' : '#8a5a10');
+  disc(24, '#e8a820');
+  disc(21, '#ffcf45', -1, -1.5);
+  g.fillStyle = 'rgba(255,255,255,0.55)'; g.beginPath(); g.ellipse(24, 20, 9, 4, -0.6, 0, 7); g.fill();
+  g.font = '900 36px "Arial Black", Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineWidth = 5; g.strokeStyle = '#fff6cf'; g.lineJoin = 'round'; g.strokeText(String(n), 32, 34.5);
+  g.fillStyle = '#2a1400'; g.fillText(String(n), 32, 34.5);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  _gold.set(key, t);
+  return t;
+}
 function coinTex() {                              // 도트 금화
   return pxMemo('coin', () => pxTex(pxCanvas(10, 10, K => {
     K.E(5, 5, 4.2, 4.2, '#e8a820'); K.E(4.6, 4.6, 3, 3, '#ffd24a'); K.P(3, 3, '#fff6c0'); K.P(4, 3, '#fff6c0'); K.R(5, 4, 1, 3, '#b07810');
@@ -763,7 +798,7 @@ function lpcSprite(name, h, glow) {
   const S = SHEETS[name], t = (glow ? S.glow : S.tex).clone();
   t.repeat.set(1 / S.m.cols, 1 / S.m.rows); t.needsUpdate = true;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial(glow ? {map: t, transparent: true, depthTest: false, blending: THREE.AdditiveBlending} : {map: t, transparent: true, alphaTest: 0.5}));
-  sp.center.set(0.5, (SP.meta.cell - SP.meta.foot) / SP.meta.cell);
+  { const cl = S.m.cell || SP.meta.cell, ft = S.m.foot || SP.meta.foot; sp.center.set(0.5, (cl - ft) / cl); }
   sp.scale.set(h, h, 1);
   sp.userData.w = h; sp.userData.lpc = {m: S.m};
   sp.renderOrder = glow ? 12 : 6;
@@ -772,7 +807,7 @@ function lpcSprite(name, h, glow) {
 }
 function makeBody(kind, team, h) {
   const nm = sheetName(kind, team);
-  if (nm && SHEETS[nm]) return lpcSprite(nm, h * (kind === 'W' ? 2.1 : 2.6));
+  if (nm && SHEETS[nm]) return lpcSprite(nm, h * (SHEETS[nm].m.scale || (kind === 'W' ? 2.1 : 2.6)));
   const w = kind === 'W' ? h : h * 16 / 24;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({map: bodyTex(kind, team, 0), transparent: true, alphaTest: 0.5}));
   sp.center.set(0.5, 0.02);
@@ -780,6 +815,145 @@ function makeBody(kind, team, h) {
   sp.userData.w = w;
   sp.renderOrder = 6;
   return sp;
+}
+
+// ---------------- 동굴 지형: 이어진 바닥 · 솟은 바위 · 구덩이 ----------------
+function vnoise(seed, P) {                       // 주기 P 인 부드러운 값 잡음 (이어 붙여도 끊기지 않는다)
+  const rn = rnd(seed), a = new Float32Array(P * P); for (let i = 0; i < P * P; i++) a[i] = rn();
+  return (x, y) => {
+    x = ((x % P) + P) % P; y = ((y % P) + P) % P;
+    const x0 = Math.floor(x) % P, y0 = Math.floor(y) % P, fx = x - Math.floor(x), fy = y - Math.floor(y), x1 = (x0 + 1) % P, y1 = (y0 + 1) % P, sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+    return (a[y0 * P + x0] * (1 - sx) + a[y0 * P + x1] * sx) * (1 - sy) + (a[y1 * P + x0] * (1 - sx) + a[y1 * P + x1] * sx) * sy;
+  };
+}
+function caveFloorTex() {                        // 동굴 바닥: 여덟 칸 (256px) 마다 되풀이. 칸 테두리 줄 없이 얼룩 · 금 · 자갈, 칸 모서리에 옅은 자국 (칸 줄은 build 의 격자가 긋는다)
+  return pxMemo('cavefloor', () => {
+    const N = 256, n1 = vnoise(11, 4), n2 = vnoise(12, 8), n3 = vnoise(13, 16), n4 = vnoise(14, 64);
+    const pal = ['#39414a', '#4b545d', '#5e6871', '#727c85', '#87919a', '#9da6ae'];
+    const c = pxCanvas(N, N, K => {
+      const Wp = v => ((Math.round(v) % N) + N) % N;
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const u = x / N, v = y / N;
+        let t = 0.3 * n1(u * 4, v * 4) + 0.3 * n2(u * 8, v * 8) + 0.4 * n3(u * 16, v * 16);
+        t += (n4(u * 64, v * 64) - 0.5) * 0.34 + (K.rn() - 0.5) * 0.16;      // 알갱이: 매끈한 얼룩이 아니라 거친 돌바닥
+        K.P(x, y, pal[Math.max(0, Math.min(5, Math.floor((t - 0.24) / 0.52 * 6)))]);
+      }
+      for (let k = 0; k < 16; k++) {                 // 갈라진 금
+        let x = K.rn() * N, y = K.rn() * N, a = K.rn() * 6.28; const len = 16 + K.rn() * 46;
+        for (let i = 0; i < len; i++) { K.P(Wp(x), Wp(y), '#262b30'); if (K.rn() < 0.3) K.P(Wp(x + 1), Wp(y + 1), '#a3aab0'); a += (K.rn() - 0.5) * 0.9; x += Math.cos(a); y += Math.sin(a); }
+      }
+      for (let k = 0; k < 80; k++) {                 // 박힌 자갈: 왼쪽 위는 밝게, 오른쪽 아래는 그늘
+        const x = Math.floor(K.rn() * N), y = Math.floor(K.rn() * N), r = 1 + Math.floor(K.rn() * 2.5);
+        for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) if (i * i + j * j <= r * r + 0.5) K.P(Wp(x + i), Wp(y + j), i + j < -r * 0.6 ? '#b8bec3' : i + j > r * 0.8 ? '#353b40' : '#8a9198');
+        for (let i = -r + 1; i <= r + 1; i++) K.P(Wp(x + i), Wp(y + r + 1), '#2b3035');
+      }
+      for (let j = 0; j < 8; j++) for (let i = 0; i < 8; i++) {   // 칸 모서리: 작은 홈 (줄은 긋지 않는다)
+        if (K.rn() < 0.12) continue;
+        const x = i * 32, y = j * 32, col = '#2b3035';
+        K.P(Wp(x), Wp(y), col); K.P(Wp(x - 1), Wp(y), col); K.P(Wp(x), Wp(y - 1), col);
+        if (K.rn() < 0.6) K.P(Wp(x + 1), Wp(y), col); if (K.rn() < 0.6) K.P(Wp(x), Wp(y + 1), col); if (K.rn() < 0.4) K.P(Wp(x - 1), Wp(y - 1), '#a3aab0');
+      }
+    }, 91);
+    const t = pxTex(c, true); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  });
+}
+function caveRockTex() {                         // 바위 겉: 회갈색 얼룩과 가는 금
+  return pxMemo('caverock', () => {
+    const N = 64, n1 = vnoise(21, 4), n2 = vnoise(22, 16);
+    const pal = ['#9aa1a8', '#adb3b9', '#bec4c9', '#cfd3d7', '#dfe2e5'];
+    const c = pxCanvas(N, N, K => {
+      const Wp = v => ((Math.round(v) % N) + N) % N;
+      for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+        const t = 0.25 * n1(x / N * 4, y / N * 4) + 0.5 * n2(x / N * 16, y / N * 16) + 0.25 * K.rn();
+        K.P(x, y, pal[Math.max(0, Math.min(4, Math.floor((t - 0.22) / 0.56 * 5)))]);
+      }
+      for (let k = 0; k < 7; k++) { let x = K.rn() * N, y = K.rn() * N, a = K.rn() * 6.28; const len = 6 + K.rn() * 14;
+        for (let i = 0; i < len; i++) { K.P(Wp(x), Wp(y), '#6c737a'); a += (K.rn() - 0.5) * 0.8; x += Math.cos(a); y += Math.sin(a); } }
+    }, 93);
+    const t = pxTex(c, true); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  });
+}
+function worldUv(mat) {                          // 칸마다 같은 그림을 찍지 않고, 바닥 전체에 한 장을 이어 깐다 (8칸마다 되풀이)
+  mat.onBeforeCompile = sh => {
+    sh.uniforms.uOff = {value: new THREE.Vector2(W / 2, H / 2)};
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec2 uOff;')
+      .replace('#include <uv_vertex>', `#include <uv_vertex>
+#ifdef USE_MAP
+  #ifdef USE_INSTANCING
+    vec4 wp_ = modelMatrix * instanceMatrix * vec4(position, 1.0);
+  #else
+    vec4 wp_ = modelMatrix * vec4(position, 1.0);
+  #endif
+  vMapUv = (wp_.xz + uOff) / 8.0;
+#endif`);
+  };
+  mat.customProgramCacheKey = () => 'worlduv' + W + 'x' + H;
+  return mat;
+}
+function pitHoleTex(v) {                         // 구덩이: 바닥이 무너져 뚫린 구멍. 들쭉날쭉한 가장자리, 건너편 안벽의 지층, 그 아래는 어둠
+  return pxMemo('pithole' + v, () => pxTex(pxCanvas(48, 48, K => {
+    const an = vnoise(40 + v, 12);
+    for (let y = 0; y < 48; y++) for (let x = 0; x < 48; x++) {
+      const dx = (x + 0.5 - 24) / 24, dy = (y + 0.5 - 24) / 24, r = Math.hypot(dx, dy), th = Math.atan2(dy, dx);
+      const R0 = 0.72 + 0.16 * an((th / 6.2832 + 0.5) * 12, 0.5);
+      if (r > R0 + 0.12) continue;
+      if (r > R0) { K.P(x, y, dy < -0.15 ? (K.rn() < 0.6 ? '#8f8776' : '#6a6357') : (K.rn() < 0.5 ? '#2a2623' : '#48423b')); continue; }   // 부서진 테두리 (먼 쪽은 밝게)
+      const dep = dy + Math.sqrt(Math.max(0, R0 * R0 - dx * dx));     // 건너편 (북쪽) 가장자리에서 아래로 내려온 거리
+      if (dep < 0.62) { const q = dep / 0.62 + (K.rn() - 0.5) * 0.12; K.P(x, y, q < 0.2 ? '#5a5046' : q < 0.45 ? '#40382f' : q < 0.72 ? '#28221c' : '#14110e'); }
+      else K.P(x, y, '#000000');
+    }
+  }, 57 + v)));
+}
+function buildRock(rows) {                        // 벽 = 바닥에서 솟은 바위. 벽 칸 안쪽으로 갈수록 높아지는 높이 지형을 삼각형으로 짠다 (지도 둘레는 동굴 벽)
+  const k = 4, B = 3, GW = (W + 2 * B) * k, GH = (H + 2 * B) * k, NV = (GW + 1) * (GH + 1);
+  const isFloor = (cx, cy) => (cx >= 0 && cy >= 0 && cx < W && cy < H) ? rows[cy][cx] !== '#' : false;
+  const hn = vnoise(31, 64), X = new Float32Array(NV), Y = new Float32Array(NV), Z = new Float32Array(NV);
+  for (let j = 0; j <= GH; j++) for (let i = 0; i <= GW; i++) {
+    const x = i / k - B, y = j / k - B, cx0 = Math.floor(x), cy0 = Math.floor(y), id = j * (GW + 1) + i;
+    let d = 2;                                    // 가장 가까운 바닥 칸까지 거리
+    for (let cy = cy0 - 2; cy <= cy0 + 2; cy++) for (let cx = cx0 - 2; cx <= cx0 + 2; cx++) if (isFloor(cx, cy)) {
+      const ddx = Math.max(cx - x, 0, x - cx - 1), ddy = Math.max(cy - y, 0, y - cy - 1); d = Math.min(d, Math.hypot(ddx, ddy)); }
+    const out = Math.hypot(Math.max(-x, 0, x - W), Math.max(-y, 0, y - H));
+    let top;
+    if (out <= 0) top = 0.6 + 0.42 * hn(x * 0.9 + 7, y * 0.9 + 3) + 0.2 * Math.min(1, Math.max(0, d - 0.5));
+    else if (y > H) top = Math.max(0, 0.36 * (1 - (y - H) / 2.4)) * (0.6 + 0.8 * hn(x * 1.3 + 50, y * 1.3 + 20));   // 남쪽 (카메라 쪽) 은 낮은 돌무더기
+    else {
+      const side = y < 0 ? 0.9 + out * 0.9 : (0.8 + out * 0.5) * Math.min(1, Math.max(0.3, (H + 0.5 - y) / 3));     // 북쪽은 높은 절벽, 옆은 중간
+      top = side * (0.8 + 0.4 * hn(x * 1.3 + 50, y * 1.3 + 20));
+    }
+    const f = d <= 0 ? 0 : d >= 0.5 ? 0.78 + 0.44 * hash(i * 3 + 1, j * 7 + 2) : d <= 0.25 ? (0.7 + 0.3 * hash(i * 3 + 1, j * 7 + 2)) * (d / 0.25) : 0.8 + 0.3 * hash(i * 3 + 1, j * 7 + 2);
+    const jit = d > 0 ? 0.11 : 0;
+    X[id] = x - W / 2 + (hash(i, j * 3 + 11) - 0.5) * 2 * jit;
+    Z[id] = y - H / 2 + (hash(i * 5 + 3, j) - 0.5) * 2 * jit;
+    Y[id] = d <= 0 ? -0.03 : Math.max(0.02, f * top + (hash(i + 17, j + 29) - 0.5) * 0.12);
+    if (d > 0 && top <= 0.001) Y[id] = -0.03;
+  }
+  const pos = [], col = [], uv = [], cells = [];
+  const tri = (a, b, c, fi) => {
+    const ya = (Y[a] + Y[b] + Y[c]) / 3;
+    const e1x = X[b] - X[a], e1y = Y[b] - Y[a], e1z = Z[b] - Z[a], e2x = X[c] - X[a], e2y = Y[c] - Y[a], e2z = Z[c] - Z[a];
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x, nl = Math.hypot(nx, ny, nz) || 1;
+    const up = Math.abs(ny) / nl, south = nz / nl * Math.sign(ny || 1);          // 윗면인가, 카메라 (남쪽) 를 보는 면인가
+    let sh = 1.6 * (0.5 + 0.62 * up + 0.22 * Math.max(0, south)) * (0.72 + 0.3 * Math.min(1, Math.max(0, ya) / 0.8)) * (0.8 + 0.4 * hash(fi, 71));
+    if (ya > 1.2) sh *= Math.max(0.12, 1 - (ya - 1.2) * 0.42);                  // 높은 절벽은 위로 갈수록 어둠 속으로
+    const cx = Math.min(W - 1, Math.max(0, Math.floor((X[a] + X[b] + X[c]) / 3 + W / 2))), cy = Math.min(H - 1, Math.max(0, Math.floor((Z[a] + Z[b] + Z[c]) / 3 + H / 2)));
+    for (const v of [a, b, c]) { pos.push(X[v], Y[v], Z[v]); col.push(sh, sh * 0.98, sh * 0.96); if (up > 0.6) uv.push(X[v] / 2, Z[v] / 2); else if (Math.abs(nx) > Math.abs(nz)) uv.push(Z[v] / 2, Y[v] / 2); else uv.push(X[v] / 2, Y[v] / 2); }   // 면이 향한 쪽으로 무늬를 편다 (늘어진 줄무늬 방지)
+    cells.push(cy * W + cx);
+  };
+  for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) {
+    const a = j * (GW + 1) + i, b = a + 1, c = a + GW + 1, d2 = c + 1;
+    if (Math.max(Y[a], Y[b], Y[c], Y[d2]) <= 0) continue;
+    if ((i + j) & 1) { tri(a, c, b, a * 2); tri(b, c, d2, a * 2 + 1); } else { tri(a, c, d2, a * 2); tri(a, d2, b, a * 2 + 1); }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo, std(0xffffff, {roughness: 1, metalness: 0, vertexColors: true, flatShading: true, map: caveRockTex()}));
+  m.castShadow = true; m.receiveShadow = true;
+  const hAt = (cx, cy) => { const i = Math.round((cx + 0.5 + B) * k), j = Math.round((cy + 0.5 + B) * k); return Math.max(0, Y[j * (GW + 1) + i]); };   // 칸 가운데의 바위 높이
+  return {mesh: m, base: Float32Array.from(col), cells: Int32Array.from(cells), hAt};
 }
 let NEAR = 0;                                    // 0 = 멀리 (둥근 아이콘), 1 = 가까이 (도트 캐릭터)
 function lod(o) {
@@ -1276,34 +1450,35 @@ function build() {
   scene.add(root);
   const n = W * H, rows = R.map.rows;
 
-  const ground = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.24, 1), std(0xffffff, {roughness: 1, map: floorTex()}), n);
+  const floorM = worldUv(std(0xffffff, {roughness: 1, map: caveFloorTex()}));
+  const ground = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 0.24, 1), floorM, n);
   ground.receiveShadow = true;
-  const gBase = new Float32Array(n * 3);
+  const gBase = new Float32Array(n * 3), gn = vnoise(5, 64);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const i = y * W + x, r = hash(x, y);
-    COL.setHSL(0.08 + r * 0.03, 0.12 + r * 0.06, 0.25 + r * 0.06);
-    if (SHEETS.floor) COL.setRGB(0.9 + r * 0.1, 0.9 + r * 0.1, 0.9 + r * 0.1);
+    const i = y * W + x, r = 0.9 + 0.1 * gn(x / 5, y / 5);   // 밝기는 넓게 천천히만 바뀐다 (칸마다 다르면 판석처럼 보인다)
+    COL.setRGB(r, r, r);
     gBase.set([COL.r, COL.g, COL.b], i * 3);
     M4.makeTranslation(wx(x), -0.12, wz(y));
     ground.setMatrixAt(i, M4);
     ground.setColorAt(i, COL);
   }
   root.add(ground);
-  // 받침돌과 가장자리 석축
-  const frameM = std(0x2a1e14, {roughness: 0.95});
-  mesh(root, new THREE.BoxGeometry(W + 1.6, 2, 0.8), frameM, 0, -1.25, -H / 2 - 0.4, false);
-  mesh(root, new THREE.BoxGeometry(W + 1.6, 2, 0.8), frameM, 0, -1.25, H / 2 + 0.4, false);
-  mesh(root, new THREE.BoxGeometry(0.8, 2, H), frameM, -W / 2 - 0.4, -1.25, 0, false);
-  mesh(root, new THREE.BoxGeometry(0.8, 2, H), frameM, W / 2 + 0.4, -1.25, 0, false);
-  mesh(root, new THREE.PlaneGeometry(W, H).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({color: 0x000000}), 0, -2.2, 0, false);
-  const curbM = std(0x9a8670, {roughness: 1, map: wallSideTex()});
-  for (let i = -1; i <= W; i++) for (const j of [-1, H]) mesh(root, new RoundedBoxGeometry(0.96, 0.22 + hash(i, j) * 0.12, 0.6, 2, 0.04), curbM, wx(i), 0, wz(j) + (j < 0 ? 0.2 : -0.2));
-  for (let j = 0; j < H; j++) for (const i of [-1, W]) mesh(root, new RoundedBoxGeometry(0.6, 0.22 + hash(i, j) * 0.12, 0.96, 2, 0.04), curbM, wx(i) + (i < 0 ? 0.2 : -0.2), 0, wz(j));
-  // 네 모서리 화로 기둥
+  mesh(root, new THREE.PlaneGeometry(W + 40, H + 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({color: 0x000000}), 0, -0.3, 0, false);
+  { // 칸 격자: 바닥 위의 가는 줄 (어느 확대에서도 1px 로 보인다). 바위는 줄을 가리고, 구덩이 둘레는 긋지 않는다
+    const pit = new Set(R.map.traps.map(c => c[0] + ',' + c[1])), isPit = (x, y) => pit.has(x + ',' + y), gp = [];
+    for (let y = 0; y <= H; y++) for (let x = 0; x < W; x++) if (!isPit(x, y) && !isPit(x, y - 1)) gp.push(x - W / 2, 0.011, y - H / 2, x + 1 - W / 2, 0.011, y - H / 2);
+    for (let x = 0; x <= W; x++) for (let y = 0; y < H; y++) if (!isPit(x, y) && !isPit(x - 1, y)) gp.push(x - W / 2, 0.011, y - H / 2, x - W / 2, 0.011, y + 1 - H / 2);
+    const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(gp, 3));
+    const grid = new THREE.LineSegments(gg, new THREE.LineBasicMaterial({color: 0xcdbf9c, transparent: true, opacity: 0.15, depthWrite: false}));
+    grid.renderOrder = 1; root.add(grid); }
+  const curbM = std(0x6a5f52, {roughness: 1});
+  const rock = buildRock(rows);
+  root.add(rock.mesh);
+  // 네 모서리 횃불 기둥: 둘레 바위 위에 선다
   const braziers = [];
   for (const [i, j] of [[-1, -1], [W, -1], [-1, H], [W, H]]) {
     const b = new THREE.Group();
-    b.position.set(wx(i), 0, wz(j));
+    b.position.set(wx(i), rock.hAt(i, j) - 0.05, wz(j));
     mesh(b, new THREE.BoxGeometry(0.62, 0.3, 0.62), curbM, 0, 0.15, 0);
     mesh(b, new THREE.CylinderGeometry(0.17, 0.21, 1.5, 8), std(0x7d6648, {roughness: 0.85}), 0, 1.05, 0);
     mesh(b, new THREE.CylinderGeometry(0.3, 0.2, 0.18, 10), std(0x8a6a3a, {metalness: 0.6, roughness: 0.45}), 0, 1.88, 0);
@@ -1334,57 +1509,6 @@ function build() {
     while (st.length) { const [x, y] = st.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k2 = (x + dx) + ',' + (y + dy); if (isWall(x + dx, y + dy) && !comp.has(k2)) { comp.set(k2, nc); st.push([x + dx, y + dy]); } } }
     nc++;
   }
-  const compH = c => 0.85 + hash(c * 13 + 7, 29) * 0.3;
-  const wSide = std(0xffffff, {roughness: 1, map: wallSideTex()}), wTop = std(0xffffff, {roughness: 1, map: wallTopTex()});
-  const wall = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), [wSide, wSide, wTop, wTop, wSide, wSide], nW);
-  const cap = new THREE.InstancedMesh(new RoundedBoxGeometry(1, 0.14, 1, 2, 0.04), std(0xffffff, {roughness: 0.85, map: slabTex()}), nW);
-  wall.castShadow = cap.castShadow = true; wall.receiveShadow = cap.receiveShadow = true;
-  const wBase = new Float32Array(wallCells.length * 3), cBase = new Float32Array(wallCells.length * 3);
-  wallCells.forEach(([x, y], k) => {
-    const r = hash(x, y), ruin = false, h = SHEETS.wall_top ? compH(comp.get(x + ',' + y)) : (hash(y + 17, x + 3) < 0.2 ? 0.5 : 1);   // 덩어리마다 높이
-    const rot = Q.identity();
-    COL.setHSL(0.08 + r * 0.02, 0.14, 0.36 + r * 0.08);
-    if (SHEETS.wall_side) COL.setRGB(0.9 + r * 0.1, 0.9 + r * 0.1, 0.9 + r * 0.1);
-    wBase.set([COL.r, COL.g, COL.b], k * 3);
-    M4.compose(V3.set(wx(x), h / 2, wz(y)), rot, S3.set(1, h, 1));
-    wall.setMatrixAt(k, M4); wall.setColorAt(k, COL);
-    COL.setHSL(0.09 + r * 0.02, 0.12, 0.55 + r * 0.12);
-    cBase.set([COL.r, COL.g, COL.b], k * 3);
-    M4.compose(V3.set(wx(x) + (ruin ? (r - 0.5) * 0.2 : 0), h + 0.05, wz(y)), rot, S3.set(ruin ? 0.8 : 1, 1, ruin ? 0.8 : 1));
-    cap.setMatrixAt(k, M4); cap.setColorAt(k, COL);
-  });
-  wall.count = cap.count = wallCells.length;
-  cap.visible = false;
-  root.add(wall, cap);
-  if (SHEETS.wall_top) {                           // 윗면: 바닥과 닿는 가장자리에만 들쭉날쭉한 바위 테두리
-    const tg = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mats = {};
-    for (const [x, y] of wallCells) {
-      const mask = (isWall(x, y - 1) ? 1 : 0) | (isWall(x + 1, y) ? 2 : 0) | (isWall(x, y + 1) ? 4 : 0) | (isWall(x - 1, y) ? 8 : 0);
-      const key = mask + ':' + ((x * 7 + y * 3) % 4);
-      const mt = mats[key] || (mats[key] = std(0xffffff, {roughness: 1, map: rimTex(mask, (x * 7 + y * 3) % 4)}));
-      const m = new THREE.Mesh(tg, mt); m.position.set(wx(x), compH(comp.get(x + ',' + y)) + 0.002, wz(y)); m.receiveShadow = true; root.add(m);
-    }
-  }
-  // 무너진 돌 조각: 벽 칸 둘레 (안개 때 그 칸 색을 따른다)
-  const rubCells = [];
-  const rubble = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), std(0xffffff, {roughness: 0.95, flatShading: true, map: brickTex()}), Math.max(1, wallCells.length * 3));
-  rubble.castShadow = true; rubble.receiveShadow = true;
-  const rBase = [];
-  wallCells.forEach(([x, y]) => {
-    const m = 1 + Math.floor(hash(x * 3, y * 5) * 3);
-    for (let k = 0; k < m; k++) {
-      const a = hash(x + k * 7, y) * Math.PI * 2, d = 0.38 + hash(x, y + k * 3) * 0.12, sc = 0.07 + hash(x + k, y + k) * 0.09;
-      M4.compose(V3.set(wx(x) + Math.cos(a) * d, sc * 0.5, wz(y) + Math.sin(a) * d),
-        Q.setFromEuler(new THREE.Euler(a, a * 2, k)), S3.set(sc * 1.3, sc * 0.8, sc));
-      const i = rubCells.length;
-      rubble.setMatrixAt(i, M4);
-      const v = 0.5 + hash(k, x * y) * 0.3; COL.setRGB(v, v * 0.92, v * 0.85); rubble.setColorAt(i, COL);
-      rBase.push(v); rubCells.push(y * W + x);
-    }
-  });
-  rubble.count = rubCells.length;
-  rubble.visible = false;
-  root.add(rubble);
   // 동굴 벽: 맵을 둘러싼 큰 바위와 종유석
   const rocks = [], spikes = [];
   const pad = 2.2, perim = (x0, z0, x1, z1, step) => { const pts = []; for (let x = x0; x <= x1; x += step) pts.push([x, z0], [x, z1]); for (let z = z0 + step; z < z1; z += step) pts.push([x0, z], [x1, z]); return pts; };
@@ -1403,9 +1527,8 @@ function build() {
   spikes.forEach(([x, z, i], k) => { const h = 1.2 + hash(i, 29) * 2.4; M4.compose(V3.set(x, h / 2 - 0.1, z), Q.identity(), S3.set(0.6 + hash(i, 31) * 0.6, h, 0.6 + hash(i, 31) * 0.6)); spikeM.setMatrixAt(k, M4); });
   spikeM.count = spikes.length;
   root.add(rockM, spikeM);
-  if (SHEETS.floor) rockM.visible = spikeM.visible = false;     // LPC 화풍: 지도 바깥은 어둠 (Cambridge 처럼 판만 뜬다)
+  rockM.visible = spikeM.visible = false;                      // 둘레는 buildRock 의 동굴 벽이 맡는다     // LPC 화풍: 지도 바깥은 어둠 (Cambridge 처럼 판만 뜬다)
   // 바위 바닥 (맵 바깥)
-  mesh(root, new THREE.PlaneGeometry(W + 30, H + 30).rotateX(-Math.PI / 2), std(0x1c1610, {roughness: 1}), 0, -0.26, 0, false).receiveShadow = true;
   // 횃불 빛: 화면 가운데에 가까운 탐험가 6명의 횃불이 주변을 밝힌다 (빛 수를 고정해 셰이더를 다시 만들지 않는다)
   const torchL = [];
   for (let i = 0; i < 6; i++) { const L = new THREE.PointLight(0xff9a40, 0, 4.2, 1.5); root.add(L); torchL.push(L); }
@@ -1468,8 +1591,8 @@ function build() {
       osp.center.set(0.5, 2 / 64); osp.scale.set(1.05, 1.05, 1); osp.renderOrder = 5; osp.userData.lpc = true; osp.material.color.setScalar(0.78);
     } else osp = pxSprite(oreTex(7), 0.95, 0.95, 0.08);
     grp.add(osp);
-    const clk = pxSprite(clockTex(0, 12), 0.78, 0.15, 0.5);
-    clk.position.y = 1.0; clk.renderOrder = 13; clk.material.depthTest = false;
+    const clk = pxSprite(clockTex(0, 12), 0.6, 0.115, 0.5);
+    clk.position.set(-0.12, 0.07, 0.44);             // 칸 앞쪽 바닥에: 그 칸에 선 모험가의 머리 · 체력바와 겹치지 않는다 clk.renderOrder = 13; clk.material.depthTest = false;
     grp.add(clk);
     grp.userData.clk = clk;
     grp.userData.spr = osp;
@@ -1502,12 +1625,9 @@ function build() {
     const shaft = new THREE.Mesh(new THREE.BoxGeometry(1, 2.1, 1), new THREE.MeshBasicMaterial({map: cliffTex(), side: THREE.BackSide}));
     shaft.geometry.groups = shaft.geometry.groups.filter(gr => gr.materialIndex !== 2 && gr.materialIndex !== 3);   // 뚜껑 · 바닥은 없앤다 (바닥은 끝없는 어둠)
     shaft.position.y = -1.05; rev.add(shaft);
-    const pt = tileTex('pit');
-    if (pt) {                                      // LPC 낭떠러지 타일 (위에서 본 깊은 구멍)
-      shaft.visible = false;
-      const pm = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), std(0xffffff, {roughness: 1, map: pt}));
-      pm.position.y = 0.003; pm.receiveShadow = true; rev.add(pm);
-    }
+    shaft.visible = false;
+    { const pm = new THREE.Mesh(new THREE.PlaneGeometry(1.06, 1.06).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({map: pitHoleTex((x * 3 + y * 5) % 4), transparent: true, alphaTest: 0.5, roughness: 1}));
+      pm.position.y = 0.005; pm.rotation.y = 0; pm.renderOrder = 1; pm.receiveShadow = true; rev.add(pm); }
     root.add(hidden, rev);
     traps.set(x + ',' + y, {hidden, rev, gi: y * W + x, gy: -0.12});
   }
@@ -1548,9 +1668,9 @@ function build() {
   root.add(sel);
 
   const oreMax = new Map(R.map.ore.map(o => [o[0] + ',' + o[1], o[2]]));
-  if (AGENT()) { hemi.intensity = 0.1; sun.intensity = 0.28; renderer.toneMappingExposure = 0.78; for (const b of braziers) b.L.distance = 6; }
+  if (AGENT()) { hemi.intensity = 0.16; sun.intensity = 0.42; renderer.toneMappingExposure = 0.78; for (const b of braziers) b.L.distance = 6; }
   else { hemi.intensity = 0.42; sun.intensity = 1.3; renderer.toneMappingExposure = 1.05; }
-  world = {oreMax, revN: -1, root, ground, gBase, wall, cap, wallCells, wBase, cBase, braziers, rubble, rubCells, rBase, torchL, dust, ore, traps, bases, wum, loot: new Map(), mind, paths, sel, units: new Map(), fogKey: '', mindKey: ''};
+  world = {oreMax, revN: -1, root, ground, gBase, rock, pitsCut: true, wallCells, braziers, torchL, dust, ore, traps, bases, wum, loot: new Map(), mind, paths, sel, units: new Map(), fogKey: '', mindKey: ''};
   scene.fog.near = s0 * 1.4; scene.fog.far = s0 * 3.6;
   const s = Math.max(W, H);
   sun.position.set(-s * 0.35, s * 1.1, s * 0.55);
@@ -1608,17 +1728,9 @@ function applyFog(fi, team, vis, seen) {
     world.ground.setColorAt(i, COL);
   }
   world.ground.instanceColor.needsUpdate = true;
-  world.wallCells.forEach(([x, y], j) => {
-    const k = fac(y * W + x);
-    COL.setRGB(world.wBase[j * 3] * k, world.wBase[j * 3 + 1] * k, world.wBase[j * 3 + 2] * k);
-    world.wall.setColorAt(j, COL);
-    COL.setRGB(world.cBase[j * 3] * k, world.cBase[j * 3 + 1] * k, world.cBase[j * 3 + 2] * k);
-    world.cap.setColorAt(j, COL);
-  });
-  if (world.wall.instanceColor) world.wall.instanceColor.needsUpdate = true;
-  if (world.cap.instanceColor) world.cap.instanceColor.needsUpdate = true;
-  world.rubCells.forEach((ci, j) => { const k = fac(ci), v = world.rBase[j] * k; COL.setRGB(v, v * 0.92, v * 0.85); world.rubble.setColorAt(j, COL); });
-  if (world.rubble.instanceColor) world.rubble.instanceColor.needsUpdate = true;
+  { const rk = world.rock, ca = rk.mesh.geometry.attributes.color, arr = ca.array, bs = rk.base, cl = rk.cells;   // 바위: 면마다 자기 칸의 밝기
+    for (let f = 0; f < cl.length; f++) { const k = fac(cl[f]); for (let q = f * 9; q < f * 9 + 9; q++) arr[q] = bs[q] * k; }
+    ca.needsUpdate = true; }
 }
 
 function updateStatic(fi, team, seen, now) {
@@ -1785,12 +1897,14 @@ function updateBases(fi, g, a, moving, seen, vis, now) {
       else { const bf = Math.floor(now * 6 + k) % 2; if (br._f !== bf) { br._f = bf; br.spr.material.map = brazierTex(bf); br.spr.material.needsUpdate = true; } } }
     setHp(b.hp, hp / R.const.hp.B, TC[t].c);
     billboard(b.hp, b.g);
+    { const hW = 1.98, th = b.g.rotation.y, wz2 = -hW * Math.cos(PHI), sc = b.g.scale.x;      // 천막 그림 꼭대기 바로 위 (화면 위쪽으로 올린다)
+      b.hp.position.set(-Math.sin(th) * wz2 / sc, hW * Math.sin(PHI) / sc, Math.cos(th) * wz2 / sc); }
   });
 }
 
 function updateUnits(f, g, a, fi, team, vis, now) {
   const moving = g !== f, ev = evOf(g);
-  for (const o of world.units.values()) { o.g.visible = false; if (o.tile) o.tile.visible = false; }
+  for (const o of world.units.values()) { o.g.visible = false; if (o.tile) o.tile.visible = false; if (o.gold) o.gold.visible = false; }
   const A = umap[f], B = umap[g];
   const show = (o, x, y, own) => {
     if (vis && !own && !vis[Math.round(y) * W + Math.round(x)]) return false;
@@ -1804,8 +1918,10 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     if (!o) {
       o = makeChar(u[2], u[1]);
       world.root.add(o.g);
-      o.tile = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({color: TC[u[1]].c, transparent: true, opacity: 0.3, depthWrite: false}));
+      o.tile = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({map: footRingTex(), color: TC[u[1]].c, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending}));
       o.tile.renderOrder = 2; world.root.add(o.tile);
+      o.gold = new THREE.Sprite(new THREE.SpriteMaterial({map: goldTex(1), transparent: true, depthTest: false}));
+      o.gold.renderOrder = 15; o.gold.visible = false; o.body.add(o.gold);
       world.units.set(u[0], o);
       o.g.rotation.y = Math.atan2(W / 2 - u[3], H / 2 - u[4]);
     }
@@ -1836,12 +1952,13 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     { const th = o.g.rotation.y, off = 0.22 / CH; o.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); o.token.position.set(-Math.sin(th) * off * 0.6, 0, Math.cos(th) * off * 0.6);
       o.shadow.position.set(o.pix.position.x, 0.006, o.pix.position.z); o.shadow.visible = NEAR > 0.3; }
     pose(o, st, a, now, id);
+    if (o.pix.userData.lpc) { o.body.rotation.set(0, 0, 0); o.body.position.set(0, 0, 0); }   // 도트 그림은 몸을 기울이지 않는다 (체력바 · 아이콘이 딸려 움직인다)
     for (const fl of o.flames) fl.scale.set(1, 1 + Math.sin(now * 17 + id) * 0.18, 1);
     const sc = moving && !p ? elastic(Math.min(1, a * 1.3)) : 1;
     o.g.scale.setScalar(Math.max(0.001, sc) * CH * (o.kind === 'G' ? 1.12 : 1));
     o.disc.visible = false; o.badge.visible = false; o._fade = 1;
     o.tile.visible = true; o.tile.position.set(wx(Math.round(x)), 0.012, wz(Math.round(y)));
-    o.tile.material.opacity = 0.15 + 0.05 * Math.sin(now * 2.4 + id);
+    o.tile.material.opacity = 0.3 + 0.06 * Math.sin(now * 2.4 + id);
     const fr = st === 'walk' ? 1 + (Math.floor(a * 4) % 2) : 0;
     if (!o.pix.userData.lpc && o._fr !== fr) { o._fr = fr; o.pix.material.map = bodyTex(o.kind, o.team, fr); o.pix.material.needsUpdate = true; o.glow.material.map = glowTex(o.kind, o.team, fr); o.glow.material.needsUpdate = true; }
     { const hov = (hoverC && hoverC[0] === Math.round(x) && hoverC[1] === Math.round(y)) || selId === id;
@@ -1851,9 +1968,9 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     if (o.pix.userData.lpc) {                    // LPC 시트: 방향 줄과 동작 칸
       const dir = lpcDir(o.g.rotation.y), act = st === 'mine' || st === 'attack' || st === 'push';
       const an = st === 'walk' ? 'walk' : act ? 'attack' : 'idle', n = o.pix.userData.lpc.m[an].n;
-      const col = st === 'walk' ? Math.floor(a * 8) % 8 : act ? Math.floor(Math.min(0.999, a / 0.8) * n) : 0;
+      const col = st === 'walk' ? Math.floor(a * n) % n : act ? Math.floor(Math.min(0.999, a / 0.8) * n) : n > 1 ? Math.floor(now * 7 + id * 5) % n : 0;
       lpcFrame(o.pix, an, dir, col); lpcFrame(o.glow, an, dir, col);
-      o.pix.position.y = o.glow.position.y = an === 'idle' && Math.sin(now * 2.4 + id * 1.7) > 0.6 ? 0.012 : 0;   // 숨쉬기: 가끔 한 도트 들썩
+      o.pix.position.y = o.glow.position.y = an === 'idle' && n === 1 && Math.sin(now * 2.4 + id * 1.7) > 0.6 ? 0.012 : 0;   // 숨쉬기: 가끔 한 도트 들썩
       o.pix.material.rotation = 0;
     } else {
     const sx = Math.sin(o.g.rotation.y);
@@ -1871,7 +1988,23 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     if (o._bk !== bk) { o._bk = bk; o.token.material.map = tokenTex(o.kind, o.team, src[6], hp10, arr); o.token.material.needsUpdate = true; }
     const mx = R.const.hp[u[2]];
     o.hp.visible = false;                          // 멀리서는 아이콘 고리, 가까이서는 머리 위 도트 막대
-    o.bar.visible = NEAR > 0.5; o.bar.position.set(o.pix.position.x, 0.84, o.pix.position.z);
+    // 도트 캐릭터는 카메라를 보고 서 있으므로, 머리 위 표시는 '화면 위쪽' 으로 올린다 (세계 높이로 올리면 화면 아래쪽 유닛은 몸통에 겹친다)
+    const topW = (o.pix.userData.lpc ? o.pix.scale.y * 36 / 64 : 0.6) * CH, thG = o.g.rotation.y, gS = o.g.scale.x || CH;
+    const above = (sp, hW) => { const wy = hW * Math.sin(PHI), wz2 = -hW * Math.cos(PHI); sp.position.set(o.pix.position.x - Math.sin(thG) * wz2 / gS, wy / gS, o.pix.position.z + Math.cos(thG) * wz2 / gS); };
+    o.bar.visible = NEAR > 0.5; above(o.bar, topW + 0.1);
+    { const cg = src[6], gd = o.gold;              // 든 금: 체력바 오른쪽 끝의 금화 (멀리서는 패의 오른쪽 위). 머리 높이라 앞뒤 유닛의 몸을 가리지 않는다
+      gd.visible = cg > 0;
+      if (cg > 0) {
+        const cap = typeof R.const.carry === 'number' ? R.const.carry : 5, gk = cg + (cg >= cap ? 'f' : '');
+        if (gd.userData.k !== gk) { gd.userData.k = gk; gd.material.map = goldTex(cg, cg >= cap); gd.material.needsUpdate = true; }
+        const wpp = 2 * camera.position.distanceTo(o.g.position) * Math.tan(camera.fov * Math.PI / 360) / renderer.domElement.clientHeight;
+        const sz = Math.min(40 * wpp, Math.max(17 * wpp, 0.3));     // 화면에서 17~40px
+        const near = NEAR > 0.5, dx = near ? 0.27 + sz * 0.5 : 0.36;
+        above(gd, near ? topW + 0.1 : 0.68 * CH - 0.14);
+        gd.position.x += Math.cos(thG) * dx / gS; gd.position.z += Math.sin(thG) * dx / gS;
+        const pop = moving && p && p[6] !== u[6] && a >= 0.5 ? 1 + 0.35 * Math.sin(Math.PI * Math.min(1, (a - 0.5) / 0.3)) : 1;   // 금이 바뀌는 순간 통 튄다
+        gd.scale.set(sz * pop / gS, sz * pop / gS, 1);
+      } }
     o.pool.visible = AGENT(); o.pool.scale.set(1 / CH, 1, 1 / CH);
     { const pv = A.get(id), hurt = moving && pv && u[5] < pv[5];     // 지금 느끼는 것: 바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔 → 머리 위 작은 아이콘 띠 (확대와 상관없이 같은 크기)
       const on = AGENT() ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', u[12] && 'steps', hurt && 'hurt'].filter(Boolean) : [];
@@ -1881,7 +2014,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
         const key = on.join(',');
         if (ic.userData.k !== key) { ic.userData.k = key; ic.material.map = perceptStrip(on); ic.material.needsUpdate = true; ic.material.sizeAttenuation = false; }
         ic.scale.set(0.022 * on.length, 0.022, 1);
-        ic.center.set(0.5, 0); ic.position.set(o.pix.position.x, NEAR > 0.5 ? 1.0 : 0.72, o.pix.position.z);
+        ic.center.set(0.5, 0); above(ic, NEAR > 0.5 ? topW + 0.2 : 0.68 * CH + 0.04);
       } }
     if (o._hk !== hp10) { o._hk = hp10; o.bar.material.map = hpTex(hp10, o.team); o.bar.material.needsUpdate = true; }
     setHp(o.hp, src[5] / mx, TC[u[1]].c);
@@ -1910,7 +2043,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.hp.visible = false; o.disc.visible = o.badge.visible = false; o.bar.visible = false; o.glow.visible = false; o.icons.forEach(x => x.visible = false);
     o._fade = Math.max(0, 1 - Math.max(0, a - 0.55) / 0.45);
     lod(o);
-    if (o.pix.userData.lpc) lpcFrame(o.pix, 'hurt', 0, Math.floor(Math.min(0.999, a * 1.4) * 6));   // 쓰러지는 동작
+    if (o.pix.userData.lpc) lpcFrame(o.pix, 'hurt', 0, Math.floor(Math.min(0.999, a * 1.25) * o.pix.userData.lpc.m.hurt.n));   // 쓰러지는 동작
     else o.pix.material.rotation = Math.min(1, a * 1.6) * Math.PI / 2 * (o._left ? -1 : 1);   // 옆으로 쓰러진다
     setFlash(o, 0);
     if (eaten) {                                   // 웜퍼스 입속으로 들려 올라가 사라진다
@@ -2414,7 +2547,7 @@ function frame(f, g, a, fi, team, vis, seen) {
   const canSee = (x, y) => !vis || vis[y * W + x] === 1;
   fxBegin();
   { const d = camera.position.distanceTo(controls.target), s0 = Math.max(W, H);   // 처음 화면 (지도 전체) 부터 도트, 더 멀어지면 아이콘
-    NEAR = Math.min(1, Math.max(0, (s0 * 1.26 - d) / (s0 * 0.12))); }
+    NEAR = Math.min(1, Math.max(0, (s0 * 1.44 - d) / (s0 * 0.12))); }
   if (world.wum) world.wum.forEach(w => { lod(w); const th = w.g.rotation.y, off = 0.3 / 1.7; w.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); w.token.position.copy(w.pix.position).multiplyScalar(0.6); });
   applyFog(fi, team, vis, seen);
   updateStatic(fi, team, seen, now);
@@ -2531,9 +2664,9 @@ function look(x, y, z, tx, ty, tz) {          // 확인용: 카메라를 칸 좌
 function legend() {                          // 오른쪽 '표시' 칸에 쓸 그림: 화면에 실제로 그리는 것과 같은 도트 아이콘
   const u = t => t.image.toDataURL(), o = {};
   for (const k of ['breeze', 'stench', 'glitter', 'bump', 'steps', 'hurt']) o[k] = u(perceptTex(k));
-  o.hp = u(hpTex(10, 0)); o.hpLow = u(hpTex(3, 0)); o.token = u(tokenTex('E', 0));
+  o.hp = u(hpTex(10, 0)); o.hpLow = u(hpTex(3, 0)); o.token = u(tokenTex('E', 0)); o.pit = u(pitHoleTex(0)); o.gold = u(goldTex(3));
   return o;
 }
 
-window.View3D = {build, frame, resize, resetCam, focus, setSpectate, look, legend};
+window.View3D = {build, frame, resize, resetCam, focus, setSpectate, look, legend, dbg: () => world};
 if (window.onView3DReady) window.onView3DReady();

@@ -128,5 +128,6 @@ tests/             기본 점검 (python -m unittest discover tests)
 
 - 3D 뷰어: [three.js](https://threejs.org) 0.160 (MIT 라이선스). 인터넷 (jsDelivr CDN) 에서 불러온다. 인터넷이 없으면 6초 뒤 비상용 2D 그림으로 바뀐다.
 - 글꼴: Cinzel, Noto Serif KR (SIL Open Font License, Google Fonts).
-- 캐릭터 · 야영지 · 웜퍼스 · 동굴 그림: [Liberated Pixel Cup (LPC)](https://lpc.opengameart.org) 공개 그림 (CC-BY-SA 3.0 / 4.0, GPL, OGA-BY, CC-BY). 합성 도구 `tools/lpc_build.py`, 만든 사람 표기 [`wumpus/viewer/sprites/CREDITS.md`](wumpus/viewer/sprites/CREDITS.md).
+- 모험가: Calciumtrice 의 [4 Direction Animated Warrior](https://opengameart.org/content/4-direction-animated-warrior) (CC-BY 4.0). 초상화: pebonius 의 [64px portraits](https://opengameart.org/content/64px-portraits) (CC-BY 4.0).
+- 야영지 · 웜퍼스 · 금맥 그림: [Liberated Pixel Cup (LPC)](https://lpc.opengameart.org) 공개 그림 (CC-BY-SA 3.0 / 4.0, GPL, OGA-BY, CC-BY). 합성 도구 `tools/lpc_build.py`, 만든 사람 표기 [`wumpus/viewer/sprites/CREDITS.md`](wumpus/viewer/sprites/CREDITS.md).
 - 효과음은 코드로 만들었다.

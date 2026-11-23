@@ -1,6 +1,6 @@
 """LPC (Liberated Pixel Cup) 레이어를 합성해 뷰어용 캐릭터 시트를 만든다.
 
-python -X utf8 tools/lpc_build.py <LPC 저장소 폴더> [<decoration_medieval 폴더>]
+python -X utf8 tools/lpc_build.py <LPC 저장소> <decoration_medieval> <LPC_cavern_ruins> <oga_monsters> <oga_containers> <oga_warrior> <portraits-64px>
 
 야영지 (천막 · 모닥불 · 팀 깃발) 는 bluecarrot16 의 "[LPC] Medieval Village Decorations" (CC-BY-SA 3.0+) 에서 가져온다:
 https://opengameart.org/content/lpc-medieval-village-decorations
@@ -268,6 +268,107 @@ def build_cave(cav):
     return out
 
 
+_HX = lambda h: tuple(int(h[i:i + 2], 16) for i in (1, 3, 5))
+W_DARK = {_HX('#3e3542'): 0, _HX('#50404a'): 1, _HX('#735c6a'): 2}       # 머리카락 · 바지 · 테두리가 같이 쓰는 어두운 색
+W_SKIN = {_HX('#ffe7d4'), _HX('#e6c6ae')}
+W_HAIR = ['#8a5a1e', '#dcae48', '#f8e08c']                                # 금발 (어두운 동굴에서도 머리가 보이게)
+W_TEAM = [  # 목도리 어두운 · 밝은, 겉옷 어두운 · 밝은
+    {'#873455': '#c22a20', '#b34564': '#ff5a44', '#99766a': '#7c2620', '#c19f91': '#a83a30'},
+    {'#873455': '#1f6fd0', '#b34564': '#48b0ff', '#99766a': '#1f3f7c', '#c19f91': '#2f5fae'},
+]
+
+
+def warrior_frame(fr, t):
+    """검사 한 칸을 팀 색으로: 목도리 · 겉옷은 팀 색, 얼굴에 닿은 어두운 덩어리 (머리카락) 는 금발."""
+    fr = fr.copy(); px = fr.load(); w, h = fr.size
+    tm = {_HX(k): _HX(v) for k, v in W_TEAM[t].items()}
+    seen = set()
+    for y0 in range(h):
+        for x0 in range(w):
+            if (x0, y0) in seen or px[x0, y0][3] == 0 or px[x0, y0][:3] not in W_DARK:
+                continue
+            comp, st, touch = [], [(x0, y0)], False
+            seen.add((x0, y0))
+            while st:
+                x, y = st.pop(); comp.append((x, y))
+                for dx in (-1, 0, 1):
+                    for dy in (-1, 0, 1):
+                        xx, yy = x + dx, y + dy
+                        if not (0 <= xx < w and 0 <= yy < h) or px[xx, yy][3] == 0:
+                            continue
+                        c = px[xx, yy][:3]
+                        if c in W_SKIN:
+                            touch = True
+                        elif c in W_DARK and (xx, yy) not in seen:
+                            seen.add((xx, yy)); st.append((xx, yy))
+            if touch:
+                for x, y in comp:
+                    px[x, y] = _HX(W_HAIR[W_DARK[px[x, y][:3]]]) + (255,)
+    for y in range(h):
+        for x in range(w):
+            c = px[x, y]
+            if c[3] and c[:3] in tm:
+                px[x, y] = tm[c[:3]] + (255,)
+    return fr
+
+
+def build_warrior(war, t):
+    """모험가: Calciumtrice 의 "4 Direction Animated Warrior" (CC-BY 4.0). 5등신 검사, 네 방향 · 서기 12 · 걷기 8 · 베기 6 · 쓰러짐 14. 칸 64."""
+    im = Image.open(os.path.join(war, 'warrior_6.png')).convert('RGBA')
+    C = 64
+    cell = lambda r, c: warrior_frame(im.crop((c * C, r * C, c * C + C, r * C + C)), t)
+    order = [18, 12, 6, 0]                                   # 시트 줄: 뒤 (위), 왼쪽, 앞 (아래), 오른쪽
+    rows, meta = [], {}
+    def add(key, off, n):
+        meta[key] = {'row': len(rows), 'n': n, 'dirs': 4}
+        rows.extend([[cell(b + off, c) for c in range(n)] for b in order])
+    add('idle', 1, 12); add('walk', 3, 8); add('attack', 5, 6)
+    meta['hurt'] = {'row': len(rows), 'n': 14, 'dirs': 1}
+    rows.append([cell(24, c) for c in range(14)])
+    sheet = Image.new('RGBA', (14 * C, len(rows) * C))
+    for y, r in enumerate(rows):
+        for x, f in enumerate(r):
+            sheet.alpha_composite(f, (x * C, y * C))
+    sheet.save(os.path.join(OUT, 'adventurer_%d.png' % t), optimize=True)
+    return {'cols': 14, 'rows': len(rows), 'cell': C, 'foot': 51, 'scale': 2.4, **meta}
+
+
+P_TEAM = [{'#4d613c': '#a82a22', '#698e34': '#ff5a44', 'dark': '#5a1512'}, {'#4d613c': '#2458b0', '#698e34': '#48b0ff', 'dark': '#12305e'}]
+P_HAIR = {'#6b7b89': '#dcae48', '#555461': '#a87428', '#939388': '#f8e08c', '#26323c': '#6e4a18'}
+
+
+def build_portrait(port, t):
+    """초상화: pebonius 의 "64px portraits" (CC-BY 4.0) 가운데 portrelf. 머리는 금발, 망토는 팀 색."""
+    src = Image.open(os.path.join(port, 'portrelf.png')).convert('RGBA'); sp = src.load()
+    im = src.copy(); px = im.load()
+    hair = {_HX(k): _HX(v) for k, v in P_HAIR.items()}
+    # 머리카락 = 머리카락 색 덩어리 가운데 그림 위쪽 (y < 12) 에 닿은 것. 눈동자는 검은 테두리에 갇혀 있어 빠진다
+    isH = lambda x, y: 0 <= x < 64 and 0 <= y < 64 and sp[x, y][3] and sp[x, y][:3] in hair
+    hset, st = set(), [(x, y) for y in range(12) for x in range(64) if isH(x, y)]
+    hset.update(st)
+    while st:
+        x, y = st.pop()
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            q = (x + dx, y + dy)
+            if q not in hset and isH(*q):
+                hset.add(q); st.append(q)
+    for y in range(64):
+        for x in range(64):
+            r, g, b, a = sp[x, y]
+            if not a:
+                continue
+            c = (r, g, b)
+            k = '#%02x%02x%02x' % c
+            if k in P_TEAM[t]:
+                px[x, y] = _HX(P_TEAM[t][k]) + (a,)
+            elif k == '#26323c' and y >= 44 and (x, y) not in hset:
+                px[x, y] = _HX(P_TEAM[t]['dark']) + (a,)       # 망토 그늘
+            elif (x, y) in hset:
+                px[x, y] = hair[c] + (a,)
+    im.save(os.path.join(OUT, 'portrait_%d.png' % t))
+    return {'cols': 1, 'rows': 1, 'cell': 64, 'portrait': True}
+
+
 def defs(src):
     out = {}
     for f in glob.glob(os.path.join(src, 'sheet_definitions', '**', '*.json'), recursive=True):
@@ -365,6 +466,14 @@ def main():
     con = sys.argv[5] if len(sys.argv) > 5 else None
     if con and deco:
         meta['sheets'].update(build_props(con, deco))
+    war = sys.argv[6] if len(sys.argv) > 6 else None
+    if war:
+        for t in (0, 1):
+            meta['sheets']['adventurer_%d' % t] = build_warrior(war, t)
+    port = sys.argv[7] if len(sys.argv) > 7 else None
+    if port:
+        for t in (0, 1):
+            meta['sheets']['portrait_%d' % t] = build_portrait(port, t)
     json.dump(meta, open(os.path.join(OUT, 'sprites.json'), 'w', encoding='utf-8'), indent=1)
 
     # 만든 사람 표기
@@ -397,6 +506,13 @@ def main():
         lines += ['', '## 동굴 바닥 · 벽 · 금맥: LPC Cavern and Ruin Tiles (Tuomo Untinen 외)', '',
                   'https://opengameart.org/content/lpc-cavern-and-ruin-tiles — CC-BY-SA 3.0, GPL 2.0, GPL 3.0. 원본 credits.txt 전문:', '', '```',
                   open(os.path.join(cav, 'credits.txt'), encoding='utf-8', errors='replace').read().strip(), '```']
+    if war:
+        lines += ['', '## 모험가: 4 Direction Animated Warrior (Calciumtrice)', '',
+                  'https://opengameart.org/content/4-direction-animated-warrior — CC-BY 4.0.',
+                  'Animated Warrior by Calciumtrice, usable under Creative Commons Attribution 4.0 license. (목도리 · 겉옷을 팀 색으로, 머리를 금발로 다시 칠함)']
+    if port:
+        lines += ['', '## 초상화: 64px portraits (pebonius)', '',
+                  'https://opengameart.org/content/64px-portraits — CC-BY 4.0. by peb / pebonius. (portrelf 를 금발 · 팀 색 망토로 다시 칠함)']
     open(os.path.join(OUT, 'CREDITS.md'), 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
     print('ok', {k: (v['cols'], v['rows']) for k, v in meta['sheets'].items()}, 'credits', len(seen))
 

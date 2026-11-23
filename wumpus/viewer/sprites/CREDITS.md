@@ -37,7 +37,6 @@
 - `head/heads/human/female` — bluecarrot16, Benjamin K. Smith (BenCreating), Stephen Challener (Redshrike). 라이선스: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0. https://opengameart.org/content/ https://opengameart.org/content/lpc-character-bases (original head by Redshrike, tweaks by BenCreating, modular version by bluecarrot16)
 - `weapon/sword/dagger` — bluecarrot16, Johannes Sjölund (wulax), Matthew Krohn (makrohn). 라이선스: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0. https://opengameart.org/content/lpc-medieval-fantasy-character-sprites https://opengameart.org/content/lpc-extended-weapon-animations 
 - `head/heads/troll` — bluecarrot16, AntumDeluge, Tuomo Untinen (reemax). 라이선스: CC-BY 3.0. https://opengameart.org/content/musclemanogreminotaur https://opengameart.org/content/trolls-0 https://opengameart.org/content/lpc-folk (original "Muscleman/Ogre/Minotaur" by Reemax, modified to "Troll" by AntumDeluge, edited to LPC style and converted to modular head by bluecarrot16)
-- `weapon/ranged/bow/arrow` — Johannes Sjölund (wulax). 라이선스: OGA-BY 3.0, CC-BY-SA 3.0, GPL 3.0. https://opengameart.org/content/lpc-medieval-fantasy-character-sprites 
 
 ## 야영지: [LPC] Medieval Village Decorations (bluecarrot16 외)
 
@@ -331,3 +330,12 @@ cavern_ruins.png
 = Red and Blue throne (CC-BY-SA) =
 * By Tuomo Untinen
 ```
+
+## 모험가: 4 Direction Animated Warrior (Calciumtrice)
+
+https://opengameart.org/content/4-direction-animated-warrior — CC-BY 4.0.
+Animated Warrior by Calciumtrice, usable under Creative Commons Attribution 4.0 license. (목도리 · 겉옷을 팀 색으로, 머리를 금발로 다시 칠함)
+
+## 초상화: 64px portraits (pebonius)
+
+https://opengameart.org/content/64px-portraits — CC-BY 4.0. by peb / pebonius. (portrelf 를 금발 · 팀 색 망토로 다시 칠함)
