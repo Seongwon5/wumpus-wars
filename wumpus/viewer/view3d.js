@@ -1,12 +1,7 @@
 // 3D 뷰 (three.js, MIT 라이선스). viewer.html 안에 <script type="module"> 로 끼워 넣는다.
 // 리플레이 상태 (R, F, P, umap, ...) 는 viewer.html 본체의 전역 변수를 읽기만 한다.
-import * as THREE from 'three';
-import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
-import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
-import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
-import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
-import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
-import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+// three.js 0.160 과 부가 모듈은 vendor/three.bundle.min.js 로 묶어 html 안에 넣는다 (replay.py). 인터넷이 필요 없다.
+const {THREE, OrbitControls, RoundedBoxGeometry, EffectComposer, RenderPass, UnrealBloomPass, OutputPass} = window.__three;
 
 const box = document.getElementById('three');
 const renderer = new THREE.WebGLRenderer({antialias: true});

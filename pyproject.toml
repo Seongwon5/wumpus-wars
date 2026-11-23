@@ -17,4 +17,4 @@ wumpus = "wumpus.cli:main"
 packages = ["wumpus"]
 
 [tool.setuptools.package-data]
-wumpus = ["viewer/*"]
+wumpus = ["viewer/*", "viewer/sprites/*", "viewer/vendor/*"]

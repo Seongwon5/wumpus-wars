@@ -23,7 +23,9 @@ def _template():
         img = {n: 'data:image/png;base64,' + base64.b64encode(open(os.path.join(sp, n + '.png'), 'rb').read()).decode()
                for n in meta['sheets']}
         js = 'window.SPRITES = ' + json.dumps({'meta': meta, 'img': img}) + ';' + chr(10) + js
-    return tpl.replace('/*VIEW3D_JS*/', js, 1)
+    with open(os.path.join(VIEWER_DIR, 'vendor', 'three.bundle.min.js'), encoding='utf-8') as f:   # three.js 를 파일 안에 넣는다 (인터넷 없이 열린다)
+        vendor = f.read().replace('</script', '<\\/script')
+    return tpl.replace('/*THREE_VENDOR*/', vendor, 1).replace('/*VIEW3D_JS*/', js, 1)
 
 
 def save_json(replay, path):

@@ -5,7 +5,7 @@
 ## 1. 준비
 
 - **Python 3.8 이상**. 다른 패키지는 필요 없다. 확인: `python --version`
-- **브라우저** (Chrome · Edge · Firefox). 리플레이를 볼 때 쓴다. 3D 화면은 three.js 를 인터넷에서 불러오므로 인터넷이 있어야 보인다 (없으면 비상용 2D 그림).
+- **브라우저** (Chrome · Edge · Firefox). 리플레이를 볼 때 쓴다. 리플레이 파일 하나에 화면에 필요한 것이 다 들어 있어서 인터넷 없이도 열린다.
 
 ```bash
 git clone <이 저장소 주소> wumpus_wars

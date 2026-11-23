@@ -115,7 +115,7 @@ wumpus/            게임 패키지
   maps.py          대칭 맵 생성기, 맵 파일 읽기 · 쓰기
   replay.py        리플레이 저장, 뷰어 html 만들기
   cli.py           명령줄 도구 (run · scrim · view · maps · new · check)
-  viewer/          리플레이 뷰어 (viewer.html, 3D 화면 view3d.js, LPC 그림 sprites/)
+  viewer/          리플레이 뷰어 (viewer.html, 3D 화면 view3d.js, 그림 sprites/, three.js 묶음 vendor/)
 bots/              starter · random · logic
 maps/              맵 10개 (*.json)
 demo/              미리 만든 리플레이
@@ -126,7 +126,7 @@ tests/             기본 점검 (python -m unittest discover tests)
 
 ## 쓴 오픈소스
 
-- 3D 뷰어: [three.js](https://threejs.org) 0.160 (MIT 라이선스). 인터넷 (jsDelivr CDN) 에서 불러온다. 인터넷이 없으면 6초 뒤 비상용 2D 그림으로 바뀐다.
+- 3D 뷰어: [three.js](https://threejs.org) 0.160 (MIT 라이선스). 리플레이 .html 안에 넣어 두므로 인터넷 없이도 열린다 (묶음: `wumpus/viewer/vendor/`).
 - 글꼴: Cinzel, Noto Serif KR (SIL Open Font License, Google Fonts).
 - 모험가: Calciumtrice 의 [4 Direction Animated Warrior](https://opengameart.org/content/4-direction-animated-warrior) (CC-BY 4.0). 초상화: pebonius 의 [64px portraits](https://opengameart.org/content/64px-portraits) (CC-BY 4.0).
 - 야영지 · 웜퍼스 · 금맥 그림: [Liberated Pixel Cup (LPC)](https://lpc.opengameart.org) 공개 그림 (CC-BY-SA 3.0 / 4.0, GPL, OGA-BY, CC-BY). 합성 도구 `tools/lpc_build.py`, 만든 사람 표기 [`wumpus/viewer/sprites/CREDITS.md`](wumpus/viewer/sprites/CREDITS.md).
