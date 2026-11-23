@@ -18,11 +18,12 @@ EMPTY, WALL, GOLD, PIT, CAMP_TILE = '.', '#', 'G', 'P', 'C'
 # ---- 규칙 상수 ----
 MAX_ROUNDS = 1000
 MEMORY_SIZE = 16
-# ---- 연산 한도 (봇 코드가 실행한 줄 수. 엔진 함수 · 내장 함수 안은 세지 않는다) ----
-OPS_PER_ROUND = 50_000      # 팀 연산 예산에 라운드마다 더해지는 줄 수
-OPS_BANK_MAX = 1_000_000   # 팀 연산 예산의 처음 값이자 상한 (남은 것은 쌓아 둘 수 있다)
-OPS_TURN_MAX = 100_000      # 한 차례 (또는 봇 파일 첫 실행) 에 쓸 수 있는 최대 줄 수
-OPS_TURN_MIN = 200          # 예산이 바닥나도 한 차례에 늘 쓸 수 있는 줄 수
+# ---- 연산 한도 (봇 코드가 한 일의 양: 실행한 줄 + 반복이 되돌아간 횟수 + 함수 · 제너레이터가 시작 · 재개된 횟수) ----
+OPS_TURN = 10_000           # 유닛마다 한 차례에 쓸 수 있는 연산. 남겨도 쌓이지 않는다
+OPS_FIRST = 200_000         # 유닛의 첫 차례 (봇 파일 불러오기 + 첫 turn 호출) 에 쓸 수 있는 연산
+TIME_SAFETY_MS = 1000       # 시간 안전망: 한 차례가 이보다 오래 걸리면 그 차례 행동을 버린다 (내장 함수에 큰 일을 시키는 것 막기)
+ALLOWED_IMPORTS = ('wumpus', 'wumpus.api', 'math', 'heapq', 'collections', 'itertools', 'functools', 'random', 'bisect', 'operator', 'copy')
+BLOCKED_BUILTINS = ('exec', 'eval', 'compile', 'open', 'input', 'breakpoint', 'exit', 'quit', 'help')
 MAX_UNITS = 10          # 팀당 살아 있는 유닛 수 한도 (야영지 제외)
 START_BANK = 20
 INCOME_EVERY = 3        # 3라운드마다 금고 +1
@@ -224,7 +225,7 @@ from . import ops as _ops  # noqa: E402
 
 
 def ops_left():
-    """이번 차례에 더 쓸 수 있는 연산 (줄 수). 연산 한도를 끈 경기면 아주 큰 값."""
+    """이번 차례에 더 쓸 수 있는 연산. 연산 한도를 끈 경기면 0."""
     m = _ops.meter()
     return m.limit - m.count if m.active else 0
 

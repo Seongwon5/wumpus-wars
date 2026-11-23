@@ -95,7 +95,7 @@ python -m wumpus viewer                          # 빈 뷰어 (viewer.html). .js
   "format": "wumpus-replay-1",
   "meta":  { "w", "h", "sym", "map", "names", "teams", "winner", "reason", "rounds", "score",
              "time_ms": [{"avg", "max", "turns", "over"}, ...],
-             "ops": [{"avg", "max", "turns", "over"}, ...] },   // 차례당 연산 (줄 수). 연산 한도를 끈 경기면 null
+             "ops": [{"avg", "max", "turns", "over"}, ...] },   // 차례당 연산 (max 는 첫 차례를 뺀 최대). 연산 한도를 끈 경기면 null
   "const": { "hp", "cost", "carry", "max_rounds", "rules", "wumpus_hp", ... },
   "map":   { "rows", "ore": [[x, y, 양]], "traps": [[x, y]], "bases": [[x, y], [x, y]], "base_ids": [1, 2],
              "wumpus": [[x, y], ...] },

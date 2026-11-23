@@ -70,7 +70,7 @@ def _ops_txt(m, t):
     o = (m.get('ops') or [None, None])[t]
     if not o:
         return ''
-    return f" | 연산 (줄/차례) 평균 {o['avg']:,}, 최대 {o['max']:,}" + (f", 한도 초과 {o['over']}번" if o['over'] else '')
+    return f" | 연산 (차례당) 평균 {o['avg']:,}, 최대 {o['max']:,}" + (f", 한도 초과 {o['over']}번" if o['over'] else '')
 
 
 # ---------------- run ----------------
@@ -207,7 +207,7 @@ def cmd_scrim(a):
     _say(f'평균 라운드 {rounds / n:.0f} | 야영지 파괴로 끝난 판 {kills}/{n}')
     _say(f'차례 시간 (ms) 평균/최대  {na} {tavg[0] / n:.2f}/{tmax[0]:.1f}  {nb} {tavg[1] / n:.2f}/{tmax[1]:.1f}')
     if omax[0] or omax[1]:
-        _say(f'연산 (줄/차례) 최대  {na} {omax[0]:,}  {nb} {omax[1]:,} | 한도 초과 차례  {na} {oover[0]}번  {nb} {oover[1]}번')
+        _say(f'연산 (차례당) 최대  {na} {omax[0]:,}  {nb} {omax[1]:,} | 한도 초과 차례  {na} {oover[0]}번  {nb} {oover[1]}번')
     if err[0] or err[1]:
         _say(f'오류 사건  {na} {err[0]}번  {nb} {err[1]}번  (wumpus check 로 원인을 본다)')
     if save_dir:
@@ -312,7 +312,7 @@ def main(argv=None):
     p.add_argument('--name', help='리플레이 파일 이름 (확장자 빼고)')
     p.add_argument('--open', action='store_true', help='끝나면 뷰어를 브라우저로 연다')
     p.add_argument('--no-html', action='store_true', help='.json 만 쓰고 .html 은 안 쓴다')
-    p.add_argument('--time-limit', type=float, default=None, help='차례당 시간 한도 ms (넘기면 그 차례 행동을 버린다)')
+    p.add_argument('--time-limit', type=float, default=None, help='차례당 시간 한도 ms (넘기면 그 차례 행동을 버린다). 기본 1000 (시간 안전망), 0 이면 끔')
     p.add_argument('--no-ops-limit', action='store_true', help='연산 한도를 끈다 (빠르지만 공식 규칙이 아니다)')
     p.set_defaults(fn=cmd_run)
 

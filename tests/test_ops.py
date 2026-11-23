@@ -1,4 +1,4 @@
-"""연산 한도 (봇 코드 실행 줄 수) 시험."""
+"""연산 한도 (유닛마다 차례당 한도, 첫 차례는 넉넉히) · 허용 모듈 · 시간 안전망 시험."""
 import os
 import sys
 import unittest
@@ -6,7 +6,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from wumpus.engine import Game  # noqa: E402
 from wumpus.maps import load_map  # noqa: E402
-from wumpus.api import OPS_TURN_MAX, OPS_TURN_MIN  # noqa: E402
+from wumpus.api import OPS_TURN, OPS_FIRST  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAP = os.path.join(ROOT, 'maps', 'temple_gate.json')
@@ -16,13 +16,13 @@ def src(name):
     return open(os.path.join(ROOT, 'bots', name, 'main.py'), encoding='utf-8').read()
 
 
-def play(a, b, rounds=None, ops=True):
+def play(a, b, rounds=None, ops=True, time_limit=None):
     from wumpus import engine
     old = engine.MAX_ROUNDS
     if rounds:
         engine.MAX_ROUNDS = rounds
     try:
-        return Game(load_map(MAP), [a, b], ['a', 'b'], seed=1, ops_limit=ops).play()
+        return Game(load_map(MAP), [a, b], ['a', 'b'], seed=1, ops_limit=ops, time_limit_ms=time_limit).play()
     finally:
         engine.MAX_ROUNDS = old
 
@@ -59,7 +59,7 @@ class Ops(unittest.TestCase):
         self.assertTrue(errs and all('연산 한도 초과' in e[2] for e in errs))
         self.assertEqual(rep['meta']['rounds'], 30)            # 경기는 끝까지 돈다
         self.assertGreater(rep['meta']['ops'][0]['over'], 0)
-        self.assertLessEqual(rep['meta']['ops'][0]['max'], OPS_TURN_MAX + 1)
+        self.assertLessEqual(rep['meta']['ops'][0]['max'], OPS_TURN + 1)
 
     def test_bare_except_cannot_escape(self):
         rep = play(SWALLOW, src('random'), rounds=10)
@@ -80,12 +80,52 @@ class Ops(unittest.TestCase):
         a, b = map(int, msg.split(': ')[1].split())
         self.assertGreater(a, b)
         self.assertGreaterEqual(a - b, 50)                    # 반복 50번은 적어도 50줄
-        self.assertGreaterEqual(a, OPS_TURN_MIN)
+        self.assertLessEqual(a, OPS_TURN)                     # 세 번째 차례: 첫 차례 몫은 이미 끝났다
 
     def test_example_bots_fit_budget(self):
         rep = play(src('logic'), src('starter'), rounds=300)
         self.assertEqual(rep['meta']['ops'][0]['over'], 0)
         self.assertEqual(rep['meta']['ops'][1]['over'], 0)
+
+
+    def test_one_line_loops_are_counted(self):
+        # 한 줄에 몰아 쓴 반복도 도는 만큼 센다 (줄만 세면 공짜가 된다)
+        for body in ("for i in range(40000): pass", "i = 0\n    while i < 40000: i += 1", "a = [i for i in range(40000)]",
+                     "a = sum(i for i in range(40000))", "a = list(map(lambda i: i, range(40000)))"):
+            bot = "n = [0]\ndef turn(me, view, memory):\n    n[0] += 1\n    if n[0] < 2:\n        return None\n    " + body + "\n"
+            rep = play(bot, src('random'), rounds=4)
+            self.assertGreater(rep['meta']['ops'][0]['over'], 0, body)
+
+    def test_first_turn_is_generous_and_nothing_accumulates(self):
+        # 첫 차례 (불러오기 + 첫 turn) 는 OPS_FIRST 까지, 그 뒤로는 쉬어도 쌓이지 않고 늘 OPS_TURN
+        bot = ("table = [i for i in range(60000)]\n"
+               "n = [0]\n"
+               "def turn(me, view, memory):\n"
+               "    n[0] += 1\n"
+               "    if n[0] == 1 or n[0] == 30:\n"
+               "        for i in range(20000):\n"
+               "            pass\n"
+               "    return None\n")
+        rep = play(bot, src('random'), rounds=3)
+        self.assertEqual(rep['meta']['ops'][0]['over'], 0)          # 불러오기 6만 + 첫 차례 6만 < 20만
+        rep = play(bot, src('random'), rounds=40)
+        self.assertGreater(rep['meta']['ops'][0]['over'], 0)        # 29 차례를 쉬었어도 30번째의 6만은 넘는다
+        self.assertGreater(OPS_FIRST, OPS_TURN)
+
+    def test_only_allowed_modules_and_no_exec(self):
+        for line, word in (("import os", "모듈"), ("import numpy", "모듈"), ("exec('x = 1')", "NameError"), ("open('x')", "NameError")):
+            rep = play(line + "\ndef turn(me, view, memory):\n    return None\n", src('random'), rounds=2)
+            errs = [e[2] for e in errors(rep)]
+            self.assertTrue(errs and word in errs[0], (line, errs[:1]))
+        ok = "import math, heapq, random\nfrom collections import deque\nfrom wumpus.api import Move\ndef turn(me, view, memory):\n    return None\n"
+        self.assertEqual(errors(play(ok, src('random'), rounds=2)), [])
+
+    def test_time_safety_net(self):
+        # 내장 함수에 큰 일을 시키면 연산으로는 조금만 세지만, 시간 안전망이 그 차례를 버린다
+        bot = "def turn(me, view, memory):\n    sum(range(3 * 10**6))\n    return None\n"
+        rep = play(bot, src('random'), rounds=3, time_limit=5)
+        self.assertTrue(any('시간 초과' in e[2] for e in errors(rep)))
+        self.assertGreater(rep['meta']['time_ms'][0]['over'], 0)
 
 
 if __name__ == '__main__':

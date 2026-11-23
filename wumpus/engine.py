@@ -8,7 +8,7 @@ from .ops import meter, OpsExceeded
 from .api import (DIRS, EXPLORER, ARCHER, CAMP, EMPTY, WALL, GOLD, PIT, CAMP_TILE,
                   MAX_ROUNDS, MEMORY_SIZE, MAX_UNITS, START_BANK, INCOME_EVERY, COST, HP,
                   VISION_R2, ATTACK_DAMAGE, CAMP_ATTACK, CARRY_MAX, REGROW_EVERY, cheb, Move, Mine, Attack, Spawn,
-                  OPS_PER_ROUND, OPS_BANK_MAX, OPS_TURN_MAX, OPS_TURN_MIN,
+                  OPS_TURN, OPS_FIRST, TIME_SAFETY_MS, ALLOWED_IMPORTS, BLOCKED_BUILTINS,
                   Shoot, Push, AGENT_HP, AGENT_CARRY, WUMPUS_HP_A, WUMPUS_STRIKE_A, WUMPUS_WAKE_A, WUMPUS_HOARD_A, WUMPUS_HP_U, WUMPUS_ROAR, WUMPUS_ROAR_DMG, WUMPUS_REGEN, WUMPUS_HOARD_U, WUMPUS_RESPAWN, HP_UNIFIED, CARRY, MELEE_RANGE, BOW_RANGE, sight_cells, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
 
 TEAM_NAMES = ('붉은 원정대', '푸른 원정대')
@@ -37,6 +37,23 @@ class Unit:
         self.prev_hp = None     # 지난 차례 끝 체력 (아픔 지각)
 
 
+def _bot_import(name, globals=None, locals=None, fromlist=(), level=0):
+    """봇이 불러올 수 있는 모듈은 api.ALLOWED_IMPORTS 뿐이다 (엔진 속 · 파일 · 큰 계산 모듈을 막는다)."""
+    if level or name not in ALLOWED_IMPORTS:
+        raise ImportError(f"봇에서는 '{name}' 모듈을 쓸 수 없다 (쓸 수 있는 것: {', '.join(ALLOWED_IMPORTS[1:])})")
+    return __import__(name, globals, locals, fromlist, level)
+
+
+def _make_builtins():
+    import builtins
+    b = {k: v for k, v in vars(builtins).items() if k not in BLOCKED_BUILTINS}
+    b['__import__'] = _bot_import
+    return b
+
+
+_BOT_BUILTINS = _make_builtins()
+
+
 class Me:
     """봇에게 주는 자기 정보 (복사본)."""
 
@@ -46,7 +63,7 @@ class Me:
         self.arrows = u.arrows
         self.round = g.round
         self.bank = g.bank[u.team]
-        self.ops_bank = g.ops_bank[u.team]          # 팀 연산 예산 (이 차례를 시작할 때)
+        self.ops_limit = u.ops_first if u.ops_first else OPS_TURN   # 이 차례에 쓸 수 있는 연산
 
 
 class UnitInfo:
@@ -166,15 +183,14 @@ class Game:
         self.wawake = {}                # 굴 -> 깨어 있는 마지막 라운드
         self.wdead = {}                 # 굴 -> 쓰러진 라운드
         self.seed = seed
-        self.time_limit_ms = time_limit_ms
+        self.time_limit_ms = TIME_SAFETY_MS if time_limit_ms is None else time_limit_ms   # 시간 안전망 (0 이면 끔)
         self.tstat = [[0.0, 0.0, 0, 0], [0.0, 0.0, 0, 0]]   # 팀마다 [합 ms, 최대 ms, 차례 수, 시간 초과 수]
         self.sources = bot_sources
         self.names = bot_names
         self.codes = [compile(src, f'<bot {i}: {bot_names[i]}>', 'exec') for i, src in enumerate(bot_sources)]
-        # 연산 한도: 팀마다 예산 (줄 수). 차례마다 min(OPS_TURN_MAX, 예산) 까지 (늘 OPS_TURN_MIN 은 허락), 쓴 만큼 뺀다
+        # 연산 한도: 유닛마다 차례당 OPS_TURN (첫 차례는 불러오기와 합쳐 OPS_FIRST). 남겨도 쌓이지 않는다
         self.ops_on = bool(ops_limit)
-        self.ops_bank = [OPS_BANK_MAX, OPS_BANK_MAX]
-        self.ostat = [[0, 0, 0, 0], [0, 0, 0, 0]]   # 팀마다 [합 줄, 최대 줄, 차례 수, 한도 초과 수]
+        self.ostat = [[0, 0, 0, 0], [0, 0, 0, 0]]   # 팀마다 [합, 최대 (첫 차례 빼고), 차례 수, 한도 초과 수]
         self.meter = meter()
         if self.ops_on:
             for c in self.codes:
@@ -264,9 +280,13 @@ class Game:
         u.hp = self.HPT[kind]
         self.next_id += 1
         self.at[(x, y)] = u
-        ns = {'__name__': f'bot_{team}_{u.id}'}
+        ns = {'__name__': f'bot_{team}_{u.id}', '__builtins__': _BOT_BUILTINS}
+        u.ops_first = OPS_FIRST                    # 첫 차례 몫: 불러오기에 쓰고 남은 만큼을 첫 turn 호출에 쓴다
         try:
-            self._ops_run(team, lambda: exec(self.codes[team], ns))
+            try:
+                self._ops_run(team, lambda: exec(self.codes[team], ns), OPS_FIRST, first=True)
+            finally:
+                u.ops_first = max(OPS_TURN, OPS_FIRST - self.meter.count) if self.ops_on else OPS_FIRST
             if not callable(ns.get('turn')):
                 raise AttributeError('turn 함수가 없다')
             u.ns = ns
@@ -276,19 +296,19 @@ class Game:
         return u
 
     # ---------- 연산 한도 ----------
-    def _ops_run(self, team, fn):
-        """봇 코드를 연산 한도 안에서 실행한다. 한도를 넘으면 OpsExceeded 를 던진다 (쓴 줄은 예산에서 뺀다)."""
+    def _ops_run(self, team, fn, limit=OPS_TURN, first=False):
+        """봇 코드를 연산 한도 안에서 실행한다. 한도를 넘으면 OpsExceeded 를 던진다."""
         if not self.ops_on:
             return fn()
-        limit = max(OPS_TURN_MIN, min(OPS_TURN_MAX, self.ops_bank[team]))
         self.meter.start(limit)
         try:
             r = fn()
         finally:
             n = self.meter.stop()
-            self.ops_bank[team] -= min(n, limit)
             st = self.ostat[team]
-            st[0] += n; st[1] = max(st[1], n); st[2] += 1
+            st[0] += n; st[2] += 1
+            if not first:
+                st[1] = max(st[1], n)
         if n > limit:                       # 봇이 OpsExceeded 를 잡아 삼켰어도 넘긴 차례는 넘긴 것
             raise OpsExceeded()
         return r
@@ -321,11 +341,12 @@ class Game:
             random.seed(self.seed * 1000003 + self.round * 1009 + u.id)
             t0 = time.perf_counter()
             try:
-                act = self._ops_run(u.team, lambda: u.ns['turn'](me, view, self.memory[u.team]))
+                first, u.ops_first = u.ops_first, 0
+                act = self._ops_run(u.team, lambda: u.ns['turn'](me, view, self.memory[u.team]), first or OPS_TURN, first=bool(first))
             except OpsExceeded:
                 act = None
                 self.ostat[u.team][3] += 1
-                self.events.append(['err', u.id, f'연산 한도 초과: 이번 차례 {self.meter.limit} 줄 (팀 예산 {max(0, self.ops_bank[u.team])})'])
+                self.events.append(['err', u.id, f'연산 한도 초과: 이번 차례 한도 {self.meter.limit}'])
             except Exception as e:
                 act = None
                 self.events.append(['err', u.id, f'{type(e).__name__}: {e}'[:160]])
@@ -684,9 +705,6 @@ class Game:
     def play(self):
         for r in range(1, MAX_ROUNDS + 1):
             self.round = r
-            if self.ops_on:
-                for t in (0, 1):
-                    self.ops_bank[t] = min(OPS_BANK_MAX, max(0, self.ops_bank[t]) + OPS_PER_ROUND)
             if r % INCOME_EVERY == 0:
                 self.bank[0] += 1
                 self.bank[1] += 1

@@ -7,14 +7,15 @@
 - 대칭 추론: 관측과 모순되는 대칭 후보를 지워 적 야영지 위치를 찾는다.
 - A*: 안전한 칸은 비용 1, 모르는 칸은 비싸게, 의심 칸은 더 비싸게. 휴리스틱은 맨해튼 거리 (허용 가능).
 
-연산 한도 (팀마다 라운드당 50,000 줄) 에 맞추려고: 추론은 새로 바뀐 사실 주변만 다시 보고 (증분), 이웃 칸은 표로,
+연산 한도 (유닛마다 한 차례에 10,000) 에 맞추려고: 추론은 새로 바뀐 사실 주변만 다시 보고 (증분), 이웃 칸은 표로,
 길 찾기는 칸 비용을 기억하고 지난 길을 다시 쓰며, 한 번에 펼칠 칸 수에 상한 (SEARCH_CAP) 을 둔다.
+한도 직전 (OPS_RESERVE) 이면 찾기를 멈추고 목표에 가장 가까이 간 칸까지만 간다 (빈 답 금지).
 유닛마다 이 파일이 따로 실행되므로 전역 변수 K 는 그 유닛만의 지식 베이스다.
 팀 공유 memory (16칸) 쓰임: [0] 지운 대칭 비트, [1],[2] 적 야영지 x+1, y+1, [3] 만든 궁수 수, [4..15] 모험가 위치 (한 명당 한 칸: 자리 · 라운드 · 번호를 묶음).
 """
 import heapq
 
-from wumpus.api import (MAX_ROUNDS, Move, Mine, Shoot, Push, Spawn, Attack, sight_cells, BOW_RANGE, MELEE_RANGE, CARRY, debug, DIRS, mirror, cheb, direction_to,
+from wumpus.api import (ops_left, MAX_ROUNDS, Move, Mine, Shoot, Push, Spawn, Attack, sight_cells, BOW_RANGE, MELEE_RANGE, CARRY, debug, DIRS, mirror, cheb, direction_to,
                         EXPLORER, ARCHER, CAMP, WALL, GOLD, PIT, CAMP_TILE,
                         CARRY_MAX, SAFE_RADIUS, COST, ARROW_RANGE, ARCHER_CARRY, WUMPUS_CLEAR, ARROWS_MAX)
 
@@ -22,7 +23,8 @@ SYMS = ('H', 'V', 'R')
 BIT = {'H': 1, 'V': 2, 'R': 4}
 SYM_KO = {'H': '좌우', 'V': '상하', 'R': '회전'}
 RALLY = 3            # 궁수가 이만큼 모이면 출발
-SEARCH_CAP = 600     # 길 찾기 한 번에 펼칠 칸 수 상한 (연산 한도 안에 들도록)
+SEARCH_CAP = 600     # 길 찾기 한 번에 펼칠 칸 수 상한
+OPS_RESERVE = 2500   # 비상 정지: 이번 차례 남은 연산이 이보다 적으면 길 찾기를 멈춘다 (뒤처리 몫)
 
 K = None             # 이 유닛의 지식 베이스
 plan_i = 0           # 야영지의 생산 순서 위치
@@ -55,6 +57,7 @@ class Knowledge:
         self._cv, self._cc, self._fail = None, {}, {}   # 길 찾기 캐시 (칸 비용 · 실패한 탐색)
         self.now = 0
         self._last = None                       # 지난번에 찾은 길
+        self._nearw = set()                     # 웜퍼스 굴에서 맨해튼 3 안의 칸 (길 찾기 때 새로 만든다)
         self._add_safe_zone(base)
         # 규칙: 웜퍼스 굴은 야영지에서 체비셰프 WUMPUS_CLEAR 밖에 있다
         for x in range(base[0] - WUMPUS_CLEAR, base[0] + WUMPUS_CLEAR + 1):
@@ -219,17 +222,17 @@ class Knowledge:
 
     def suspect(self, c):
         """바람한 칸에 붙어 있고 안전이 증명되지 않은 칸."""
-        return c not in self.safe and any(self.vib.get(n) for n in self.nb4(c))
+        return c not in self.safe and any([self.vib.get(n) for n in self.N[c]])
 
     def wsuspect(self, c):
         """악취 칸에 붙어 있고 굴이 아님이 증명되지 않은 칸."""
-        return c in self.wump or (c not in self.nw and any(self.smell.get(n) for n in self.nb4(c)))
+        return c in self.wump or (c not in self.nw and any([self.smell.get(n) for n in self.N.get(c, ())]))
 
     # --- A* ---
     def cost(self, c):
         if c in self.walls or c in self.trap or c == self.base or c == self.enemy_base or self.wsuspect(c):
             return None
-        near_w = any(abs(c[0] - w[0]) + abs(c[1] - w[1]) <= 3 for w in self.wump)   # 웜퍼스 공격 거리 (맨해튼 3): 되도록 피한다
+        near_w = c in self._nearw                   # 웜퍼스 공격 거리 (맨해튼 3): 되도록 피한다
         if c in self.safe:
             return 12 if near_w else 1
         return 40 if self.suspect(c) else (20 if near_w else 8)
@@ -242,6 +245,9 @@ class Knowledge:
         ver = (len(self.safe), len(self.trap), len(self.walls), len(self.wump), len(self.nw), len(self.vib), len(self.smell))
         if ver != self._cv:
             self._cv, self._cc, self._fail = ver, {}, {}
+            self._nearw = {(wx + dx, wy + dy) for wx, wy in self.wump for dx in range(-3, 4) for dy in range(abs(dx) - 3, 4 - abs(dx))}
+        if ops_left() < OPS_RESERVE:                 # 비상 정지: 이번 차례에 남은 연산이 적으면 새 길을 찾지 않는다
+            return None
         fkey = (start, frozenset(goals))
         if self.now - self._fail.get(fkey, -99) < 5:
             return None
@@ -261,23 +267,21 @@ class Knowledge:
             if ok:
                 self._last = lp
                 return lp
-        few = len(goals) <= 8
-
-        def h(c):
-            if not few:
-                return 0                            # 목표가 많으면 다익스트라
-            return min(abs(c[0] - g[0]) + abs(c[1] - g[1]) for g in goals)
-
+        gl = list(goals) if len(goals) <= 4 else None   # 목표가 적으면 A*, 많으면 다익스트라 (h = 0)
+        sx, sy = start
         g = {start: 0}
         came = {start: None}
-        pq = [(h(start), 0, start)]
-        work = 0                                    # 일의 양 상한: 칸을 SEARCH_CAP 개 넘게 펼치면 멈춘다 (연산 한도)
+        pq = [(min([abs(sx - a) + abs(sy - b) for a, b in gl]) if gl else 0, 0, start)]
+        work = 0                                    # 일의 양 상한: 칸을 SEARCH_CAP 개 넘게 펼치면 멈춘다
+        best, best_h, cut = None, 1 << 30, False    # 멈췄을 때 쓸 '목표에 가장 가까이 간 칸'
+        N, push, pop = self.N, heapq.heappush, heapq.heappop
         while pq:
-            f, gc, c = heapq.heappop(pq)
+            f, gc, c = pop(pq)
             if gc > g[c]:
                 continue
             work += 1
-            if work > SEARCH_CAP:
+            if work > SEARCH_CAP or (work & 15 == 0 and ops_left() < OPS_RESERVE):   # 한도 직전이면 멈춘다 (남은 연산은 비상 정지에만 읽는다)
+                cut = True
                 break
             if c in goals:
                 path = []
@@ -286,17 +290,25 @@ class Knowledge:
                     c = came[c]
                 self._last = path[::-1]
                 return self._last
-            for n in self.N[c]:
+            if gl and f - gc < best_h:
+                best, best_h = c, f - gc
+            for n in N[c]:
                 step = cc.get(n)
                 if step is None:
                     step = cc[n] = cost(n) or 0      # 0 = 지나갈 수 없는 칸
-                if not step or n in occupied:
-                    continue                        # 다른 유닛이 선 칸은 지나지 않는다
                 ng = gc + step
-                if ng < g.get(n, 1 << 30):
+                if step and n not in occupied and ng < g.get(n, 1 << 30):   # 다른 유닛이 선 칸은 지나지 않는다
                     g[n] = ng
                     came[n] = c
-                    heapq.heappush(pq, (ng + h(n), ng, n))
+                    push(pq, (ng + min([abs(n[0] - a) + abs(n[1] - b) for a, b in gl]) if gl else ng, ng, n))
+        if cut:                                     # 끝까지 못 찾았다: 목표 쪽으로 가장 가까이 간 칸까지만 간다 (빈 답 금지). 실패로 기억하지 않는다
+            if best is None or best == start:
+                return None
+            path = []
+            while best is not None:
+                path.append(best)
+                best = came[best]
+            return path[::-1]
         self._fail[fkey] = self.now
         return None
 

@@ -9,7 +9,8 @@
   지각: view.breeze 바람 · view.stench 악취 · view.glitter 반짝임 · view.bump 부딪힘
         view.footsteps 발소리 · view.hurt 아픔 · view.screams 비명
 - 한 턴에 행동 하나: Move(d) · Mine() · Attack(x, y) (상하좌우 옆 칸) · None (쉬기)
-- 연산 한도: 팀마다 라운드당 50,000 줄 (봇 코드 실행 줄 수). 넘은 차례는 행동이 버려진다 (ops_left() 로 남은 양을 본다).
+- 연산 한도: 유닛마다 한 차례에 10,000 (첫 차례만 200,000). 넘은 차례는 행동이 버려진다. 그래서 길 찾기에 상한 (SEARCH_CAP) 을 둔다.
+- 불러올 수 있는 모듈: math · heapq · collections · itertools · functools · random · bisect · operator · copy · wumpus.api
 - 팀끼리 나눌 정보는 memory (32비트 정수 16칸, 맵 전체는 못 담는다) 에 적는다.
 
 이 봇이 하는 일 (기본 동작은 다 한다)
@@ -33,6 +34,8 @@ danger = set()       # 바람 · 악취를 느낀 칸 (그 옆 어딘가가 위�
 last_target = None   # 지난 차례에 들어가려던 칸
 bumps = {}           # 칸 -> 연달아 부딪힌 횟수
 swing = 0            # 반격할 때 다음에 칠 방향 번호
+SEARCH_CAP = 220     # 길 찾기 한 번에 펼칠 칸 수 상한 (연산 한도 안에 들도록 일의 양을 직접 센다)
+D4 = tuple(DIRS.values())
 
 
 def turn(me, view, memory):
@@ -56,10 +59,8 @@ def camp_turn(me, view, memory):
 
 # ---------------- 모험가 ----------------
 def neighbors(c, w, h):
-    for dx, dy in DIRS.values():
-        n = (c[0] + dx, c[1] + dy)
-        if 0 <= n[0] < w and 0 <= n[1] < h:
-            yield n
+    x, y = c
+    return [(x + dx, y + dy) for dx, dy in D4 if 0 <= x + dx < w and 0 <= y + dy < h]
 
 
 def adventurer_turn(me, view, memory):
@@ -123,8 +124,16 @@ def go(me, pos, goals, w, h, label):
         return None
     prev = {pos: None}
     q = deque([pos])
+    work = 0
     while q:
         c = q.popleft()
+        work += 1
+        if work > SEARCH_CAP:                       # 상한: 여기까지 본 칸 가운데 목표에 가장 가까운 칸으로 간다 (빈 답을 내지 않는다)
+            gx, gy = min(goals)
+            c = min(prev, key=lambda p: abs(p[0] - gx) + abs(p[1] - gy))
+            goals = {c}
+            if c == pos:
+                return None
         if c in goals:
             while prev[c] != pos and prev[c] is not None:
                 c = prev[c]
