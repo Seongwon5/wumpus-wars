@@ -1583,7 +1583,7 @@ function build() {
     if (SHEETS.ore) {                              // LPC 금맥: 바위 위 금빛 수정
       const tx = SHEETS.ore.tex.clone(); tx.repeat.set(1 / 8, 1); tx.offset.set(7 / 8, 0); tx.needsUpdate = true;
       osp = new THREE.Sprite(new THREE.SpriteMaterial({map: tx, transparent: true, alphaTest: 0.5}));
-      osp.center.set(0.5, 2 / 64); osp.scale.set(1.05, 1.05, 1); osp.renderOrder = 5; osp.userData.lpc = true; osp.material.color.setScalar(0.78);
+      osp.center.set(0.5, 2 / 64); osp.scale.set(1.05, 1.05, 1); osp.renderOrder = 5; osp.userData.lpc = true; osp.material.color.setScalar(0.62);
     } else osp = pxSprite(oreTex(7), 0.95, 0.95, 0.08);
     grp.add(osp);
     const clk = pxSprite(clockTex(0, 12), 0.6, 0.115, 0.5);
@@ -1663,7 +1663,7 @@ function build() {
   root.add(sel);
 
   const oreMax = new Map(R.map.ore.map(o => [o[0] + ',' + o[1], o[2]]));
-  if (AGENT()) { hemi.intensity = 0.16; sun.intensity = 0.42; renderer.toneMappingExposure = 0.78; for (const b of braziers) b.L.distance = 6; }
+  if (AGENT()) { hemi.intensity = 0.085; sun.intensity = 0.2; renderer.toneMappingExposure = 0.78; for (const b of braziers) b.L.distance = 5; rock.mesh.material.color.setScalar(1.7); }   // 동굴은 어둡다: 모험가가 선 칸만 밝다 (applyFog 의 LIT)
   else { hemi.intensity = 0.42; sun.intensity = 1.3; renderer.toneMappingExposure = 1.05; }
   world = {oreMax, revN: -1, root, ground, gBase, rock, pitsCut: true, wallCells, braziers, torchL, dust, ore, traps, bases, wum, loot: new Map(), mind, paths, sel, units: new Map(), fogKey: '', mindKey: ''};
   scene.fog.near = s0 * 1.4; scene.fog.far = s0 * 3.6;
@@ -1712,13 +1712,19 @@ function evOf(g) {
   return e;
 }
 
+const LIT = 6;                                   // 모험가가 선 칸의 바닥 밝기 (어두운 바닥의 몇 배)
 function applyFog(fi, team, vis, seen) {
   const key = fi + '|' + team;
   if (key === world.fogKey) return;
   world.fogKey = key;
   const fac = i => !vis ? 1 : vis[i] ? 1 : seen[i] ? 0.4 : 0.09;
+  const lit = new Set();                         // 모험가 · 야영지가 선 칸만 밝다 ("자기 칸만 느낀다")
+  if (AGENT()) {
+    for (const u of F[fi].u) if (team < 0 || u[1] === team || (vis && vis[u[4] * W + u[3]])) lit.add(u[4] * W + u[3]);
+    R.map.bases.forEach(([x, y], t) => { if (F[fi].bh[t] > 0) lit.add(y * W + x); });
+  }
   for (let i = 0; i < W * H; i++) {
-    const k = fac(i);
+    const k = fac(i) * (lit.has(i) ? LIT : 1);
     COL.setRGB(world.gBase[i * 3] * k, world.gBase[i * 3 + 1] * k, world.gBase[i * 3 + 2] * k);
     world.ground.setColorAt(i, COL);
   }
@@ -1888,7 +1894,7 @@ function updateBases(fi, g, a, moving, seen, vis, now) {
       if (b.spr.userData.camp) { const cm = b.spr.userData.camp, k5 = Math.floor(now * 9 + t * 2) % 5; b.spr.material.map.offset.set(((dead ? cm.dead[0] : cm.alive[0]) + k5) / cm.cols, 0); }
       else if (b._k !== key) { b._k = key; b.spr.material.map = campTex(t, dead, dead ? 0 : fr); b.spr.material.needsUpdate = true; }
       const kk = Math.min(1, shake * 14); b.spr.material.color.setRGB(1, 1 - kk * 0.6, 1 - kk * 0.6); }
-    if (t === 0) for (const [k, br] of world.braziers.entries()) { const f2 = 1 + Math.sin(now * 11 + k * 2) * 0.1 + Math.sin(now * 19 + k) * 0.06; br.fl.scale.set(1, f2, 1); br.L.intensity = 9 * f2; if (br.spr.userData.cols) br.spr.material.map.offset.set((Math.floor(now * 8 + k) % 3) / 3, 0);
+    if (t === 0) for (const [k, br] of world.braziers.entries()) { const f2 = 1 + Math.sin(now * 11 + k * 2) * 0.1 + Math.sin(now * 19 + k) * 0.06; br.fl.scale.set(1, f2, 1); br.L.intensity = (AGENT() ? 2.2 : 9) * f2; if (br.spr.userData.cols) br.spr.material.map.offset.set((Math.floor(now * 8 + k) % 3) / 3, 0);
       else { const bf = Math.floor(now * 6 + k) % 2; if (br._f !== bf) { br._f = bf; br.spr.material.map = brazierTex(bf); br.spr.material.needsUpdate = true; } } }
     setHp(b.hp, hp / R.const.hp.B, TC[t].c);
     billboard(b.hp, b.g);
@@ -2521,7 +2527,7 @@ function torches(now) {
   for (const o of world.units.values()) if (o.g.visible && o.flames.length) { o.flames[0].getWorldPosition(TP); list.push([TP.distanceToSquared(controls.target), TP.clone(), o]); }
   list.sort((p, q) => p[0] - q[0]);
   world.torchL.forEach((L, i) => {
-    if (i < list.length) { L.position.copy(list[i][1]); L.intensity = 2.4 + Math.sin(now * 13 + i * 2) * 0.35 + Math.sin(now * 23 + i) * 0.2; }
+    if (i < list.length && !AGENT()) { L.position.copy(list[i][1]); L.intensity = 2.4 + Math.sin(now * 13 + i * 2) * 0.35 + Math.sin(now * 23 + i) * 0.2; }
     else L.intensity = 0;
   });
   const d = world.dust, pos = d.geometry.attributes.position, b = d.userData.base, sd = d.userData.seed;
