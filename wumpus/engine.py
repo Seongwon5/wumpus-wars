@@ -2,14 +2,15 @@
 import os
 import random
 import time
+import types
 
-from . import api
+from . import api, guard
 from .ops import meter, OpsExceeded
 from .api import (DIRS, EXPLORER, ARCHER, CAMP, EMPTY, WALL, GOLD, PIT, CAMP_TILE,
                   MAX_ROUNDS, MEMORY_SIZE, MAX_UNITS, START_BANK, INCOME_EVERY, COST, HP,
                   VISION_R2, ATTACK_DAMAGE, CAMP_ATTACK, CARRY_MAX, REGROW_EVERY, cheb, Move, Mine, Attack, Spawn,
                   OPS_TURN, OPS_FIRST, TIME_SAFETY_MS, ALLOWED_IMPORTS, BLOCKED_BUILTINS,
-                  Shoot, Push, AGENT_HP, AGENT_CARRY, WUMPUS_HP_A, WUMPUS_STRIKE_A, WUMPUS_WAKE_A, WUMPUS_HOARD_A, WUMPUS_HP_U, WUMPUS_ROAR, WUMPUS_ROAR_DMG, WUMPUS_REGEN, WUMPUS_HOARD_U, WUMPUS_RESPAWN, HP_UNIFIED, CARRY, MELEE_RANGE, BOW_RANGE, sight_cells, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
+                  Shoot, Push, _Frozen, AGENT_HP, AGENT_CARRY, WUMPUS_HP_A, WUMPUS_STRIKE_A, WUMPUS_WAKE_A, WUMPUS_HOARD_A, WUMPUS_HP_U, WUMPUS_ROAR, WUMPUS_ROAR_DMG, WUMPUS_REGEN, WUMPUS_HOARD_U, WUMPUS_RESPAWN, HP_UNIFIED, CARRY, MELEE_RANGE, BOW_RANGE, sight_cells, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
 
 TEAM_NAMES = ('붉은 원정대', '푸른 원정대')
 KIND_CODE = {EXPLORER: 'E', ARCHER: 'G', CAMP: 'B'}
@@ -37,24 +38,178 @@ class Unit:
         self.prev_hp = None     # 지난 차례 끝 체력 (아픔 지각)
 
 
-def _bot_import(name, globals=None, locals=None, fromlist=(), level=0):
-    """봇이 불러올 수 있는 모듈은 api.ALLOWED_IMPORTS 뿐이다 (엔진 속 · 파일 · 큰 계산 모듈을 막는다)."""
-    if level or name not in ALLOWED_IMPORTS:
-        raise ImportError(f"봇에서는 '{name}' 모듈을 쓸 수 없다 (쓸 수 있는 것: {', '.join(ALLOWED_IMPORTS[1:])})")
-    return __import__(name, globals, locals, fromlist, level)
+# ---------- 봇에게 주는 것: 내장 함수 · 모듈은 유닛마다 따로 만든 복사본이다 ----------
+# (같이 쓰면 한 봇이 고친 것이 상대 봇 · 엔진 · 다음 판에 남는다)
+_SAFE_BUILTINS = (
+    'abs', 'all', 'any', 'ascii', 'bin', 'bool', 'bytearray', 'bytes', 'callable', 'chr', 'classmethod', 'complex',
+    'dict', 'divmod', 'enumerate', 'filter', 'float', 'format', 'frozenset', 'hasattr', 'hash', 'hex', 'id', 'int',
+    'isinstance', 'issubclass', 'iter', 'len', 'list', 'map', 'max', 'min', 'next', 'object', 'oct', 'ord', 'pow',
+    'print', 'property', 'range', 'repr', 'reversed', 'round', 'set', 'slice', 'sorted', 'staticmethod', 'str',
+    'sum', 'super', 'tuple', 'zip', 'NotImplemented', 'Ellipsis', '__build_class__')
+_NO_EXC = ('SystemExit', 'KeyboardInterrupt', 'GeneratorExit')
 
 
 def _make_builtins():
     import builtins
-    b = {k: v for k, v in vars(builtins).items() if k not in BLOCKED_BUILTINS}
-    b['__import__'] = _bot_import
+    b = {k: getattr(builtins, k) for k in _SAFE_BUILTINS}
+    for k, v in vars(builtins).items():             # 예외 클래스
+        if isinstance(v, type) and issubclass(v, BaseException) and k not in _NO_EXC:
+            b[k] = v
     return b
 
 
 _BOT_BUILTINS = _make_builtins()
+_BUILTIN_EXC = frozenset(v for v in _BOT_BUILTINS.values() if isinstance(v, type) and issubclass(v, BaseException))
+
+_PICK = {       # 파이썬으로 짠 모듈은 줄 이름을 고른다 (속성 이름을 글로 받아 꺼내는 도구를 빼려고)
+    'functools': ('reduce', 'partial', 'lru_cache', 'cache', 'cmp_to_key', 'total_ordering'),
+    'collections': ('deque', 'defaultdict', 'OrderedDict', 'Counter', 'namedtuple', 'ChainMap'),
+    'copy': ('copy', 'deepcopy'),
+}
+_DROP = {'operator': ('attrgetter', 'methodcaller'), 'random': ('SystemRandom',)}
+_PLAIN = (int, float, str, bool, bytes, type(None))
+_NO = object()
 
 
-class Me:
+def _wrap(f):
+    return lambda *a, **k: f(*a, **k)
+
+
+def _share(v, modname):
+    """모듈 속 값 하나를 봇에게 줄 모양으로 바꾼다. 줄 수 없으면 _NO."""
+    if isinstance(v, types.FunctionType):           # 파이썬 함수: 유닛마다 새 껍데기 (함수에 속성을 달아 같이 쓰지 못하게)
+        return _wrap(v)
+    if isinstance(v, type):
+        if isinstance(v, _Frozen) or v.__flags__ & (1 << 8):    # 고칠 수 없는 클래스는 그대로
+            return v
+        try:
+            return type(v)(v.__name__, (v,), {'__module__': modname})   # 고칠 수 있는 클래스: 유닛마다 새 자식 클래스
+        except TypeError:
+            pass
+        try:
+            setattr(v, '_ww_probe', 1)
+        except TypeError:
+            return v
+        delattr(v, '_ww_probe')
+        return _NO
+    if isinstance(v, (types.BuiltinFunctionType, types.MethodType)) or isinstance(v, _PLAIN):
+        return v
+    if isinstance(v, tuple) and all(isinstance(x, _PLAIN) for x in v):
+        return v
+    return _NO
+
+
+def _make_importer():
+    """유닛 하나가 쓸 import. 허용 모듈 (api.ALLOWED_IMPORTS) 의 복사본만 준다."""
+    cache = {}
+
+    def proxy(name):
+        m = cache.get(name)
+        if m is not None:
+            return m
+        m = cache[name] = types.ModuleType(name)
+        if name == 'wumpus':
+            m.api = proxy('wumpus.api')
+            return m
+        own = name == 'wumpus.api'
+        real = api if own else __import__(name)
+        keep, drop = _PICK.get(name), _DROP.get(name, ())
+        for k, v in list(vars(real).items()):
+            if k.startswith('_') or k in drop or (keep is not None and k not in keep):
+                continue
+            if own and isinstance(v, dict):         # DIRS · COST · HP ... 는 엔진도 쓰는 표다. 복사본을 준다
+                v = dict(v)
+            elif not (own and v is api.debug):
+                v = _share(v, name)
+            if v is not _NO:
+                setattr(m, k, v)
+        return m
+
+    def bot_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if level or name not in ALLOWED_IMPORTS:
+            raise ImportError(f"봇에서는 '{name}' 모듈을 쓸 수 없다 (쓸 수 있는 것: {', '.join(ALLOWED_IMPORTS[1:])})")
+        return proxy(name) if fromlist else proxy(name.split('.')[0])
+
+    return bot_import
+
+
+def _plain_repr(o, depth=0):
+    """기본 값만 글로 바꾼다 (봇이 만든 객체의 __repr__ · __str__ 은 부르지 않는다)."""
+    t = type(o)
+    if t in (int, float, bool, type(None)):
+        return repr(o)
+    if t is str:
+        return repr(o[:80])
+    if t in (tuple, list) and depth < 2 and len(o) <= 8:
+        inner = ', '.join(_plain_repr(x, depth + 1) for x in o)
+        return f'({inner})' if t is tuple else f'[{inner}]'
+    return '<...>'
+
+
+def _err_text(e):
+    """봇이 낸 예외를 기록용 글로. 봇 코드를 부르지 않는다."""
+    t = type(e)
+    name = type.__dict__['__name__'].__get__(t)
+    if t not in _BUILTIN_EXC:
+        return name
+    args = BaseException.__dict__['args'].__get__(e)
+    if type(args) is not tuple or not args:
+        return name
+    if len(args) == 1 and type(args[0]) is str:
+        return f'{name}: {args[0]}'[:160]
+    return f"{name}: {', '.join(_plain_repr(a) for a in args[:4])}"[:160]
+
+
+def _clean_act(a):
+    """봇이 돌려준 행동 하나를 엔진의 새 행동으로 옮긴다. 종류 · 값이 정확히 맞지 않으면 None."""
+    t = type(a)
+    try:
+        if t is Move or t is Shoot or t is Push:
+            d = a.d
+            return t(d) if type(d) is str and d in DIRS else None
+        if t is Mine:
+            return Mine()
+        if t is Attack:
+            x, y = a.x, a.y
+            return Attack(x, y) if type(x) is int and type(y) is int and abs(x) < 10000 and abs(y) < 10000 else None
+        if t is Spawn:
+            k, d = a.kind, a.d
+            return Spawn(k, d) if type(k) is str and type(d) is str and k in COST and d in DIRS else None
+    except AttributeError:                          # 값이 비어 있는 행동
+        return None
+    return None
+
+
+def _debug_dump():
+    """디버그 표시를 리플레이에 넣을 모양으로. 봇이 넣은 값은 종류를 확인하고 옮긴다."""
+    d = api.debug
+    out = {}
+    try:
+        def cell(c):
+            return type(c) is list and len(c) == 2 and type(c[0]) is int and type(c[1]) is int and abs(c[0]) < 10000 and abs(c[1]) < 10000
+
+        def text(v, n):
+            return type(v) is str and len(v) <= n
+        m, ln, tx = d.marks, d.lines, d.texts
+        if type(m) is list:
+            m = [[c[0], c[1], c[2]] for c in m[:api.Debug.MAX_MARKS] if type(c) is list and len(c) == 3 and cell(c[:2]) and text(c[2], 32)]
+            if m:
+                out['m'] = m
+        if type(ln) is list:
+            ln = [[q[0], [[c[0], c[1]] for c in q[1][:200] if cell(c)]] for q in ln[:8]
+                  if type(q) is list and len(q) == 2 and text(q[0], 32) and type(q[1]) is list]
+            if ln:
+                out['l'] = ln
+        if type(tx) is list:
+            tx = [v for v in tx[:8] if text(v, 200)]
+            if tx:
+                out['t'] = tx
+    except Exception:
+        return {}
+    return out
+
+
+class Me(metaclass=_Frozen):
     """봇에게 주는 자기 정보 (복사본)."""
 
     def __init__(self, u, g):
@@ -66,8 +221,9 @@ class Me:
         self.ops_limit = u.ops_first if u.ops_first else OPS_TURN   # 이 차례에 쓸 수 있는 연산
 
 
-class UnitInfo:
+class UnitInfo(metaclass=_Frozen):
     __slots__ = ('id', 'team', 'kind', 'x', 'y', 'hp', 'carry', 'arrows')
+    alive = True
 
     def __init__(self, u):
         self.id, self.team, self.kind = u.id, u.team, u.kind
@@ -78,12 +234,17 @@ class UnitInfo:
         return f'UnitInfo(#{self.id} {self.kind} team={self.team} ({self.x},{self.y}) hp={self.hp})'
 
 
-class View:
-    """유닛이 지금 보고 느끼는 것."""
+class View(metaclass=_Frozen):
+    """유닛이 지금 보고 느끼는 것. 만들 때 보이는 칸의 값만 복사해 둔다 (게임 전체는 들고 있지 않다)."""
 
     def __init__(self, g, u):
-        self._g = g
-        self._vis = g.vision(u)
+        vis = g.vision(u)
+        self._vis = vis
+        self._tile = {c: g.public_tile(c[0], c[1]) for c in vis}
+        self._gold = {c: g.ore.get(c, 0) for c in vis}
+        self._arrows = {c: g.ground_arrows.get(c, 0) for c in vis}
+        self._loot = {c: g.loot.get(c, 0) for c in vis}
+        self._at = {c: UnitInfo(v) for c in vis for v in (g.at.get(c),) if v is not None and v.alive}
         self.width, self.height = g.w, g.h
         self.round = g.round
         self.team = u.team
@@ -115,31 +276,31 @@ class View:
         """보이는 칸이면 '.', '#', 'G', 'P', 'C' 중 하나. 안 보이면 None. 숨은 구덩이는 '.' 로 보인다."""
         if (x, y) not in self._vis:
             return None
-        return self._g.public_tile(x, y)
+        return self._tile.get((x, y))
 
     def gold(self, x, y):
         if (x, y) not in self._vis:
             return None
-        return self._g.ore.get((x, y), 0)
+        return self._gold.get((x, y), 0)
 
     def arrows_at(self, x, y):
         """보이는 칸에 떨어진 화살 수. 안 보이면 None."""
         if (x, y) not in self._vis:
             return None
-        return self._g.ground_arrows.get((x, y), 0)
+        return self._arrows.get((x, y), 0)
 
     def loot(self, x, y):
         """보이는 칸에 떨어진 금 (쓰러진 유닛의 짐 · 웜퍼스 보물). 안 보이면 None."""
         if (x, y) not in self._vis:
             return None
-        return self._g.loot.get((x, y), 0)
+        return self._loot.get((x, y), 0)
 
     def units(self):
         """보이는 유닛 목록 (야영지 포함, 자기 자신 포함)."""
-        g = self._g
+        at = self._at
         out = []
         for c in self._vis:
-            v = g.at.get(c)
+            v = at.get(c)
             if v is not None and v.alive:
                 out.append(UnitInfo(v))
         out.sort(key=lambda v: v.id)
@@ -147,7 +308,8 @@ class View:
 
 
 class Game:
-    def __init__(self, gmap, bot_sources, bot_names, seed=0, time_limit_ms=None, rules=None, ops_limit=True):
+    def __init__(self, gmap, bot_sources, bot_names, seed=0, time_limit_ms=None, rules=None, ops_limit=True, turn_cb=None):
+        self.turn_cb = turn_cb          # 봇 코드를 부르기 직전에 팀 번호를 알린다 (경기가 멈췄을 때 누구 차례였는지 알려고)
         self.rules = dict(RULES)
         if rules:
             self.rules.update(rules)
@@ -187,14 +349,17 @@ class Game:
         self.tstat = [[0.0, 0.0, 0, 0], [0.0, 0.0, 0, 0]]   # 팀마다 [합 ms, 최대 ms, 차례 수, 시간 초과 수]
         self.sources = bot_sources
         self.names = bot_names
-        self.codes = [compile(src, f'<bot {i}: {bot_names[i]}>', 'exec') for i, src in enumerate(bot_sources)]
+        # 제출 코드 검사: 모든 봇이 거친다. 걸린 봇은 실격 (코드를 실행하지 않는다)
+        self.rejected = [guard.check(src) for src in bot_sources]
+        self.codes = [None if self.rejected[i] else compile(src, f'<bot {i}: {bot_names[i]}>', 'exec') for i, src in enumerate(bot_sources)]
         # 연산 한도: 유닛마다 차례당 OPS_TURN (첫 차례는 불러오기와 합쳐 OPS_FIRST). 남겨도 쌓이지 않는다
         self.ops_on = bool(ops_limit)
         self.ostat = [[0, 0, 0, 0], [0, 0, 0, 0]]   # 팀마다 [합, 최대 (첫 차례 빼고), 차례 수, 한도 초과 수]
         self.meter = meter()
         if self.ops_on:
             for c in self.codes:
-                self.meter.watch(c)
+                if c is not None:
+                    self.meter.watch(c)
             self.meter.watch_host(Me, View, UnitInfo, *[v for k, v in vars(api).items()
                                                         if not k.startswith('_') and (isinstance(v, type) or callable(v)) and getattr(v, '__module__', '') == api.__name__])
         self.bank = [START_BANK, START_BANK]
@@ -280,7 +445,14 @@ class Game:
         u.hp = self.HPT[kind]
         self.next_id += 1
         self.at[(x, y)] = u
-        ns = {'__name__': f'bot_{team}_{u.id}', '__builtins__': _BOT_BUILTINS}
+        if self.codes[team] is None:               # 실격한 봇: 실행하지 않는다
+            u.ops_first = 0
+            return u
+        b = dict(_BOT_BUILTINS)
+        b['__import__'] = _make_importer()
+        ns = {'__name__': f'bot_{team}_{u.id}', '__builtins__': b}
+        if self.turn_cb:
+            self.turn_cb(team)
         u.ops_first = OPS_FIRST                    # 첫 차례 몫: 불러오기에 쓰고 남은 만큼을 첫 turn 호출에 쓴다
         try:
             try:
@@ -290,8 +462,10 @@ class Game:
             if not callable(ns.get('turn')):
                 raise AttributeError('turn 함수가 없다')
             u.ns = ns
-        except (Exception, OpsExceeded) as e:  # 봇 파일 자체가 깨졌으면 그 유닛은 아무것도 안 한다
-            msg = f'연산 한도 초과 (봇 파일 첫 실행)' if isinstance(e, OpsExceeded) else f'{type(e).__name__}: {e}'
+        except KeyboardInterrupt:
+            raise
+        except BaseException as e:             # 봇 파일 자체가 깨졌으면 그 유닛은 아무것도 안 한다
+            msg = '연산 한도 초과 (봇 파일 첫 실행)' if isinstance(e, OpsExceeded) else _err_text(e)
             self.events.append(['err', u.id, f'불러오기 실패: {msg}'[:160]])
         return u
 
@@ -339,6 +513,8 @@ class Game:
             u.bump = False                          # 지각은 한 번만 (다음 차례엔 새로)
             u.prev_hp = u.hp
             random.seed(self.seed * 1000003 + self.round * 1009 + u.id)
+            if self.turn_cb:
+                self.turn_cb(u.team)
             t0 = time.perf_counter()
             try:
                 first, u.ops_first = u.ops_first, 0
@@ -347,9 +523,11 @@ class Game:
                 act = None
                 self.ostat[u.team][3] += 1
                 self.events.append(['err', u.id, f'연산 한도 초과: 이번 차례 한도 {self.meter.limit}'])
-            except Exception as e:
+            except KeyboardInterrupt:
+                raise
+            except BaseException as e:
                 act = None
-                self.events.append(['err', u.id, f'{type(e).__name__}: {e}'[:160]])
+                self.events.append(['err', u.id, _err_text(e)])
             ms = (time.perf_counter() - t0) * 1000
             ts = self.tstat[u.team]
             ts[0] += ms; ts[1] = max(ts[1], ms); ts[2] += 1
@@ -357,22 +535,24 @@ class Game:
                 act = None; ts[3] += 1
                 self.events.append(['err', u.id, f'시간 초과: {ms:.1f} ms > {self.time_limit_ms} ms'])
             self._fix_memory(u.team)
-        d = api.debug.dump()
+        d = _debug_dump()
         if d:
             self.debug[u.id] = d
-        if isinstance(act, (list, tuple)):              # (이동, 행동): 광부만 둘 다, 나머지는 첫 행동만
-            acts = [a for a in act if a is not None]
+        # 봇이 돌려준 값은 종류가 정확히 맞을 때만 받는다 (봇이 만든 객체의 코드를 엔진이 부르지 않는다)
+        if type(act) in (list, tuple):                  # (이동, 행동): 광부만 둘 다, 나머지는 첫 행동만
+            acts = [a for a in act[:8] if a is not None]
             if self.rules['unified'] and u.kind == EXPLORER and not self.rules['agent']:
-                mv = next((a for a in acts if isinstance(a, Move)), None)
-                ot = next((a for a in acts if not isinstance(a, Move)), None)
-                if mv is not None:
-                    self._apply(u, mv)
-                if ot is not None and u.alive:
-                    self._apply(u, ot)
-            elif acts:
-                self._apply(u, acts[0])
-        elif act is not None:
-            self._apply(u, act)
+                mv = next((a for a in acts if type(a) is Move), None)
+                ot = next((a for a in acts if type(a) is not Move), None)
+                todo = [mv, ot]
+            else:
+                todo = acts[:1]
+        else:
+            todo = [act]
+        for a in todo:
+            a = _clean_act(a) if a is not None else None
+            if a is not None and u.alive:
+                self._apply(u, a)
         if u.alive and u.kind == ARCHER and self.rules['arrows'] and u.arrows < ARROWS_MAX:
             b = self.bases[u.team]
             if cheb(u.x, u.y, b.x, b.y) <= 1:
@@ -398,9 +578,7 @@ class Game:
         mem = self.memory[team]
         fixed = []
         for v in list(mem[:MEMORY_SIZE]):
-            try:
-                v = int(v)
-            except Exception:
+            if type(v) is not int:                # 정수만 받는다 (다른 것은 0)
                 v = 0
             v &= 0xFFFFFFFF                       # 32비트 부호 있는 정수로 자른다
             fixed.append(v - (1 << 32) if v >= (1 << 31) else v)
@@ -703,6 +881,12 @@ class Game:
 
     # ---------- 경기 ----------
     def play(self):
+        if any(self.rejected):                          # 코드 검사에 걸린 봇은 경기 없이 진다
+            bad = [t for t in (0, 1) if self.rejected[t]]
+            self.over = True
+            self.winner = -1 if len(bad) == 2 else 1 - bad[0]
+            self.reason = '실격: 코드 검사 불합격 (' + ', '.join(str(self.names[t]) for t in bad) + ')'
+            return self.replay()
         for r in range(1, MAX_ROUNDS + 1):
             self.round = r
             if r % INCOME_EVERY == 0:
@@ -750,6 +934,7 @@ class Game:
                 'score': list(self.score), 'map': getattr(m, 'name', ''),
                 'time_ms': [{'avg': round(t[0] / max(1, t[2]), 3), 'max': round(t[1], 3), 'turns': t[2], 'over': t[3]} for t in self.tstat],
                 'time_limit_ms': self.time_limit_ms,
+                'rejected': [list(v) for v in self.rejected],
                 'ops': [{'avg': round(o[0] / max(1, o[2])), 'max': o[1], 'turns': o[2], 'over': o[3]} for o in self.ostat] if self.ops_on else None,
             },
             'const': {
@@ -818,11 +1003,11 @@ def resolve_bot(spec, bots_dir='bots'):
     raise FileNotFoundError(f'봇을 찾을 수 없다: {spec} (bots/<이름>/main.py 또는 .py 파일 경로)')
 
 
-def run_match(gmap, bot_paths, seed=0, names=None, time_limit_ms=None, rules=None, ops_limit=True):
+def run_match(gmap, bot_paths, seed=0, names=None, time_limit_ms=None, rules=None, ops_limit=True, turn_cb=None):
     sources, auto = [], []
     for p in bot_paths:
         path, name = resolve_bot(p)
         with open(path, encoding='utf-8') as f:
             sources.append(f.read())
         auto.append(name)
-    return Game(gmap, sources, names or auto, seed, time_limit_ms, rules, ops_limit).play()
+    return Game(gmap, sources, names or auto, seed, time_limit_ms, rules, ops_limit, turn_cb).play()

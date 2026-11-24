@@ -65,7 +65,7 @@ def turn(me, view, memory):
 ## 4. 고치고 시험하는 순서
 
 ```bash
-python -m wumpus check mybot                  # 1) 오류 · 시간 점검 (양쪽 진영 한 판씩)
+python -m wumpus check mybot                  # 1) 코드 검사 · 오류 · 시간 점검 (양쪽 진영 한 판씩)
 python -m wumpus run mybot random --open      # 2) 한 판을 눈으로 본다
 python -m wumpus scrim mybot logic            # 3) 맵 10개 x 양쪽 진영 = 20판으로 실력을 잰다
 ```

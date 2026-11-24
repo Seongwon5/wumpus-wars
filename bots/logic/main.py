@@ -356,9 +356,9 @@ def turn(me, view, memory):
     K.observe(me, view, memory)
     if me.kind == CAMP:
         return base_turn(me, view, memory)
-    if getattr(view, 'rules', {}).get('agent'):            # 시안 3: 자기 칸만 느끼는 모험가
+    if view.rules.get('agent'):            # 시안 3: 자기 칸만 느끼는 모험가
         return agent_turn(me, view, memory)
-    if getattr(view, 'rules', {}).get('unified'):          # 시안 2: 누구나 캐고 싸운다
+    if view.rules.get('unified'):          # 시안 2: 누구나 캐고 싸운다
         return miner_turn(me, view, memory) if me.kind == EXPLORER else archer_turn(me, view, memory)
     if me.kind == EXPLORER:
         return explorer_turn(me, view)
@@ -370,7 +370,7 @@ PLAN = [EXPLORER, ARCHER, EXPLORER, ARCHER, ARCHER, EXPLORER, ARCHER, ARCHER]
 
 def base_turn(me, view, memory):
     global plan_i
-    kind = EXPLORER if getattr(view, 'rules', {}).get('agent') else PLAN[plan_i % len(PLAN)]
+    kind = EXPLORER if view.rules.get('agent') else PLAN[plan_i % len(PLAN)]
     debug.say(f'다음 생산: {"탐험가" if kind == EXPLORER else "궁수"} (금고 {me.bank}/{COST[kind]})')
     if view.unit_count >= 10 or me.bank < COST[kind]:
         return None

@@ -113,10 +113,13 @@ class Ops(unittest.TestCase):
         self.assertGreater(OPS_FIRST, OPS_TURN)
 
     def test_only_allowed_modules_and_no_exec(self):
-        for line, word in (("import os", "모듈"), ("import numpy", "모듈"), ("exec('x = 1')", "NameError"), ("open('x')", "NameError")):
+        for line, word in (("import os", "모듈"), ("import numpy", "모듈"), ("exec('x = 1')", "exec"), ("open('x')", "open")):
             rep = play(line + "\ndef turn(me, view, memory):\n    return None\n", src('random'), rounds=2)
-            errs = [e[2] for e in errors(rep)]
-            self.assertTrue(errs and word in errs[0], (line, errs[:1]))
+            bad = rep['meta']['rejected'][0]                    # 코드 검사에 걸려 경기 없이 진다
+            self.assertTrue(bad and word in bad[0], (line, bad[:1]))
+            self.assertEqual(rep['meta']['winner'], 1)
+        rep = play("e = exec\ne('x = 1')\ndef turn(me, view, memory):\n    return None\n", src('random'), rounds=2)
+        self.assertIn('NameError', errors(rep)[0][2])           # 검사를 비껴가도 내장 함수에 없다
         ok = "import math, heapq, random\nfrom collections import deque\nfrom wumpus.api import Move\ndef turn(me, view, memory):\n    return None\n"
         self.assertEqual(errors(play(ok, src('random'), rounds=2)), [])
 

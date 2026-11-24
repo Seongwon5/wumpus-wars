@@ -23,7 +23,8 @@ OPS_TURN = 10_000           # 유닛마다 한 차례에 쓸 수 있는 연산. 
 OPS_FIRST = 200_000         # 유닛의 첫 차례 (봇 파일 불러오기 + 첫 turn 호출) 에 쓸 수 있는 연산
 TIME_SAFETY_MS = 1000       # 시간 안전망: 한 차례가 이보다 오래 걸리면 그 차례 행동을 버린다 (내장 함수에 큰 일을 시키는 것 막기)
 ALLOWED_IMPORTS = ('wumpus', 'wumpus.api', 'math', 'heapq', 'collections', 'itertools', 'functools', 'random', 'bisect', 'operator', 'copy')
-BLOCKED_BUILTINS = ('exec', 'eval', 'compile', 'open', 'input', 'breakpoint', 'exit', 'quit', 'help')
+BLOCKED_BUILTINS = ('exec', 'eval', 'compile', 'open', 'input', 'breakpoint', 'exit', 'quit', 'help',
+                    'getattr', 'setattr', 'delattr', 'vars', 'globals', 'locals', 'type', 'dir')   # 봇이 쓸 수 없는 내장 함수 (guard.py 가 미리 걸러 낸다)
 MAX_UNITS = 10          # 팀당 살아 있는 유닛 수 한도 (야영지 제외)
 START_BANK = 20
 INCOME_EVERY = 3        # 3라운드마다 금고 +1
@@ -109,8 +110,18 @@ RULES = {               # 규칙 스위치 (모두 켜면 시안 규칙, 모두 
 }
 
 
+class _Frozen(type):
+    """봇이 고칠 수 없는 클래스. 봇과 엔진이 같이 쓰는 클래스의 속성을 바꾸면 상대 봇 · 엔진이 달라지기 때문이다."""
+
+    def __setattr__(cls, name, value):
+        raise TypeError('이 클래스는 고칠 수 없다')
+
+    def __delattr__(cls, name):
+        raise TypeError('이 클래스는 고칠 수 없다')
+
+
 # ---- 행동 ----
-class Move:
+class Move(metaclass=_Frozen):
     """한 칸 이동. d 는 'N','E','S','W'."""
     __slots__ = ('d',)
 
@@ -121,7 +132,7 @@ class Move:
         return f'Move({self.d!r})'
 
 
-class Mine:
+class Mine(metaclass=_Frozen):
     """서 있는 칸에 떨어진 것을 줍는다. 없으면 금맥에서 금 1을 캔다 (탐험가만).
     궁수는 떨어진 화살을 먼저 (화살통 한도까지), 그다음 떨어진 금을 ARCHER_CARRY 까지 줍는다."""
     __slots__ = ()
@@ -130,7 +141,7 @@ class Mine:
         return 'Mine()'
 
 
-class Attack:
+class Attack(metaclass=_Frozen):
     """(x, y) 를 친다 (궁수만). 직선 화살 규칙에서는 (x, y) 가 같은 줄 · 같은 열에 있으면 그쪽으로 Shoot 한 것과 같다.
     옛 규칙에서는 주변 8칸 (체비셰프 1) 의 적 유닛이나 적 야영지를 친다."""
     __slots__ = ('x', 'y')
@@ -142,7 +153,7 @@ class Attack:
         return f'Attack({self.x}, {self.y})'
 
 
-class Shoot:
+class Shoot(metaclass=_Frozen):
     """d 방향 ('N','E','S','W') 으로 화살을 쏜다 (궁수만, 화살이 있어야 함).
     화살은 ARROW_RANGE 칸까지 날아가 처음 만난 유닛 · 야영지 · 웜퍼스에 맞는다. 우리 편이면 막혀서 피해가 없다. 벽에서 멈춘다.
     화살이 없으면: 바로 옆 적 유닛은 단검으로 찌르고 (DAGGER_DAMAGE), 바로 옆 적 야영지는 횃불로 태운다."""
@@ -155,7 +166,7 @@ class Shoot:
         return f'Shoot({self.d!r})'
 
 
-class Push:
+class Push(metaclass=_Frozen):
     """d 방향 옆 칸의 적 유닛을 한 칸 더 민다 (탐험가만). 피해는 없지만, 밀린 칸이 구덩이나 웜퍼스 굴이면 떨어져 죽는다.
     밀릴 칸이 벽 · 유닛 · 맵 밖이면 아무 일도 없다."""
     __slots__ = ('d',)
@@ -167,7 +178,7 @@ class Push:
         return f'Push({self.d!r})'
 
 
-class Spawn:
+class Spawn(metaclass=_Frozen):
     """야영지가 옆 칸 (d 방향) 에 유닛을 만든다 (야영지만)."""
     __slots__ = ('kind', 'd')
 
@@ -179,8 +190,9 @@ class Spawn:
 
 
 # ---- 디버그 표시 ("봇의 머릿속 보기") ----
-class Debug:
+class Debug(metaclass=_Frozen):
     """리플레이 뷰어에 겹쳐 그릴 표시. 경기 결과에는 영향이 없다."""
+    __slots__ = ('marks', 'lines', 'texts')
     MAX_MARKS = 400
 
     def __init__(self):

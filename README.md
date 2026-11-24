@@ -101,7 +101,7 @@ PDF 문서 (인쇄용, 학위논문 양식). 규칙서 · 가이드북은 `pytho
 | `python -m wumpus viewer` | 빈 뷰어 (json 을 끌어다 놓아 연다) |
 | `python -m wumpus maps [list / show 맵 / gen]` | 맵 목록 · 글자 그림 · 새 맵 |
 | `python -m wumpus new 이름` | 새 봇 폴더 |
-| `python -m wumpus check 봇` | 봇 점검 (불러오기 · 오류 · 차례 시간 · 연산) |
+| `python -m wumpus check 봇` | 봇 점검 (코드 검사 · 오류 · 차례 시간 · 연산) |
 
 `run` · `scrim` · `check` 에 `--no-ops-limit` 를 붙이면 연산 셈을 꺼서 빠르게 돌린다 (공식 규칙은 아니다).
 

@@ -11,15 +11,16 @@
 pip install -e . 로 설치하면 'python -m wumpus' 대신 'wumpus' 만 써도 된다.
 """
 import argparse
-import concurrent.futures as cf
 import csv
+import multiprocessing as mp
+import multiprocessing.connection as mpc
 import os
 import shutil
 import sys
 import time
 import unicodedata
 
-from . import __version__
+from . import __version__, guard
 from .engine import run_match, resolve_bot
 from .maps import load_map, list_maps, generate, save_map, MAP_DIR
 from .replay import save_json, load_json, write_html, open_in_browser
@@ -73,6 +74,14 @@ def _ops_txt(m, t):
     return f" | 연산 (차례당) 평균 {o['avg']:,}, 최대 {o['max']:,}" + (f", 한도 초과 {o['over']}번" if o['over'] else '')
 
 
+def _say_rejected(m):
+    for t, bad in enumerate(m.get('rejected') or [[], []]):
+        if bad:
+            _say(f"  {m['teams'][t]} {m['names'][t]}: 코드 검사 불합격 {len(bad)}건 (실격)")
+            for b in bad[:5]:
+                _say('     -', b)
+
+
 # ---------------- run ----------------
 def cmd_run(a):
     gmap = load_map(a.map)
@@ -92,6 +101,7 @@ def cmd_run(a):
     for t, (n, msgs) in enumerate(_team_errors(rep)):
         if n:
             _say(f"  {m['teams'][t]} 오류 {n}번. 예: {msgs[0]}")
+    _say_rejected(m)
     _say('리플레이:', base + '.json')
     if not a.no_html:
         write_html(rep, base + '.html')
@@ -101,12 +111,17 @@ def cmd_run(a):
 
 
 # ---------------- scrim ----------------
-def _play(task):
-    """프로세스 하나에서 경기 하나. 결과 요약 (와 리플레이 저장) 을 돌려준다."""
+def _play(task, turn=None):
+    """프로세스 하나에서 경기 하나. 결과 요약 (와 리플레이 저장) 을 돌려준다.
+    turn 은 부모와 같이 보는 숫자 칸: 봇 코드를 부르기 직전에 그 팀 번호를 적는다."""
     bots, map_name, seed, seat, limit, save_dir, ops = task
     gmap = load_map(map_name)
     t0 = time.time()
-    rep = run_match(gmap, bots, seed=seed, time_limit_ms=limit, ops_limit=ops)
+    cb = None
+    if turn is not None:
+        def cb(team):
+            turn.value = team
+    rep = run_match(gmap, bots, seed=seed, time_limit_ms=limit, ops_limit=ops, turn_cb=cb)
     m = rep['meta']
     errs = _team_errors(rep)
     out = {'map': gmap.name, 'seed': seed, 'seat': seat, 'winner': m['winner'], 'reason': m['reason'],
@@ -117,6 +132,66 @@ def _play(task):
         save_json(rep, base + '.json')
         write_html(rep, base + '.html')
     return out
+
+
+def _child(task, conn, turn):
+    try:
+        conn.send(('ok', _play(task, turn)))
+    except BaseException as e:                       # 엔진이 죽었다: 부모가 그때 차례였던 팀의 실격으로 적는다
+        conn.send(('err', f'{type(e).__name__}: {e}'[:200]))
+
+
+def _forfeit(task, team, why):
+    """경기가 끝나지 못했다 (멈춤 · 프로세스 죽음). 그때 코드가 돌던 팀의 실격으로 적는다."""
+    bots, map_name, seed, seat, limit, save_dir, ops = task
+    try:
+        name = load_map(map_name).name
+    except Exception:
+        name = str(map_name)
+    known = team in (0, 1)
+    zero = {'avg': 0.0, 'max': 0.0, 'turns': 0, 'over': 0}
+    return {'map': name, 'seed': seed, 'seat': seat, 'winner': 1 - team if known else -1,
+            'reason': '실격: ' + why if known else '무효: ' + why, 'rounds': 0, 'score': [0, 0], 'camp_hp': None,
+            'time': [dict(zero), dict(zero)], 'ops': None, 'errors': [int(team == 0), int(team == 1)],
+            'err_msg': [[why] if team == 0 else [], [why] if team == 1 else []], 'sec': 0.0}
+
+
+def _run_games(tasks, jobs, game_timeout, tick=None):
+    """판마다 새 프로세스에서 돌린다 (동시에 jobs 판). 시간 한도를 넘긴 판은 프로세스를 끝내고 실격으로 적는다.
+    판마다 새 프로세스라서 봇이 앞 판의 것을 다음 판에 남길 수도 없다."""
+    ctx = mp.get_context('spawn')
+    todo = list(enumerate(tasks))
+    running, results, done = {}, [None] * len(tasks), 0
+    while todo or running:
+        while todo and len(running) < max(1, jobs):
+            i, t = todo.pop(0)
+            rx, tx = ctx.Pipe(False)
+            turn = ctx.RawValue('i', -1)
+            p = ctx.Process(target=_child, args=(t, tx, turn), daemon=True)
+            p.start()
+            tx.close()
+            running[i] = (p, rx, turn, time.time(), t)
+        ready = mpc.wait([v[1] for v in running.values()], timeout=0.2)
+        for i, (p, rx, turn, t0, t) in list(running.items()):
+            res = None
+            if rx in ready:
+                try:
+                    kind, val = rx.recv()
+                except (EOFError, OSError):
+                    kind, val = 'err', '경기 프로세스가 죽었다'
+                res = val if kind == 'ok' else _forfeit(t, turn.value, '엔진 오류 (' + val + ')')
+            elif game_timeout and time.time() - t0 > game_timeout:
+                p.kill()
+                res = _forfeit(t, turn.value, f'판 시간 한도 {game_timeout:.0f}초 초과')
+            if res is not None:
+                p.join(10)
+                rx.close()
+                results[i] = res
+                del running[i]
+                done += 1
+                if tick:
+                    tick(done, len(tasks))
+    return results
 
 
 def _map_list(spec):
@@ -157,17 +232,14 @@ def cmd_scrim(a):
                 tasks.append(([pa, pb] if seat == 0 else [pb, pa], mp, sd, seat, a.time_limit, save_dir, not a.no_ops_limit))
     _say(f'스크림: {na} vs {nb} | 맵 {len(maps)}개 x 시드 {len(seeds)}개 x 진영 {len(seats)} = {len(tasks)}판 | 동시에 {a.jobs}판')
     t0 = time.time()
-    results = []
-    if a.jobs > 1:
-        with cf.ProcessPoolExecutor(max_workers=a.jobs) as ex:
-            futs = [ex.submit(_play, t) for t in tasks]
-            for i, f in enumerate(cf.as_completed(futs), 1):
-                results.append(f.result())
-                print(f'\r  진행 {i}/{len(tasks)}', end='', flush=True)
-        print()
-    else:
-        for t in tasks:
-            results.append(_play(t))
+    for path, name in ((pa, na), (pb, nb)):           # 제출 코드 검사 결과를 먼저 알린다 (걸린 봇은 모든 판이 실격)
+        bad = guard.check(open(path, encoding='utf-8').read())
+        if bad:
+            _say(f'  {name}: 코드 검사 불합격 {len(bad)}건 (실격)')
+            for b in bad[:5]:
+                _say('     -', b)
+    results = _run_games(tasks, a.jobs, a.game_timeout, lambda i, n: print(f'\r  진행 {i}/{n}', end='', flush=True))
+    print()
     results.sort(key=lambda r: (maps.index(r['map']) if r['map'] in maps else 0, r['seed'], r['seat']))
 
     # A 쪽에서 본 결과로 바꾸기
@@ -205,6 +277,9 @@ def cmd_scrim(a):
     _say(f'{na}: {wins[0]}승  {nb}: {wins[1]}승  무승부: {draws}   ->  {na} 승률 {100 * (wins[0] + 0.5 * draws) / n:.1f}%')
     _say(f'평균 바친 금  {na} {gold[0] / n:.1f}  :  {nb} {gold[1] / n:.1f}')
     _say(f'평균 라운드 {rounds / n:.0f} | 야영지 파괴로 끝난 판 {kills}/{n}')
+    out = [r for r in results if r['reason'].startswith(('실격', '무효'))]
+    if out:
+        _say(f'실격 · 무효로 끝난 판 {len(out)}/{n}. 예: {out[0]["map"]} - {out[0]["reason"]}')
     _say(f'차례 시간 (ms) 평균/최대  {na} {tavg[0] / n:.2f}/{tmax[0]:.1f}  {nb} {tavg[1] / n:.2f}/{tmax[1]:.1f}')
     if omax[0] or omax[1]:
         _say(f'연산 (차례당) 최대  {na} {omax[0]:,}  {nb} {omax[1]:,} | 한도 초과 차례  {na} {oover[0]}번  {nb} {oover[1]}번')
@@ -273,15 +348,15 @@ def cmd_check(a):
     path, name = resolve_bot(a.bot)
     _say(f'봇 점검: {name} ({path})')
     src = open(path, encoding='utf-8').read()
-    try:
-        compile(src, path, 'exec')
-    except SyntaxError as e:
-        raise SystemExit(f'  문법 오류: {e}')
-    ns = {'__name__': 'check'}
-    exec(compile(src, path, 'exec'), ns)
-    if not callable(ns.get('turn')):
+    bad = guard.check(src)
+    if bad:
+        _say(f'  코드 검사 불합격 {len(bad)}건 (이대로 내면 실격):')
+        for b in bad:
+            _say('   -', b)
+        raise SystemExit(1)
+    if not guard.has_turn(src):
         raise SystemExit('  turn(me, view, memory) 함수가 없다.')
-    _say('  불러오기 OK, turn 함수 있음')
+    _say('  코드 검사 통과, turn 함수 있음')
     for seat in (0, 1):
         bots = [a.bot, a.opponent] if seat == 0 else [a.opponent, a.bot]
         rep = run_match(load_map(a.map), bots, seed=1, time_limit_ms=a.time_limit, ops_limit=not a.no_ops_limit)
@@ -326,6 +401,7 @@ def main(argv=None):
     p.add_argument('--out', default='replays', help='--save 때 리플레이 폴더')
     p.add_argument('--csv', help='판마다 결과를 CSV 로 저장')
     p.add_argument('--time-limit', type=float, default=None)
+    p.add_argument('--game-timeout', type=float, default=300, help='한 판의 시간 한도 (초). 넘기면 그때 코드가 돌던 팀의 실격. 0 이면 끔 (기본 300)')
     p.add_argument('--no-ops-limit', action='store_true', help='연산 한도를 끈다 (빠르지만 공식 규칙이 아니다)')
     p.add_argument('--quiet', action='store_true', help='판마다 줄을 찍지 않고 요약만')
     p.set_defaults(fn=cmd_scrim)

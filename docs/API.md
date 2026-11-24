@@ -139,7 +139,10 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 
 - **연산 한도:** 봇 코드가 한 일의 양을 센다. 유닛마다 한 차례에 10,000, 첫 차례 (봇 파일 불러오기 + 첫 `turn`) 만 200,000 이다. 남겨도 쌓이지 않는다. 넘으면 그 자리에서 차례가 끊기고 행동이 버려진다 ([규칙 11절](RULES.md)).
 - **세는 법:** 줄 하나를 실행할 때 1, 반복이 한 번 되돌아갈 때 1, 함수 · 람다 · 제너레이터가 시작되거나 이어질 때 1. 한 줄에 몰아 쓴 반복 (`[f(x) for x in xs]`, `sum(… for …)`, `sorted(key=lambda …)`) 도 도는 만큼 센다. 내장 함수 안쪽은 세지 않는다.
-- **쓸 수 있는 모듈:** `math` · `heapq` · `collections` · `itertools` · `functools` · `random` · `bisect` · `operator` · `copy` · `wumpus.api`. 다른 모듈을 불러오면 `ImportError` 가 난다. `exec` · `eval` · `compile` · `open` · `input` 은 없다.
+- **쓸 수 있는 모듈:** `math` · `heapq` · `collections` · `itertools` · `functools` · `random` · `bisect` · `operator` · `copy` · `wumpus.api`. 다른 모듈은 쓸 수 없다.
+- **코드 검사:** 봇 파일은 경기 전에 검사를 거치고, 걸리면 실격이다. 밑줄 두 개로 시작하는 속성 · 이름 (`x.__class__`), `getattr` · `type` · `globals` · `exec` · `open` 같은 함수, 문자열 `.format`, 허용 목록 밖의 `import` 가 걸린다. 전체 목록은 [규칙 11절](RULES.md) 에 있다. `python -m wumpus check 봇` 이 걸린 줄을 알려 준다.
+- **돌려주는 값은 정확한 종류로:** 행동은 `Move` · `Mine` · `Attack` · `Spawn` 그대로, 방향은 글자, `Attack` 의 좌표와 `memory` 값은 `int`. `Attack(3.0, 4.0)` 처럼 실수를 넣으면 그 행동은 버려진다.
+- **표 · 모듈은 복사본:** `DIRS` · `COST` 같은 표와 불러온 모듈은 유닛마다 따로 받은 복사본이다. 고쳐도 그 유닛에게만 보인다.
 - **시간 안전망:** 한 차례가 1초를 넘으면 그 차례의 행동을 버린다. 내장 함수에 아주 큰 일을 넘기는 코드를 막는 장치이고, 보통 봇은 닿지 않는다.
 - 남은 양은 `ops_left()` 로 본다. 다만 **결정을 남은 양으로 가르지 않는다.** 코드를 한 줄만 바꿔도 쓰는 양이 바뀌어 결정이 줄줄이 뒤집히고, 왜 그렇게 움직였는지 설명할 수 없게 된다. 남은 양은 한도 직전에 멈추는 **비상 정지** 에만 읽는다.
 - 대신 **일의 양을 직접 센다.** 탐색마다 펼칠 칸 수 · 후보 수에 이름 붙은 상한을 두고, 넘으면 그때까지 찾은 가장 좋은 답을 쓴다. 같은 상태면 같은 답이 나온다.

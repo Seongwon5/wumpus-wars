@@ -123,12 +123,34 @@
 
   그래서 `for i in r: t += i` 나 `[f(x) for x in xs]`, `sum(g(x) for x in xs)`, `sorted(xs, key=lambda …)` 처럼 **한 줄에 몰아 쓴 반복도 도는 만큼 센다.** 여러 줄로 풀어 쓴 코드와 크게 다르지 않다.
 - **세지 않는 것:** `len` · `sorted` · `heapq` 같은 내장 함수의 안쪽 (부른 줄만 센다). 이 틈은 아래 둘이 막는다.
-  - **허용 모듈:** 봇은 `math` · `heapq` · `collections` · `itertools` · `functools` · `random` · `bisect` · `operator` · `copy` · `wumpus.api` 만 불러올 수 있다. `exec` · `eval` · `compile` · `open` · `input` 은 쓸 수 없다.
+  - **허용 모듈:** 봇은 `math` · `heapq` · `collections` · `itertools` · `functools` · `random` · `bisect` · `operator` · `copy` · `wumpus.api` 만 불러올 수 있다. `exec` · `eval` · `compile` · `open` · `input` 은 쓸 수 없다 (아래 코드 검사).
   - **시간 안전망:** 한 차례가 1초를 넘으면 그 차례의 행동을 버린다. 한도 안의 봇은 한 차례가 수 ms 라 닿을 일이 없다. 내장 함수에 아주 큰 일을 넘기는 코드만 걸린다.
 - **넘으면:** 한도에 닿는 그 자리에서 차례가 끊기고, 그 차례의 행동은 버려진다 (쉰 것과 같다). 리플레이에 오류로 남는다.
 - 끊길 때 나는 예외는 `Exception` 이 아니므로 `except Exception:` 으로 잡히지 않는다. `except:` 로 잡아도 다음 줄에서 다시 끊긴다.
 - 이번 차례에 남은 연산은 `ops_left()` 로, 이번 차례의 한도는 `me.ops_limit` 으로 볼 수 있다. 결정은 남은 양이 아니라 직접 센 일의 양 (탐색 칸 수 상한 등) 으로 가르는 것을 권한다 ([API 9절](API.md)).
 - 공식 셈은 Python 3.12 이상 기준이다 (그 아래 버전은 다른 방식으로 세어 값이 조금 다를 수 있다).
+
+### 코드 검사 (모든 제출 봇)
+
+봇 파일은 경기에 실리기 전에 **코드 검사** 를 거친다. 걸린 봇은 **실격** 이다 (코드를 실행하지 않고 그 판을 진다). 내기 전에 `python -m wumpus check 봇` 으로 확인한다.
+
+봇은 `me` · `view` · `memory` 와 허용 모듈만으로 판단해야 한다. 엔진 속 (숨은 구덩이 · 점수 · 상대 유닛) 이나 컴퓨터의 파일에 닿으려는 코드는 쓸 수 없다. 검사가 막는 것:
+
+| 금지 | 예 | 대신 |
+|---|---|---|
+| 밑줄 두 개로 시작하는 속성 · 이름 | `x.__class__`, `__builtins__` | 클래스 안의 `def __init__` · `__lt__` 같은 메서드 정의와 `self._cache` 같은 밑줄 하나는 된다 |
+| 실행 틀을 보는 속성 | `gi_frame`, `f_back`, `tb_frame`, `mro` | 없음 |
+| 문자열 `.format` · `.format_map` | `'{}'.format(x)` | f-string, `%` |
+| `getattr` `setattr` `delattr` `vars` `globals` `locals` `type` `dir` | `type(x)` | `isinstance(x, int)`, `x.속성` |
+| `exec` `eval` `compile` `open` `input` | | 없음 |
+| 허용 목록 밖의 `import` | `import os`, `import numpy` | 위의 허용 모듈 |
+| `async` · `await`, `__del__` 정의 | | 없음 |
+
+- 금지 함수와 같은 이름의 **자기 변수** (`dir = 'N'`, `type = 3`) 는 써도 된다.
+- 허용 모듈에서도 몇 개는 빠져 있다: `operator.attrgetter` · `methodcaller`, `functools.wraps` · `update_wrapper`, `random.SystemRandom`.
+- 엔진은 봇에게 **복사본** 만 준다. `DIRS` · `COST` 같은 표나 모듈을 고쳐도 자기 유닛에게만 보인다 (엔진 · 상대 · 같은 팀의 다른 유닛은 그대로다). 팀이 나누는 정보는 `memory` 16칸뿐이다.
+- 엔진은 봇이 돌려준 값의 **종류를 정확히** 본다. 행동은 `Move` · `Mine` · `Attack` · `Spawn` 그대로여야 하고 (자식 클래스는 안 됨), 방향은 글자, 좌표와 `memory` 값은 정수 (`int`) 여야 한다. 아니면 그 행동은 버려지고 `memory` 값은 0 이 된다.
+- 검사를 비껴가 엔진 속을 보거나 고치는 것, 상대 봇이나 채점을 방해하는 것은 **부정행위** 이다. 검사에 걸리지 않았더라도 실격이다.
 
 이 한도는 일반 컴퓨터 (4코어) 에서 학생 40명이 한 시간에 6판씩 겨루고, 교수님이 1시간 반 안에 모두를 여러 맵에서 채점할 수 있게 정했다. 보통 봇끼리는 한 판이 몇 초이고, 두 팀의 모든 유닛이 매 차례 한도를 꽉 채우는 극단에서도 일반 컴퓨터에서 1분쯤이다.
 
