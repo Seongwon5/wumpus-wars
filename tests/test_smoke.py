@@ -24,27 +24,26 @@ class Smoke(unittest.TestCase):
             self.assertEqual(tuple(g.bases[1]), api.mirror(g.sym, *g.bases[0], g.w, g.h))
 
     def test_bots_resolve(self):
-        for b in ('starter', 'random', 'logic'):
-            path, name = resolve_bot(b)
-            self.assertTrue(path.endswith('main.py'))
-            self.assertEqual(name, b)
+        path, name = resolve_bot('starter')
+        self.assertTrue(path.endswith('main.py'))
+        self.assertEqual(name, 'starter')
 
     def test_deterministic(self):
-        a = run_match(load_map('twin_pillars'), ['logic', 'random'], seed=3)
-        b = run_match(load_map('twin_pillars'), ['logic', 'random'], seed=3)
+        a = run_match(load_map('twin_pillars'), ['starter', 'starter'], seed=3)
+        b = run_match(load_map('twin_pillars'), ['starter', 'starter'], seed=3)
         self.assertEqual(a['meta']['score'], b['meta']['score'])
         self.assertEqual(a['meta']['rounds'], b['meta']['rounds'])
         self.assertEqual(len(a['frames']), len(b['frames']))
 
     def test_starter_runs_without_errors(self):
-        rep = run_match(load_map('scarab_maze'), ['starter', 'random'], seed=1)
+        rep = run_match(load_map('scarab_maze'), ['starter', 'starter'], seed=1)
         errs = [e for fr in rep['frames'] for e in fr['e'] if e[0] == 'err']
         self.assertEqual(errs, [])
         self.assertLessEqual(rep['meta']['rounds'], api.MAX_ROUNDS)
 
-    def test_logic_beats_random(self):
-        rep = run_match(generate(5), ['logic', 'random'], seed=1)
-        self.assertEqual(rep['meta']['winner'], 0)
+    def test_starter_delivers_gold_on_generated_map(self):
+        rep = run_match(generate(5), ['starter', 'starter'], seed=1)
+        self.assertGreater(min(rep['meta']['score']), 0)
 
 
 if __name__ == '__main__':

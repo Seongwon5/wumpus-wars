@@ -22,16 +22,16 @@ python -m wumpus --help
 ## 2. 첫 경기
 
 ```bash
-python -m wumpus run logic random --open
+python -m wumpus run starter starter --open
 ```
 
 ```
-맵 temple_gate (24x24, 대칭 H) | 붉은 원정대 (logic) 승리 - 야영지 파괴
-라운드 84 | 바친 금 60 : 15 | 0.2초
-  붉은 원정대 logic: 차례당 평균 0.27 ms, 최대 4.6 ms
-  푸른 원정대 random: 차례당 평균 0.01 ms, 최대 0.0 ms
-리플레이: replays/logic-vs-random-temple_gate-s1.json
-뷰어    : replays/logic-vs-random-temple_gate-s1.html
+맵 temple_gate (24x24, 대칭 H) | 붉은 원정대 (starter) 승리 - 1000라운드 끝, 바친 금
+라운드 1000 | 바친 금 513 : 501 | 7.9초
+  붉은 원정대 starter: 차례당 평균 0.33 ms, 최대 3.2 ms | 연산 (차례당) 평균 1,011, 최대 6,554
+  푸른 원정대 starter: 차례당 평균 0.34 ms, 최대 2.5 ms | 연산 (차례당) 평균 1,024, 최대 6,561
+리플레이: replays/starter-vs-starter-temple_gate-s1.json
+뷰어    : replays/starter-vs-starter-temple_gate-s1.html
 ```
 
 - 첫 봇이 **붉은 원정대**, 둘째 봇이 **푸른 원정대**다.
@@ -66,8 +66,8 @@ def turn(me, view, memory):
 
 ```bash
 python -m wumpus check mybot                  # 1) 코드 검사 · 오류 · 시간 점검 (양쪽 진영 한 판씩)
-python -m wumpus run mybot random --open      # 2) 한 판을 눈으로 본다
-python -m wumpus scrim mybot logic            # 3) 맵 10개 x 양쪽 진영 = 20판으로 실력을 잰다
+python -m wumpus run mybot starter --open     # 2) 한 판을 눈으로 본다
+python -m wumpus scrim mybot starter          # 3) 맵 10개 x 양쪽 진영 = 20판으로 실력을 잰다
 ```
 
 **디버그 기록**: `debug.mark(x, y, 'green')`, `debug.path(칸들)`, `debug.say('글')` 을 부르면 리플레이 .json 의 프레임 `d` 에 남는다. 경기 결과에는 영향이 없다. 추론이 맞는지 확인할 때 쓴다. 리플레이 화면에서는 모험가 머리 위의 **지각 아이콘**으로 그 순간 무엇을 느꼈는지 볼 수 있다.
@@ -82,5 +82,5 @@ python -m wumpus scrim mybot mybot_v1          # 새 봇이 정말 나아졌나?
 
 ## 5. 더 볼 것
 
-- 예시 추론 봇 `bots/logic/main.py`: 명제논리 · 대칭 추론 · A* · 발소리 추론을 쓴다. 일부러 고칠 거리를 남겨 두었다 (공유 지도, 웜퍼스 사냥, CSP 배정, 여러 바람 칸을 엮는 레졸루션).
+- 시작용 봇 `bots/starter/main.py` 의 `TODO`: 구덩이 위치 추론, 발소리로 적 위치 추론, 야영지 공격 시점, 생산 계획. 막 복사한 봇은 시작용 봇과 20판에서 10승 10패다. 여기서부터 올린다.
 - 기본 점검: `python -m unittest discover tests`

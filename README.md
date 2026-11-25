@@ -50,8 +50,8 @@ Python 3.8 이상이면 된다 (연산 한도의 공식 셈은 3.12 이상 기�
 git clone <이 저장소 주소> wumpus_wars
 cd wumpus_wars
 
-python -m wumpus run starter random --open      # 경기 하나. 끝나면 브라우저에 리플레이가 열린다
 python -m wumpus new mybot                      # bots/mybot/main.py 를 만든다 (시작용 봇 복사)
+python -m wumpus run mybot starter --open       # 경기 하나. 끝나면 브라우저에 리플레이가 열린다
 python -m wumpus scrim mybot starter            # 맵 10개에서 양쪽 진영으로 겨루고 승패를 센다
 ```
 
@@ -59,18 +59,24 @@ python -m wumpus scrim mybot starter            # 맵 10개에서 양쪽 진영�
 
 ## 들어 있는 봇
 
-| 봇 | 하는 일 |
+봇은 **시작용 봇 하나** (`bots/starter`) 다. 복사해서 고쳐 쓰는 출발점이자, 처음 넘어야 할 상대다.
+
+| 쓰는 것 | 시작용 봇이 하는 일 |
 |---|---|
-| `bots/starter` | **시작용 봇.** 바람도 악취도 없는 칸으로 안전한 칸을 넓히며 탐험하고, 반짝이면 캐고, 아는 길로 돌아와 바친다. 부딪힘으로 벽을 배우고, 아프면 반격한다. `TODO` 부터 고쳐 쓴다 |
-| `bots/random` | 무작위 봇 (기준선) |
-| `bots/logic` | 추론 예시 봇. 팀 공유 메모리로 팀원 위치를 나눠 발소리에서 적을 가려내고, 후반에는 적 야영지를 친다 |
+| 바람 · 악취 | 둘 다 없는 칸의 상하좌우는 안전하다고 보고, 안전한 칸을 넓히며 탐험한다 |
+| 반짝임 | 캔다. 가득 차면 아는 길로 야영지에 돌아가 바친다 |
+| 부딪힘 · 발소리 | 발소리 없이 막히면 벽으로 기억한다. 다른 모험가에게 막히면 잠시 돌아간다 |
+| 아픔 | 옆 칸을 차례로 쳐서 반격한다. 적 야영지 옆에서는 체력이 넉넉할 때 야영지를 친다 |
+| 비명 | 악취를 느꼈던 칸에 다시 가서 웜퍼스가 사라졌는지 확인한다 |
+| `memory` | 찾은 금맥의 위치를 팀과 나눈다. 바친 뒤에는 아는 금맥으로 돌아간다 |
+
+일부러 남겨 둔 것은 파일 안의 `TODO` 에 적혀 있다 (구덩이 위치 추론, 적 위치 추론, 야영지 공격 시점, 생산 계획).
 
 미리 만든 리플레이는 [`demo/`](demo) 에 있다. `.html` 파일을 브라우저로 열면 된다.
 
 | 파일 | 내용 |
 |---|---|
-| `demo/starter_vs_random.html` | 시작용 봇 vs 무작위 봇. 1000 라운드 끝에 417 : 261 |
-| `demo/logic_vs_starter.html` | 추론 봇 vs 시작용 봇. 추론 봇이 202 라운드에 야영지를 부순다 |
+| `demo/starter_vs_starter.html` | 시작용 봇끼리의 한 판 (맵 temple_gate). 1000 라운드 끝에 513 : 501 |
 
 ## 설명서
 
@@ -116,11 +122,11 @@ wumpus/            게임 패키지
   replay.py        리플레이 저장, 뷰어 html 만들기
   cli.py           명령줄 도구 (run · scrim · view · maps · new · check)
   viewer/          리플레이 뷰어 (viewer.html, 3D 화면 view3d.js, 그림 sprites/, three.js 묶음 vendor/)
-bots/              starter · random · logic
+bots/              starter (시작용 봇 하나. 자기 봇도 여기에 만든다)
 maps/              맵 10개 (*.json)
 demo/              미리 만든 리플레이
 docs/              설명서, 그림 (images/), PDF (pdf/)
-tools/             PDF 조판 (md2thesis.py · proposal.py · thesis.py), 그림 합성 (lpc_build.py), 대표 GIF (hero_gif.py), 재미 지표 (funstats.py)
+tools/             PDF 조판 (md2thesis.py · proposal.py · thesis.py), 그림 합성 (lpc_build.py), 대표 GIF (hero_gif.py)
 tests/             기본 점검 (python -m unittest discover tests)
 ```
 

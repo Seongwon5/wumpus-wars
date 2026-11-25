@@ -33,9 +33,8 @@ def bot(body, head=''):
 
 class Guard(unittest.TestCase):
     def test_shipped_bots_pass(self):
-        for name in ('logic', 'starter', 'random'):
-            src = open(os.path.join(ROOT, 'bots', name, 'main.py'), encoding='utf-8').read()
-            self.assertEqual(guard.check(src), [], name)
+        src = open(os.path.join(ROOT, 'bots', 'starter', 'main.py'), encoding='utf-8').read()
+        self.assertEqual(guard.check(src), [])
 
     def test_rejects(self):
         bad = [

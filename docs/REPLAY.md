@@ -12,7 +12,7 @@
 | `이름.html` | 뷰어 + 기록을 한 파일에 담은 것. **브라우저로 바로 열린다.** 다른 사람에게 그대로 보내도 된다 |
 
 ```bash
-python -m wumpus run mybot logic --open          # 경기 후 바로 뷰어 열기
+python -m wumpus run mybot starter --open         # 경기 후 바로 뷰어 열기
 python -m wumpus view replays/어떤경기.json      # 저장된 .json 을 뷰어로 열기 (.html 을 옆에 만든다)
 python -m wumpus viewer                          # 빈 뷰어 (viewer.html). .json 을 창에 끌어다 놓으면 열린다
 ```

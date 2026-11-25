@@ -341,7 +341,7 @@ def cmd_new(a):
     os.makedirs(dst_dir)
     shutil.copy(src, os.path.join(dst_dir, 'main.py'))
     _say(f'만들었다: {dst_dir}/main.py ({a.src} 를 복사)')
-    _say(f'시험:  python -m wumpus run {a.name} random --open')
+    _say(f'시험:  python -m wumpus run {a.name} starter --open')
 
 
 def cmd_check(a):
@@ -427,7 +427,7 @@ def main(argv=None):
     p.set_defaults(fn=cmd_new)
 
     p = sub.add_parser('check', help='봇을 점검한다 (불러오기 · 오류 · 차례 시간)')
-    p.add_argument('bot'); p.add_argument('--opponent', default='random'); p.add_argument('--map', default=DEFAULT_MAP)
+    p.add_argument('bot'); p.add_argument('--opponent', default='starter'); p.add_argument('--map', default=DEFAULT_MAP)
     p.add_argument('--time-limit', type=float, default=None)
     p.add_argument('--no-ops-limit', action='store_true', help='연산 한도를 끈다 (빠르지만 공식 규칙이 아니다)')
     p.set_defaults(fn=cmd_check)

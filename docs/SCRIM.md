@@ -6,32 +6,35 @@
 python -m wumpus scrim 봇A 봇B
 ```
 
-봇은 `bots/` 안의 이름 (`logic`) 이나 파일 · 폴더 경로 (`bots/mybot`, `my_bot.py`) 로 준다.
+봇은 `bots/` 안의 이름 (`starter`) 이나 파일 · 폴더 경로 (`bots/mybot`, `my_bot.py`) 로 준다.
 
 ## 1. 첫 스크림
 
 ```bash
-python -m wumpus scrim logic starter
+python -m wumpus new mybot                 # 시작용 봇을 복사해 내 봇을 만든다
+python -m wumpus scrim mybot starter
 ```
 
 ```
-스크림: logic vs starter | 맵 10개 x 시드 1개 x 진영 2 = 20판 | 동시에 4판
+스크림: mybot vs starter | 맵 10개 x 시드 1개 x 진영 2 = 20판 | 동시에 4판
 
-맵              시드  A 진영      결과       라운드     금 A:B  끝난 이유
-dusty_vault        1  logic 붉은  logic 승      991    364:104  야영지 파괴
-dusty_vault        1  logic 푸른  logic 승     1000    502:256  1000라운드 끝, 바친 금
-jackal_hall        1  logic 붉은  logic 승     1000    222:167  1000라운드 끝, 바친 금
+맵              시드  A 진영      결과         라운드     금 A:B  끝난 이유
+dusty_vault        1  mybot 붉은  mybot 승       1000    460:393  1000라운드 끝, 바친 금
+dusty_vault        1  mybot 푸른  starter 승     1000    393:460  1000라운드 끝, 바친 금
+jackal_hall        1  mybot 붉은  starter 승     1000    315:425  1000라운드 끝, 바친 금
 ...
-temple_gate        1  logic 붉은  logic 승      202      103:0  야영지 파괴
-temple_gate        1  logic 푸른  logic 승      891    777:318  야영지 파괴
+twin_pillars       1  mybot 붉은  mybot 승        538    127:208  야영지 파괴
+twin_pillars       1  mybot 푸른  starter 승      538    208:127  야영지 파괴
 
-== 요약 (20판, 38초) ==
-logic: 20승  starter: 0승  무승부: 0   ->  logic 승률 100.0%
-평균 바친 금  logic 526.7  :  starter 175.8
-평균 라운드 852 | 야영지 파괴로 끝난 판 8/20
-차례 시간 (ms) 평균/최대  logic 0.55/35.5  starter 0.15/3.7
-연산 (차례당) 최대  logic 8,829  starter 6,841 | 한도 초과 차례  logic 0번  starter 0번
+== 요약 (20판, 49초) ==
+mybot: 10승  starter: 10승  무승부: 0   ->  mybot 승률 50.0%
+평균 바친 금  mybot 469.4  :  starter 469.4
+평균 라운드 954 | 야영지 파괴로 끝난 판 2/20
+차례 시간 (ms) 평균/최대  mybot 0.41/96.4  starter 0.41/79.4
+연산 (차례당) 최대  mybot 6,872  starter 6,872 | 한도 초과 차례  mybot 0번  starter 0번
 ```
+
+막 복사한 봇은 시작용 봇과 똑같으므로 10승 10패다 (진영만 바뀐 같은 경기). 봇을 고칠 때마다 이 숫자가 어떻게 바뀌는지 본다.
 
 ### 결과 읽는 법
 
@@ -72,19 +75,19 @@ python -m wumpus new mybot_v1 --from mybot     # 고치기 전 봇을 보관
 python -m wumpus scrim mybot mybot_v1 --save   # 20판. 진 판은 리플레이로 원인을 본다
 ```
 
-- 판 수가 적으면 운이 섞인다. 20판에서 11승 9패는 거의 같은 실력이다. 차이가 작으면 `--seeds 1-3` 처럼 판을 늘린다 (봇이 `random` 을 쓸 때).
+- 판 수가 적으면 운이 섞인다. 20판에서 11승 9패는 거의 같은 실력이다. 차이가 작으면 `--seeds 1-3` 처럼 판을 늘린다 (봇이 `random` 모듈을 쓸 때).
 - 진 판의 리플레이를 열어 **어디서 무엇이 틀렸는지** 보는 것이 가장 빨리 느는 길이다.
 
 **특정 맵만 빠르게**
 
 ```bash
-python -m wumpus scrim mybot logic --maps scarab_maze,twin_pillars --jobs 1
+python -m wumpus scrim mybot starter --maps scarab_maze,twin_pillars --jobs 1
 ```
 
 **결과를 표로 모으기**
 
 ```bash
-python -m wumpus scrim mybot logic --csv result.csv
+python -m wumpus scrim mybot starter --csv result.csv
 ```
 
 CSV 열: `map, seed, A_side, result, reason, rounds, gold_A, gold_B`
@@ -94,7 +97,7 @@ CSV 열: `map, seed, A_side, result, reason, rounds, gold_A, gold_B`
 스크림이 "몇 번 이겼나" 를 본다면, `run` 은 "한 판을 어떻게 이겼나" 를 본다.
 
 ```bash
-python -m wumpus run mybot logic --map scarab_maze --open
+python -m wumpus run mybot starter --map scarab_maze --open
 ```
 
 | 옵션 | 뜻 |
@@ -114,19 +117,19 @@ python -m wumpus check mybot
 ```
 
 ```
-봇 점검: starter (bots/starter/main.py)
-  불러오기 OK, turn 함수 있음
-  붉은 원정대 진영 vs random: 승 (1000라운드 끝, 바친 금, 1000라운드, 금 417:261)
-    차례 시간 평균 0.15 ms, 최대 2.4 ms | 연산 (차례당) 평균 462, 최대 3,946 | 오류 0번
-  푸른 원정대 진영 vs random: 패 (1000라운드 끝, 바친 금, 1000라운드, 금 213:301)
-    차례 시간 평균 0.07 ms, 최대 1.2 ms | 연산 (차례당) 평균 204, 최대 3,189 | 오류 0번
+봇 점검: mybot (bots/mybot/main.py)
+  코드 검사 통과, turn 함수 있음
+  붉은 원정대 진영 vs starter: 승 (1000라운드 끝, 바친 금, 1000라운드, 금 513:501)
+    차례 시간 평균 0.33 ms, 최대 3.3 ms | 연산 (차례당) 평균 1,011, 최대 6,554 | 오류 0번
+  푸른 원정대 진영 vs starter: 패 (1000라운드 끝, 바친 금, 1000라운드, 금 501:513)
+    차례 시간 평균 0.34 ms, 최대 2.6 ms | 연산 (차례당) 평균 1,024, 최대 6,561 | 오류 0번
 ```
 
-문법 오류, `turn` 없음, 경기 중 예외 (처음 몇 개의 메시지와 라운드), 차례 시간, 연산을 한 번에 본다. 제출 전에 꼭 돌린다.
+코드 검사 (금지된 코드), 문법 오류, `turn` 없음, 경기 중 예외 (처음 몇 개의 메시지와 라운드), 차례 시간, 연산을 한 번에 본다. 제출 전에 꼭 돌린다.
 
 ## 6. 알아 둘 것
 
 - 스크림은 판마다 별도 프로세스에서 돌린다. 그래서 봇끼리 전역 변수가 섞이지 않는다.
-- 같은 봇 · 맵 · 시드면 결과가 같다. 예시 추론 봇처럼 `random` 을 안 쓰는 봇끼리는 시드를 바꿔도 같은 결과가 나온다. 판을 늘리려면 **맵을 늘리는 것** (`maps gen`) 이 더 효과적이다.
+- 같은 봇 · 맵 · 시드면 결과가 같다. 시작용 봇처럼 `random` 모듈을 안 쓰는 봇끼리는 시드를 바꿔도 같은 결과가 나온다. 판을 늘리려면 **맵을 늘리는 것** (`maps gen`) 이 더 효과적이다.
 - 차례 시간은 컴퓨터마다 다르다. 시간 안전망 (1초) 에 걸리는 차례는 컴퓨터에 따라 달라질 수 있지만, 한도 안의 봇은 닿지 않는다. 연산 한도는 일의 양을 세므로 어느 컴퓨터에서나 같다.
 - 연산 셈은 경기를 2~3배 느리게 한다. 많은 판을 빨리 돌릴 때는 `--no-ops-limit` 를 쓰고, 제출 전에는 셈을 켠 채로 `check` · `scrim` 을 한 번 돌려 한도 초과가 0 인지 본다.

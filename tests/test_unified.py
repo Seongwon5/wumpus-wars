@@ -148,14 +148,6 @@ def test_dead_unit_drops_all_gold():
     assert not e.alive and g.loot[(7, 5)] == 5
 
 
-def test_logic_bot_plays_unified_match():
-    from wumpus.engine import run_match
-    from wumpus.maps import generate
-    r = run_match(generate(3), ['logic', 'logic'], seed=1, rules={'agent': False})
-    kinds = {e[0] for fr in r['frames'] for e in fr['e']}
-    assert r['const']['rules']['unified'] and 'atk' in kinds and 'mine' in kinds
-
-
 def test_pits_stay_hidden_after_someone_falls():
     from wumpus.api import PIT
     m = GameMap(20, 20, 'H', set(), {}, {(6, 5)}, [(2, 2), (17, 2)], 0, 'test')
