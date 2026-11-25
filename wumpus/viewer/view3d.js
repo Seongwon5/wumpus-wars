@@ -1906,6 +1906,7 @@ function updateBases(fi, g, a, moving, seen, vis, now) {
     b.pile.visible = !dead;
     let shake = 0;
     const hit = moving && ev.hit.get(R.map.base_ids[t]);
+    { const dmg = moving && g > 0 ? F[g - 1].bh[t] - F[g].bh[t] : 0; if (dmg > 0 && b.g.visible) dmgText(dmg, wx(x), 2.3, wz(y), a, true); }
     if (hit && a > 0.45) shake = (1 - a) * 0.05;
     b.g.position.x = wx(x) + Math.sin(now * 70) * shake;
     for (const m of b.flash) m.emissive.setRGB(shake * 12, 0, 0);
@@ -2029,6 +2030,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
         gd.scale.set(sz * pop / gS, sz * pop / gS, 1);
       } }
     o.pool.visible = AGENT(); o.pool.scale.set(1 / CH, 1, 1 / CH);
+    { const pv0 = A.get(id); if (moving && pv0 && u[5] < pv0[5]) dmgText(pv0[5] - u[5], o.g.position.x, 1.75, o.g.position.z, a); }
     { const pv = A.get(id), hurt = moving && pv && u[5] < pv[5];     // 지금 느끼는 것: 바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔 → 머리 위 작은 아이콘 띠 (확대와 상관없이 같은 크기)
       const on = AGENT() && PERCEPT !== 'off' ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', hurt && 'hurt'].filter(Boolean) : [];
       const picked = (hoverC && hoverC[0] === Math.round(x) && hoverC[1] === Math.round(y)) || selId === id;
@@ -2302,7 +2304,32 @@ function breeze(pos, now, id, cx, cy) {     // 바람을 느끼는 유닛: 구�
   }
 }
 
+function dmgText(n, x, y, z, a, big) {             // 떠오르는 피해 숫자 (-3)
+  if (a < 0.3) return;
+  const q = (a - 0.3) / 0.7, sp = textSprite('-' + n, '#ff6a55'), k = big ? 1.3 : 1;
+  sp.position.set(x, y + q * 0.6, z); sp.scale.set(0.7 * k, 0.35 * k, 1); sp.material.opacity = 1 - q * q; sp.renderOrder = 18;
+}
+// 6. 아슬아슬한 순간: 구덩이나 살아 있는 웜퍼스 굴 바로 옆 (상하좌우) 에 모험가가 서 있으면 그 칸이 심장처럼 두근거린다.
+//    관전자는 위험을 보지만 모험가는 바람 · 악취만 느낀다는 것을 드러낸다
+function dangerCells(fi, canSee) {
+  const us = F[fi].u, out = [];
+  const near = (x, y) => us.some(u => Math.abs(u[3] - x) + Math.abs(u[4] - y) === 1 && canSee(u[3], u[4]));
+  if (showTraps) for (const [x, y] of R.map.traps) if (near(x, y)) out.push([x, y]);
+  (R.map.wumpus || []).forEach(([x, y], i) => { if (((F[fi].w || [])[i] || 0) > 0 && near(x, y)) out.push([x, y]); });
+  return out;
+}
+function dangerFx(fi, now, canSee) {
+  const t = now * 5.4, beat = Math.pow(Math.max(0, Math.sin(t)), 8) + 0.6 * Math.pow(Math.max(0, Math.sin(t - 1.0)), 8);   // 두근, 두근
+  for (const [x, y] of dangerCells(fi, canSee)) {
+    ring(wx(x), wz(y), 0.06, 0.46 + beat * 0.14, 0xff3a2a, 0.3 + beat * 0.6);
+    ring(wx(x), wz(y), 0.06, 0.3 + beat * 0.3, 0xff7a4a, beat * 0.35);
+  }
+}
 function effects(g, a, canSee) {
+  (R.map.wumpus || []).forEach(([x, y], i) => {     // 웜퍼스가 받은 피해
+    const d = ((F[g - 1].w || [])[i] || 0) - ((F[g].w || [])[i] || 0);
+    if (d > 0 && canSee(x, y)) dmgText(d, wx(x), 2.0, wz(y), a, true);
+  });
   const baseIdx = id => R.map.base_ids.indexOf(id);
   for (const e of evOf(g).list) {
     const k = e[0];
@@ -2584,6 +2611,7 @@ function frame(f, g, a, fi, team, vis, seen) {
   updateMind(fi, team);
   torches(now);
   if (moving) effects(g, a, canSee);
+  if (AGENT()) dangerFx(fi, now, canSee);
   // 선택 고리
   let sx = null, sy = null;
   if (selId != null) {
@@ -2728,5 +2756,5 @@ function legend() {                          // 오른쪽 '표시' 칸에 쓸 �
   return o;
 }
 
-window.View3D = {build, frame, resize, resetCam, focus, setSpectate, setPercepts, cineStart, cineEnd, look, legend, locate, dbg: () => world};
+window.View3D = {build, frame, resize, resetCam, focus, setSpectate, setPercepts, cineStart, cineEnd, dangerCells, look, legend, locate, dbg: () => world};
 if (window.onView3DReady) window.onView3DReady();

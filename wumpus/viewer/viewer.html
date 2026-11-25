@@ -583,11 +583,15 @@ const snd={on:true,vol:0.7,ctx:null,out:null,last:-1,amb:null,
       setTimeout(drip,2500+Math.random()*6500); };
     setTimeout(drip,1500); },
   // ---- 한 라운드의 사건을 소리로 ----
+  heart(o){this.tone(58,0.16,{...o,g:0.2,f2:40,type:'sine',rev:0.2});this.tone(52,0.2,{...o,g:0.15,f2:36,type:'sine',rev:0.2,at:(o.at||0)+0.26});},   // 두근: 낮은 두 박
   play(g,canSee){
     if(!this.on||!this.ctx||g===this.last)return; this.last=g;
     const where=(x,y)=>(window.View3D&&View3D.locate)?View3D.locate(x,y):{pan:0,vol:1};
     const ev={};                                                    // 종류 → [{pan, vol}] (큰 소리부터)
     const add=(k,x,y)=>{(ev[k]||(ev[k]=[])).push(where(x,y));};
+    if(window.View3D&&View3D.dangerCells&&g>0&&R.const.rules&&R.const.rules.agent){                  // 위험 칸 옆에 새로 들어선 모험가: 심장 소리
+      const was=new Set(View3D.dangerCells(g-1,canSee).map(c=>c[0]+','+c[1]));
+      for(const c of View3D.dangerCells(g,canSee))if(!was.has(c[0]+','+c[1]))add('heart',c[0],c[1]);}
     for(const e of F[g].e||[]){const k=e[0];
       if(k==='mine'&&canSee(e[2],e[3]))add('mine',e[2],e[3]);
       else if(k==='atk'&&(canSee(e[2],e[3])||canSee(e[4],e[5]))){add('swing',e[2],e[3]);add(baseIds.includes(e[6])?'camp':'hit',e[4],e[5]);}
