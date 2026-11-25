@@ -150,6 +150,19 @@ input[type=checkbox]{accent-color:#c79a55}
 #three canvas{display:block}
 #banner,#hover{z-index:2}
 #feed{position:absolute;left:14px;top:12px;z-index:2;display:flex;flex-direction:column;gap:4px;pointer-events:none;max-width:46%}
+#feed .it{pointer-events:auto;cursor:pointer} #feed .it:hover{border-color:var(--bronze2);filter:brightness(1.25)}
+#feed .it.new{animation:feedIn .45s ease-out}
+@keyframes feedIn{0%{transform:translateX(-18px);opacity:0;box-shadow:0 0 0 rgba(255,220,150,0)}55%{transform:none;box-shadow:0 0 14px rgba(255,220,150,.55)}100%{box-shadow:0 0 0 rgba(255,220,150,0)}}
+#sl{flex:1;min-width:120px;position:relative;display:flex;align-items:center;height:28px}
+#sl input{width:100%}
+#marks{position:absolute;left:8px;right:8px;top:0;height:7px;pointer-events:none}
+#marks i{position:absolute;top:0;width:3px;height:7px;margin-left:-1px;border-radius:1px;pointer-events:auto;cursor:pointer;opacity:.8;background:#e5533f}
+#marks i:hover{height:11px;top:-2px;opacity:1;width:5px;margin-left:-2px}
+#marks i.pit{background:#9fd3ff} #marks i.wump{background:#9adf3a} #marks i.lead{background:#f4e04d;height:4px} #marks i.end{background:#fff;width:4px}
+.cbar{position:absolute;left:0;right:0;height:0;background:#000;z-index:1;pointer-events:none;transition:height .35s ease}
+#cbarT{top:0} #cbarB{bottom:0}
+#stage.cine .cbar{height:7%}
+#bDrama.on{border-color:var(--bronze2);background:linear-gradient(#5a3f1c,#2e2010);color:#fff3d6}
 #feed .it{font-size:12.5px;padding:3px 10px 3px 8px;border-radius:3px;background:rgba(14,10,6,.78);border:1px solid #3b2b1a;border-left:3px solid var(--bronze2);
   color:#e9dcc0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #feed .it .rd{font-family:var(--serif);color:var(--dim);font-size:11px;margin-right:6px}
@@ -199,6 +212,7 @@ input[type=checkbox]{accent-color:#c79a55}
   <main>
     <div id="stage">
       <div id="three"></div>
+      <div id="cbarT" class="cbar"></div><div id="cbarB" class="cbar"></div>
       <div id="banner"></div>
       <div id="hover"></div>
       <div id="feed"></div>
@@ -222,6 +236,7 @@ input[type=checkbox]{accent-color:#c79a55}
     <button id="bCam" title="카메라를 처음 위치로 (끌어서 돌리기 · 휠로 확대)">카메라 ↺</button>
     <button id="bSpec" title="싸움 · 사고가 난 곳을 카메라가 따라간다 (끌면 꺼짐)">관전 카메라</button>
     <button id="bPer" title="모험가가 느끼는 지각 아이콘: 전체 → 선택한 모험가만 → 끔">지각: 전체</button>
+    <button id="bDrama" class="on" title="큰 사건 (처치 · 구덩이 추락 · 웜퍼스 · 야영지 파괴) 때 재생을 잠깐 늦추고 카메라가 다가간다">명장면 켬</button>
     <button id="bSnd" class="on" title="소리 켜기 / 끄기">소리 켬</button>
     <input type="range" id="vol" min="0" max="100" value="70" title="음량">
     <button id="bStart" title="처음으로">⏮</button>
@@ -229,7 +244,7 @@ input[type=checkbox]{accent-color:#c79a55}
     <button id="bPlay" class="main" title="재생 / 정지 (Space)">▶ 재생</button>
     <button id="bNext" title="한 라운드 앞으로 (→)">▶</button>
     <button id="bEnd" title="끝으로">⏭</button>
-    <input type="range" id="slider" min="0" max="1" value="0" step="1">
+    <div id="sl"><div id="marks"></div><input type="range" id="slider" min="0" max="1" value="0" step="1"></div>
     <span id="rlabel">라운드 0</span>
     <select id="speed" title="재생 속도">
       <option value="1.5">느리게</option><option value="3" selected>보통</option><option value="6">빠르게</option><option value="15">아주 빠르게</option>
@@ -256,6 +271,47 @@ let P=0,playing=false,speed=3,lastT=0;
 let viewMode='all',mindMode='off',showTraps=true,selId=null;
 let oreAt=[],revAt=[],visAt=[[],[]],seenAt=[[],[]],umap=[],dieAt=[],baseIds=[1,2];
 let lootAt=[],wumAt=[],arrAt=[];   // 칸마다 떨어진 금, 웜퍼스 체력 (굴 순서)
+
+// ---------- 명장면 ----------
+// HL: 경기의 큰 사건 (재생 막대에 찍는다). SLOW: 그 가운데 재생을 늦출 것 (너무 잦지 않게 간격을 둔다)
+let HL=[],SLOW=[],drama=true,slowNow=null;
+const SLOW_GAP=25;
+function buildHighlights(){
+  HL=[];SLOW=[];
+  const nm=(id,f)=>{const u=umap[f].get(id)||umap[Math.max(0,f-1)].get(id);return u?`${R.meta.teams[u[1]]} #${id}`:'#'+id;};
+  let lead=0;
+  for(let f=1;f<N;f++){
+    for(const e of F[f].e||[]){
+      if(e[0]==='trap')HL.push({f,k:'pit',x:e[2],y:e[3],big:1,t:`${nm(e[1],f)} 구덩이에 빠짐`});
+      else if(e[0]==='eaten')HL.push({f,k:'wump',x:e[2],y:e[3],big:1,t:`${nm(e[1],f)} 웜퍼스에게 잡아먹힘`});
+      else if(e[0]==='scream')HL.push({f,k:'wump',x:e[2],y:e[3],big:1,t:'웜퍼스가 쓰러짐'});
+      else if(e[0]==='die'&&e[4]==='roar')HL.push({f,k:'wump',x:e[2],y:e[3],big:1,t:`${nm(e[1],f)} 웜퍼스에게 쓰러짐`});
+      else if(e[0]==='die'&&e[4]==='atk'){const bi=baseIds.indexOf(e[1]);
+        if(bi>=0)HL.push({f,k:'end',x:e[2],y:e[3],big:2,t:`${R.meta.teams[bi]} 야영지 파괴`});
+        else HL.push({f,k:'kill',x:e[2],y:e[3],big:1,t:`${nm(e[1],f)} 쓰러짐`});}
+    }
+    const d=Math.sign(F[f].sc[0]-F[f].sc[1]);
+    if(d&&d!==lead){if(lead)HL.push({f,k:'lead',x:R.map.bases[d>0?0:1][0],y:R.map.bases[d>0?0:1][1],big:0,t:`역전: ${R.meta.teams[d>0?0:1]} 앞섬`});lead=d;}
+  }
+  let last=-99;
+  for(const h of HL)if(h.big&&(h.big>1||h.f-last>=SLOW_GAP)){SLOW.push(h);last=h.f;}
+  $('marks').innerHTML=HL.map((h,i)=>`<i class="${h.k}" data-i="${i}" style="left:${(100*h.f/Math.max(1,N-1)).toFixed(2)}%" title="R${h.f} ${esc(h.t)}"></i>`).join('');
+}
+function gotoEvent(f,x,y){                         // 그 사건 직전으로 가서 그 자리를 비추고 재생한다
+  jump(Math.max(0,f-1));
+  if(window.View3D){View3D.setSpectate(false);$('bSpec').classList.remove('on');View3D.focus(x,y,11);}
+  setPlay(true);
+}
+function slowAt(){                                 // 지금 재생 자리가 느리게 볼 사건의 앞뒤인가
+  if(!drama)return null;
+  for(const h of SLOW){const d=P-(h.f-1);if(d>-0.4&&d<1.2)return h;if(h.f-1>P+1)break;}
+  return null;
+}
+function setSlow(h){
+  if(h===slowNow)return;slowNow=h;
+  $('stage').classList.toggle('cine',!!h);
+  if(window.View3D&&View3D.cineStart){if(h)View3D.cineStart(h.x,h.y);else View3D.cineEnd();}
+}
 
 // ---------- 불러오기 ----------
 function load(data){
@@ -291,7 +347,7 @@ function load(data){
   else if(rl&&rl.unified){$('rulesTag').style.display='block';$('rulesTag').textContent='규칙: 누구나 캐고 싸움 · 광부 이동+행동 · 궁수 사거리 '+(R.const.bow_range||3)+' · 밀치기 · 떨어진 금 · 웜퍼스';}
   else if(rl&&Object.values(rl).some(v=>v)){const on=[['line_shot','직선 화살'],['arrows','화살 '+(R.const.arrows||3)+'발'],['push','밀치기'],['loot','떨어진 금'],['wumpus','웜퍼스']].filter(([k])=>rl[k]).map(([,n])=>n);
     $('rulesTag').style.display='block';$('rulesTag').textContent='규칙: '+on.join(' · ');} else $('rulesTag').style.display='none';
-  P=0;selId=null;layout();
+  P=0;selId=null;layout();buildHighlights();
   if(window.View3D)View3D.build();
 }
 function decodeVis(hex){
@@ -563,16 +619,17 @@ function updateFeed(fi){
   for(let f=fi;f>=Math.max(1,fi-14)&&items.length<5;f--){
     const vis=team>=0?visAt[team][f]:null, see=(x,y)=>!vis||vis[y*W+x]===1;
     for(const e of F[f].e||[]){
-      if(e[0]==='trap'&&see(e[2],e[3]))items.push(['pit',f,(F[f].e||[]).some(p=>p[0]==='push'&&p[4]===e[1])?`${who(e[1],f)} 밀려서 구덩이에 빠짐!`:`${who(e[1],f)} 구덩이에 빠짐`]);
-      else if(e[0]==='die'&&e[4]==='atk'&&see(e[2],e[3]))items.push(['kill',f,`${who(e[1],f)} 쓰러짐`]);
-      else if(e[0]==='eaten'&&see(e[2],e[3]))items.push(['wump',f,`${who(e[1],f)} 웜퍼스에게 잡아먹힘`]);
-      else if(e[0]==='scream')items.push(['wump',f,`웜퍼스의 비명! (처치: ${who(e[1],f)}) → 굴에 보물`]);
-      else if(e[0]==='push'&&see(e[5],e[6])&&!(e[5]===e[7]&&e[6]===e[8]))items.push(['push',f,`밀치기: ${who(e[1],f)} ➜ ${who(e[4],f)}`]);
+      if(e[0]==='trap'&&see(e[2],e[3]))items.push(['pit',f,(F[f].e||[]).some(p=>p[0]==='push'&&p[4]===e[1])?`${who(e[1],f)} 밀려서 구덩이에 빠짐!`:`${who(e[1],f)} 구덩이에 빠짐`,e[2],e[3]]);
+      else if(e[0]==='die'&&e[4]==='atk'&&see(e[2],e[3]))items.push(['kill',f,`${who(e[1],f)} 쓰러짐`,e[2],e[3]]);
+      else if(e[0]==='die'&&e[4]==='roar'&&see(e[2],e[3]))items.push(['wump',f,`${who(e[1],f)} 웜퍼스에게 쓰러짐`,e[2],e[3]]);
+      else if(e[0]==='eaten'&&see(e[2],e[3]))items.push(['wump',f,`${who(e[1],f)} 웜퍼스에게 잡아먹힘`,e[2],e[3]]);
+      else if(e[0]==='scream')items.push(['wump',f,`웜퍼스의 비명! (처치: ${who(e[1],f)}) → 굴에 보물`,e[2],e[3]]);
+      else if(e[0]==='push'&&see(e[5],e[6])&&!(e[5]===e[7]&&e[6]===e[8]))items.push(['push',f,`밀치기: ${who(e[1],f)} ➜ ${who(e[4],f)}`,e[5],e[6]]);
     }
     for(let t=0;t<2;t++){const d=F[f-1].bh[t]-F[f].bh[t];
-      if(d>0&&(team<0||team===t||see(R.map.bases[t][0],R.map.bases[t][1])))items.push(['camp',f,`<span class="${'rb'[t]}">${TEAM[t].name} 야영지</span> 공격받음 (-${d})`]);}
+      if(d>0&&(team<0||team===t||see(R.map.bases[t][0],R.map.bases[t][1])))items.push(['camp',f,`<span class="${'rb'[t]}">${TEAM[t].name} 야영지</span> 공격받음 (-${d})`,R.map.bases[t][0],R.map.bases[t][1]]);}
   }
-  $('feed').innerHTML=items.slice(0,5).map(([c,f,h])=>`<div class="it ${c}" style="opacity:${Math.max(0.35,1-(fi-f)/15).toFixed(2)}"><span class="rd">R${f}</span>${h}</div>`).join('');
+  $('feed').innerHTML=items.slice(0,5).map(([c,f,h,x,y])=>`<div class="it ${c}${f===fi?' new':''}" data-f="${f}" data-x="${x}" data-y="${y}" title="누르면 이 장면으로" style="opacity:${Math.max(0.45,1-(fi-f)/15).toFixed(2)}"><span class="rd">R${f}</span>${h}</div>`).join('');
 }
 let screamFi=-1;
 function updateScream(fi){
@@ -668,7 +725,8 @@ function drawChart(fi){
 // ---------- 조작 ----------
 function tick(t){
   const dt=Math.min(0.1,(t-lastT)/1000);lastT=t;
-  if(playing&&R){P+=dt*speed;if(P>=N-1){P=N-1;setPlay(false);}}
+  const sl=playing&&R?slowAt():null;setSlow(sl);
+  if(playing&&R){P+=dt*speed*(sl?Math.min(0.6,Math.max(0.12,1/speed)):1);if(P>=N-1){P=N-1;setPlay(false);}}
   else if(stepTo!==null&&R){const v=Math.max(2.5,speed*0.8)*dt;if(Math.abs(stepTo-P)<=v){P=stepTo;stepTo=null;}else P+=Math.sign(stepTo-P)*v;}
   draw();requestAnimationFrame(tick);
 }
@@ -711,6 +769,9 @@ function hoverCell(x,y){
 $('bCam').onclick=()=>{if(window.View3D){View3D.setSpectate(false);$('bSpec').classList.remove('on');View3D.resetCam();}};
 $('bSpec').onclick=()=>{if(!window.View3D)return;const on=!$('bSpec').classList.contains('on');$('bSpec').classList.toggle('on',on);View3D.setSpectate(on);};
 window.onSpectateOff=()=>$('bSpec').classList.remove('on');
+$('bDrama').onclick=()=>{drama=!drama;$('bDrama').classList.toggle('on',drama);$('bDrama').textContent=drama?'명장면 켬':'명장면 끔';};
+$('feed').onclick=e=>{const it=e.target.closest('.it');if(it)gotoEvent(+it.dataset.f,+it.dataset.x,+it.dataset.y);};
+$('marks').onclick=e=>{const h=HL[+e.target.dataset.i];if(h)gotoEvent(h.f,h.x,h.y);};
 {const PM=[['all','지각: 전체'],['sel','지각: 선택만'],['off','지각: 끔']];let pi=0;                     // 지각 아이콘 표시 전환
  $('bPer').onclick=()=>{pi=(pi+1)%PM.length;$('bPer').textContent=PM[pi][1];if(window.View3D&&View3D.setPercepts)View3D.setPercepts(PM[pi][0]);};}
 $('bSnd').onclick=()=>{snd.init();snd.on=!snd.on;snd.setVol(snd.vol);$('bSnd').classList.toggle('on',snd.on);$('bSnd').textContent=snd.on?'소리 켬':'소리 끔';};

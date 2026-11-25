@@ -2608,6 +2608,7 @@ function frame(f, g, a, fi, team, vis, seen) {
   }
   // 관전 카메라: 싸움 · 사고가 난 곳을 부드럽게 따라간다
   if (spect) spectate(g);
+  if (cine) cineStep();
   controls.update();
   // 화면 흔들림: 큰 사건 (구덩이 추락 · 처치 · 야영지 피격) 때 잠깐
   let amp = 0;
@@ -2632,6 +2633,27 @@ function frame(f, g, a, fi, team, vis, seen) {
 const SH = new THREE.Vector3(), FOC = new THREE.Vector3(), OFF = new THREE.Vector3();
 let spect = false, focusPt = null, focusT = 0;
 function setSpectate(on) { spect = on; focusPt = null; }
+// 명장면 카메라: 큰 사건이 난 칸으로 다가갔다가, 끝나면 보던 자리로 돌아온다 (화면을 끌면 그만둔다)
+let cine = null;
+function cineStart(x, y) {
+  if (!cine) cine = {home: [controls.target.clone(), camera.position.clone()]};
+  cine.pt = [wx(x), wz(y)]; cine.out = false;
+}
+function cineEnd() { if (cine) cine.out = true; }
+function cineStep() {
+  if (!cine.out) {
+    FOC.set(cine.pt[0], 0, cine.pt[1]);
+    OFF.copy(camera.position).sub(controls.target);
+    const len = OFF.length(), want = Math.min(len, 9);
+    OFF.multiplyScalar((len + (want - len) * 0.08) / len);
+    controls.target.lerp(FOC, 0.1);
+    camera.position.copy(controls.target).add(OFF);
+  } else if (spect) cine = null;                       // 관전 카메라가 켜져 있으면 돌아가지 않고 그쪽에 맡긴다
+  else {
+    controls.target.lerp(cine.home[0], 0.08); camera.position.lerp(cine.home[1], 0.08);
+    if (camera.position.distanceTo(cine.home[1]) < 0.05) { controls.target.copy(cine.home[0]); camera.position.copy(cine.home[1]); cine = null; }
+  }
+}
 function setPercepts(m) { PERCEPT = m === 'sel' || m === 'off' ? m : 'all'; }
 function spectate(g) {
   const now = performance.now() / 1000;
@@ -2671,7 +2693,7 @@ function cellOf(ev) {
 }
 let down = null;
 renderer.domElement.addEventListener('pointerdown', ev => { down = [ev.clientX, ev.clientY]; });
-controls.addEventListener('start', () => { if (spect) { spect = false; if (window.onSpectateOff) window.onSpectateOff(); } });
+controls.addEventListener('start', () => { cine = null; if (spect) { spect = false; if (window.onSpectateOff) window.onSpectateOff(); } });
 renderer.domElement.addEventListener('pointerup', ev => {
   if (down && Math.hypot(ev.clientX - down[0], ev.clientY - down[1]) < 5) { const c = cellOf(ev); if (c) selectCell(c[0], c[1]); }
   down = null;
@@ -2706,5 +2728,5 @@ function legend() {                          // 오른쪽 '표시' 칸에 쓸 �
   return o;
 }
 
-window.View3D = {build, frame, resize, resetCam, focus, setSpectate, setPercepts, look, legend, locate, dbg: () => world};
+window.View3D = {build, frame, resize, resetCam, focus, setSpectate, setPercepts, cineStart, cineEnd, look, legend, locate, dbg: () => world};
 if (window.onView3DReady) window.onView3DReady();
