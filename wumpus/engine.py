@@ -258,13 +258,16 @@ class View(metaclass=_Frozen):
         self.stench = u.kind != CAMP and g.stench_at(u.x, u.y)
         # 비명: 지금까지 쓰러진 웜퍼스 수 (맵 어디서든 모두에게 들린다)
         self.screams = g.screams
+        # 외침: 지금까지 쓰러진 모험가 수 (두 팀 모두, 맵 어디서든. 어떻게 쓰러졌는지 · 어느 팀인지는 알려 주지 않는다)
+        self.cries = g.cries
+        # 열기: 지금 선 칸의 상하좌우 이웃에 야영지 (어느 팀이든) 가 있으면 True. 적 야영지 위치는 알려 주지 않는다
+        self.warmth = u.kind != CAMP and g.warmth_at(u.x, u.y)
         self.rules = dict(g.rules)      # 켜진 규칙 (봇이 규칙에 맞게 움직이도록)
-        # 시안 3 지각: 반짝임 · 부딪힘 · 발소리 · 아픔. 두 야영지 위치는 모두가 안다
+        # 시안 3 지각: 반짝임 · 부딪힘 · 발소리 · 아픔. 우리 야영지 위치만 안다 (적 야영지는 열기 · 맵 대칭으로 추론)
         self.glitter = u.kind != CAMP and (g.ore.get((u.x, u.y), 0) > 0 or g.loot.get((u.x, u.y), 0) > 0)
         self.bump = u.bump
         self.footsteps = g.footsteps_at(u) if u.kind != CAMP else 0
         self.hurt = max(0, (u.prev_hp if u.prev_hp is not None else u.hp) - u.hp)
-        self.enemy_camp = g.bases[1 - u.team].x, g.bases[1 - u.team].y
 
     def visible(self, x, y):
         return (x, y) in self._vis
@@ -337,6 +340,7 @@ class Game:
         self.frames_started = False
         self.wumpus = {}                # 굴 칸 -> 남은 체력 (0 이면 쓰러짐)
         self.screams = 0
+        self.cries = 0                  # 쓰러진 모험가 수 (외침)
         if self.rules['wumpus']:
             for c in wumpus_cells(gmap):
                 self.wumpus[c] = (WUMPUS_HP_A if self.rules['agent'] else WUMPUS_HP_U) if self.rules['unified'] else WUMPUS_HP
@@ -412,6 +416,9 @@ class Game:
             if v is not None and v.alive and v.kind != CAMP:
                 n += 1
         return n
+
+    def warmth_at(self, x, y):
+        return any((x + dx, y + dy) == (b.x, b.y) for b in self.bases for dx, dy in DIRS.values())
 
     def breeze_at(self, x, y):
         return any((x + dx, y + dy) in self.traps for dx, dy in DIRS.values())
@@ -490,6 +497,8 @@ class Game:
     def _kill(self, u, cause):
         u.alive = False
         u.hp = 0
+        if u.kind != CAMP:
+            self.cries += 1             # 외침: 쓰러진 모험가는 맵 전체에 들린다
         if cause != 'trap':             # 구덩이에 떨어지면 짐도 함께 사라진다
             self._drop((u.x, u.y), u.carry)
             if u.kind == ARCHER and u.arrows > 0 and self.rules['arrows']:
@@ -856,7 +865,8 @@ class Game:
                               1 if u.kind != CAMP and self.stench_at(u.x, u.y) else 0,
                               1 if u.kind != CAMP and (self.ore.get((u.x, u.y), 0) > 0 or self.loot.get((u.x, u.y), 0) > 0) else 0,
                               1 if u.bumped else 0,
-                              self.footsteps_at(u) if u.kind != CAMP else 0])
+                              self.footsteps_at(u) if u.kind != CAMP else 0,
+                              1 if u.kind != CAMP and self.warmth_at(u.x, u.y) else 0])
                 u.bumped = False
         fr = {
             'u': units,

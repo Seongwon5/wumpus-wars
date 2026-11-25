@@ -198,8 +198,24 @@ def test_agent_sees_only_own_cell_and_percepts():
     e = put(g, 1, EXPLORER, 5, 4)
     v = View(g, a)
     assert v.visible_cells() == [(5, 5)] and v.tile(6, 5) is None and [u.id for u in v.units()] == [a.id]
-    assert v.breeze and v.stench and v.glitter and v.footsteps == 1 and v.enemy_camp == (17, 2)
+    assert v.breeze and v.stench and v.glitter and v.footsteps == 1
+    assert not hasattr(v, 'enemy_camp') and v.my_camp == (2, 2) and not v.warmth and v.cries == 0   # 적 야영지는 알려 주지 않는다
     assert a.hp == HP_UNIFIED[ARCHER] + 2 or a.hp == 10      # 모험가 체력 10
+
+
+def test_warmth_next_to_any_camp_and_cries_count_downed_adventurers():
+    from wumpus.engine import View
+    m = GameMap(20, 20, 'H', set(), {}, set(), [(2, 2), (17, 2)], 0, 'test')
+    g = _agent_game(m)
+    a = put(g, 0, EXPLORER, 17, 3)                   # 적 야영지 바로 아래
+    b = put(g, 0, EXPLORER, 16, 3)                   # 대각선: 열기 없음
+    c = put(g, 1, EXPLORER, 3, 2)                    # 자기 (푸른) 쪽이 아닌 붉은 야영지 옆: 어느 팀 야영지든 열기
+    assert View(g, a).warmth and not View(g, b).warmth and View(g, c).warmth
+    g._kill(b, 'atk')
+    g._kill(c, 'trap')
+    assert View(g, a).cries == 2 and View(g, a).screams == 0   # 모험가 외침은 웜퍼스 비명과 따로 센다
+    g._kill(g.bases[1], 'atk')
+    assert View(g, a).cries == 2                     # 야영지는 세지 않는다
 
 
 def test_agent_bump_one_action_and_sleeping_wumpus():

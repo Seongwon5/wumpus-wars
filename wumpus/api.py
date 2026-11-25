@@ -77,7 +77,9 @@ WUMPUS_RESPAWN = 80     # 쓰러지고 이 라운드 뒤 다시 나타난다 (�
 # 지각 (View): breeze 바람 (상하좌우에 구덩이) · stench 악취 (상하좌우에 웜퍼스) · glitter 반짝임 (이 칸에 금맥 · 떨어진 금)
 #              bump 부딪힘 (지난 이동이 막힘) · footsteps 발소리 (상하좌우의 다른 모험가 수, 팀 구분 없음)
 #              hurt 아픔 (지난 차례 뒤 받은 피해) · screams 비명 (쓰러진 웜퍼스 수, 맵 어디서든)
-# 두 야영지의 위치는 모두가 안다 (view.my_camp, view.enemy_camp). 금은 금맥 칸에 서서 Mine() 으로 캔다.
+#              warmth 열기 (상하좌우에 야영지, 어느 팀이든) · cries 외침 (쓰러진 모험가 수, 두 팀 모두, 맵 어디서든)
+# 우리 야영지 위치만 안다 (view.my_camp). 적 야영지는 맵 대칭 (H · V · R 중 하나) 의 거울 칸이다:
+# 후보 셋 (mirror(대칭, *my_camp, w, h)) 가운데 관측 (벽의 거울 칸 · 열기) 으로 좁힌다. 금은 금맥 칸에 서서 Mine() 으로 캔다.
 AGENT_HP = 10
 AGENT_CARRY = 5
 WUMPUS_HP_A = 9         # 검 3번

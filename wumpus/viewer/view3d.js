@@ -729,6 +729,7 @@ function perceptTex(k) {                       // 지각 도트 아이콘 (머�
     else if (k === 'glitter') { K.L(7, 2, 7, 12, '#ffe070'); K.L(2, 7, 12, 7, '#ffe070'); K.R(6, 6, 3, 3, '#fff8d0'); K.P(4, 4, '#ffc63a'); K.P(10, 10, '#ffc63a'); K.P(10, 4, '#ffc63a'); K.P(4, 10, '#ffc63a'); }
     else if (k === 'bump') { K.R(6, 2, 2, 7, '#ff9a40'); K.R(6, 10, 2, 2, '#ff9a40'); }
     else if (k === 'steps') { K.E(5, 5, 1.6, 2.2, '#e8dcc4'); K.E(9, 9, 1.6, 2.2, '#e8dcc4'); K.P(5, 8, '#e8dcc4'); K.P(9, 12, '#e8dcc4'); }
+    else if (k === 'warmth') { K.E(7, 9, 3.2, 3.4, '#ff7a2a'); K.E(7, 8, 2, 2.6, '#ffc24a'); K.E(7, 9.5, 1, 1.2, '#fff3b0'); K.P(5, 4, '#ff7a2a'); K.P(9, 3, '#ffb03a'); K.P(7, 2, '#ff7a2a'); }
     else if (k === 'hurt') { K.E(5, 6, 2.2, 2.2, '#ff4a3a'); K.E(9, 6, 2.2, 2.2, '#ff4a3a'); K.L(3, 7, 7, 11, '#ff4a3a', 2); K.L(11, 7, 7, 11, '#ff4a3a', 2); }
   }))));
 }
@@ -2032,7 +2033,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.pool.visible = AGENT(); o.pool.scale.set(1 / CH, 1, 1 / CH);
     { const pv0 = A.get(id); if (moving && pv0 && u[5] < pv0[5]) dmgText(pv0[5] - u[5], o.g.position.x, 1.75, o.g.position.z, a); }
     { const pv = A.get(id), hurt = moving && pv && u[5] < pv[5];     // 지금 느끼는 것: 바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔 → 머리 위 작은 아이콘 띠 (확대와 상관없이 같은 크기)
-      const on = AGENT() && PERCEPT !== 'off' ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', hurt && 'hurt'].filter(Boolean) : [];
+      const on = AGENT() && PERCEPT !== 'off' ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', u[13] && 'warmth', hurt && 'hurt'].filter(Boolean) : [];
       const picked = (hoverC && hoverC[0] === Math.round(x) && hoverC[1] === Math.round(y)) || selId === id;
       const dot = PERCEPT === 'sel' && !picked;      // '선택만': 나머지는 작은 점 하나
       const ic = o.icons[0]; o.icons.forEach((x, k) => { if (k) x.visible = false; });
@@ -2751,7 +2752,7 @@ function look(x, y, z, tx, ty, tz) {          // 확인용: 카메라를 칸 좌
 
 function legend() {                          // 오른쪽 '표시' 칸에 쓸 그림: 화면에 실제로 그리는 것과 같은 도트 아이콘
   const u = t => t.image.toDataURL(), o = {};
-  for (const k of ['breeze', 'stench', 'glitter', 'bump', 'steps', 'hurt']) o[k] = u(perceptTex(k));
+  for (const k of ['breeze', 'stench', 'glitter', 'bump', 'steps', 'warmth', 'hurt']) o[k] = u(perceptTex(k));
   o.hp = u(hpTex(10, 0)); o.hpLow = u(hpTex(3, 0)); o.token = u(tokenTex('E', 0)); o.pit = u(pitHoleTex(0)); o.gold = u(goldTex(3));
   return o;
 }

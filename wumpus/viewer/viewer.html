@@ -449,10 +449,11 @@ function buildLegend(){
   const L=(window.View3D&&View3D.legend)?View3D.legend():{};
   const img=(u,cls)=>u?`<img src="${u}"${cls?` class="${cls}"`:''}>`:'<span></span>';
   const P=[['breeze','바람','상하좌우에 구덩이가 있다'],['stench','악취','상하좌우에 웜퍼스 굴이 있다'],['glitter','반짝임','이 칸에 금맥이나 떨어진 금'],
-    ['bump','부딪힘','지난 이동이 막혔다 (벽 · 맵 끝 · 다른 모험가)'],['steps','발소리','상하좌우에 다른 모험가 (적 · 팀원 구분 없음). 발밑 칸 모서리에 표시'],['hurt','아픔','지난 차례 뒤 피해를 받았다']];
+    ['bump','부딪힘','지난 이동이 막혔다 (벽 · 맵 끝 · 다른 모험가)'],['steps','발소리','상하좌우에 다른 모험가 (적 · 팀원 구분 없음). 발밑 칸 모서리에 표시'],['warmth','열기','상하좌우에 야영지 (어느 팀이든). 적 야영지를 찾는 단서'],['hurt','아픔','지난 차례 뒤 피해를 받았다']];
   let h='<div class="lg-h">머리 위 · 발밑: 모험가가 지금 느끼는 것</div>';
   for(const [k,n,d] of P)h+=`${img(L[k])}<span><b>${n}</b> · ${d}</span>`;
   h+=`<span style="font-size:15px;text-align:center;color:#d8ff6a">!</span><span><b>비명</b> · 웜퍼스가 쓰러짐 (맵 전체가 듣는다, 화면 가운데 글자)</span>`;
+  h+=`<span style="font-size:15px;text-align:center;color:#e5533f">!</span><span><b>외침</b> · 모험가가 쓰러짐 (두 팀 모두, 맵 전체가 듣는다, 왼쪽 위 사건 알림)</span>`;
   h+='<div class="lg-h">모험가</div>';
   h+=`<span id="lg_adv"></span><span>모험가. 멀리서는 둥근 패, 가까이서는 도트 캐릭터</span>`;
   h+=`${img(L.hp,'wide')}<span>체력 (30% 이하면 주황)</span>`;

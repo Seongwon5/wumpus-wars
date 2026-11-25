@@ -64,6 +64,8 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 | `view.footsteps` | 정수 0 ~ 4 | 발소리: 상하좌우의 다른 모험가 수 (팀 구분 없음) |
 | `view.hurt` | 정수 | 아픔: 지난 차례 뒤 받은 피해 |
 | `view.screams` | 정수 | 비명: 지금까지 쓰러진 웜퍼스 수 (맵 어디서든) |
+| `view.warmth` | `True`/`False` | 열기: 상하좌우에 야영지 (어느 팀이든). 적 야영지를 찾는 단서 |
+| `view.cries` | 정수 | 외침: 지금까지 쓰러진 모험가 수 (두 팀 모두, 맵 어디서든). 웜퍼스 비명과 따로 센다 |
 
 ### 칸 (자기 칸만)
 
@@ -82,7 +84,7 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 
 | 속성 | 뜻 |
 |---|---|
-| `view.my_camp`, `view.enemy_camp` | 우리 · 적 야영지 좌표 `(x, y)` |
+| `view.my_camp` | 우리 야영지 좌표 `(x, y)`. **적 야영지는 알려 주지 않는다**: 대칭 셋 가운데 맞는 것의 거울 칸 `mirror(sym, *view.my_camp, w, h)` 이다 (규칙 2 · 4절) |
 | `view.width`, `view.height` | 맵 크기 |
 | `view.round`, `view.bank`, `view.score`, `view.team` | 라운드, 우리 금고, 우리 점수 (바친 금 합), 팀 번호 |
 | `view.unit_count` | 우리 팀 살아 있는 모험가 수 |
