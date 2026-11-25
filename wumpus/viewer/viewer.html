@@ -221,6 +221,7 @@ input[type=checkbox]{accent-color:#c79a55}
   <footer>
     <button id="bCam" title="카메라를 처음 위치로 (끌어서 돌리기 · 휠로 확대)">카메라 ↺</button>
     <button id="bSpec" title="싸움 · 사고가 난 곳을 카메라가 따라간다 (끌면 꺼짐)">관전 카메라</button>
+    <button id="bPer" title="모험가가 느끼는 지각 아이콘: 전체 → 선택한 모험가만 → 끔">지각: 전체</button>
     <button id="bSnd" class="on" title="소리 켜기 / 끄기">소리 켬</button>
     <input type="range" id="vol" min="0" max="100" value="70" title="음량">
     <button id="bStart" title="처음으로">⏮</button>
@@ -377,8 +378,8 @@ function buildLegend(){
   const L=(window.View3D&&View3D.legend)?View3D.legend():{};
   const img=(u,cls)=>u?`<img src="${u}"${cls?` class="${cls}"`:''}>`:'<span></span>';
   const P=[['breeze','바람','상하좌우에 구덩이가 있다'],['stench','악취','상하좌우에 웜퍼스 굴이 있다'],['glitter','반짝임','이 칸에 금맥이나 떨어진 금'],
-    ['bump','부딪힘','지난 이동이 막혔다 (벽 · 맵 끝 · 다른 모험가)'],['steps','발소리','상하좌우에 다른 모험가 (적 · 팀원 구분 없음)'],['hurt','아픔','지난 차례 뒤 피해를 받았다']];
-  let h='<div class="lg-h">머리 위: 모험가가 지금 느끼는 것</div>';
+    ['bump','부딪힘','지난 이동이 막혔다 (벽 · 맵 끝 · 다른 모험가)'],['steps','발소리','상하좌우에 다른 모험가 (적 · 팀원 구분 없음). 발밑 칸 모서리에 표시'],['hurt','아픔','지난 차례 뒤 피해를 받았다']];
+  let h='<div class="lg-h">머리 위 · 발밑: 모험가가 지금 느끼는 것</div>';
   for(const [k,n,d] of P)h+=`${img(L[k])}<span><b>${n}</b> · ${d}</span>`;
   h+=`<span style="font-size:15px;text-align:center;color:#d8ff6a">!</span><span><b>비명</b> · 웜퍼스가 쓰러짐 (맵 전체가 듣는다, 화면 가운데 글자)</span>`;
   h+='<div class="lg-h">모험가</div>';
@@ -710,6 +711,8 @@ function hoverCell(x,y){
 $('bCam').onclick=()=>{if(window.View3D){View3D.setSpectate(false);$('bSpec').classList.remove('on');View3D.resetCam();}};
 $('bSpec').onclick=()=>{if(!window.View3D)return;const on=!$('bSpec').classList.contains('on');$('bSpec').classList.toggle('on',on);View3D.setSpectate(on);};
 window.onSpectateOff=()=>$('bSpec').classList.remove('on');
+{const PM=[['all','지각: 전체'],['sel','지각: 선택만'],['off','지각: 끔']];let pi=0;                     // 지각 아이콘 표시 전환
+ $('bPer').onclick=()=>{pi=(pi+1)%PM.length;$('bPer').textContent=PM[pi][1];if(window.View3D&&View3D.setPercepts)View3D.setPercepts(PM[pi][0]);};}
 $('bSnd').onclick=()=>{snd.init();snd.on=!snd.on;snd.setVol(snd.vol);$('bSnd').classList.toggle('on',snd.on);$('bSnd').textContent=snd.on?'소리 켬':'소리 끔';};
 $('vol').oninput=e=>{snd.init();snd.setVol(+e.target.value/100);try{localStorage.setItem('ww_vol',e.target.value);}catch(_){}};
 try{const v=localStorage.getItem('ww_vol');if(v!==null){$('vol').value=v;snd.vol=+v/100;}}catch(_){}

@@ -704,16 +704,33 @@ function perceptStrip(keys) {                    // 지각 아이콘 여러 개�
     return t;
   });
 }
-function perceptTex(k) {                       // 지각 도트 아이콘 (머리 위)
-  return pxMemo('pc_' + k, () => pxTex(pxCanvas(14, 14, K => {
-    K.E(7, 7, 6.6, 6.6, '#120c08');
+function outlined(c) {                           // 그림 둘레에 어두운 테 1픽셀 (배경 원 없이도 어디서나 읽히게)
+  const g = c.getContext('2d'), w = c.width, h = c.height, im = g.getImageData(0, 0, w, h), D = im.data, S = D.slice();
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4;
+    if (S[i + 3]) continue;
+    let near = false;
+    for (let dy = -1; dy <= 1 && !near; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const X = x + dx, Y = y + dy;
+      if (X >= 0 && Y >= 0 && X < w && Y < h && S[(Y * w + X) * 4 + 3]) { near = true; break; }
+    }
+    if (near) { D[i] = 14; D[i + 1] = 9; D[i + 2] = 6; D[i + 3] = 235; }
+  }
+  g.putImageData(im, 0, 0);
+  return c;
+}
+function perceptDot() {                          // '선택만' 표시에서 나머지 모험가 머리 위에 찍는 작은 점 (느끼는 것이 있다는 뜻)
+  return pxMemo('pc_dot', () => pxTex(outlined(pxCanvas(5, 5, K => { K.R(1, 1, 3, 3, '#ffe9b0'); }))));
+}
+function perceptTex(k) {                       // 지각 도트 아이콘 (머리 위. 발소리만 발밑 칸에 그린다)
+  return pxMemo('pc_' + k, () => pxTex(outlined(pxCanvas(14, 14, K => {
     if (k === 'breeze') { K.L(3, 5, 10, 5, '#bfe9ff'); K.L(4, 8, 11, 8, '#8fd0ff'); K.L(3, 11, 8, 11, '#bfe9ff'); K.P(10, 4, '#bfe9ff'); K.P(11, 7, '#8fd0ff'); }
     else if (k === 'stench') { for (const x of [4, 7, 10]) { K.L(x, 11, x + 1, 8, '#9adf3a'); K.L(x + 1, 8, x, 4, '#c8ff6a'); } }
     else if (k === 'glitter') { K.L(7, 2, 7, 12, '#ffe070'); K.L(2, 7, 12, 7, '#ffe070'); K.R(6, 6, 3, 3, '#fff8d0'); K.P(4, 4, '#ffc63a'); K.P(10, 10, '#ffc63a'); K.P(10, 4, '#ffc63a'); K.P(4, 10, '#ffc63a'); }
     else if (k === 'bump') { K.R(6, 2, 2, 7, '#ff9a40'); K.R(6, 10, 2, 2, '#ff9a40'); }
     else if (k === 'steps') { K.E(5, 5, 1.6, 2.2, '#e8dcc4'); K.E(9, 9, 1.6, 2.2, '#e8dcc4'); K.P(5, 8, '#e8dcc4'); K.P(9, 12, '#e8dcc4'); }
     else if (k === 'hurt') { K.E(5, 6, 2.2, 2.2, '#ff4a3a'); K.E(9, 6, 2.2, 2.2, '#ff4a3a'); K.L(3, 7, 7, 11, '#ff4a3a', 2); K.L(11, 7, 7, 11, '#ff4a3a', 2); }
-  })));
+  }))));
 }
 let _ring = null;
 function footRingTex() {                         // 발밑 팀 표시: 그 칸이 팀 색으로 옅게 빛난다 (가장자리는 조금 더 밝게, 모서리는 둥글게)
@@ -951,6 +968,8 @@ function buildRock(rows) {                        // 벽 = 바닥에서 솟은 �
   return {mesh: m, base: Float32Array.from(col), cells: Int32Array.from(cells), hAt};
 }
 let NEAR = 0;                                    // 0 = 멀리 (둥근 아이콘), 1 = 가까이 (도트 캐릭터)
+let PERCEPT = 'all';                             // 지각 아이콘 표시: 'all' 전체 · 'sel' 선택하거나 가리킨 모험가만 · 'off' 끔
+let ICONK = 1;                                   // 지각 아이콘 크기 (멀리서 보면 작게, 가까이서 1)
 function lod(o) {
   const n = NEAR;
   o.token.visible = n < 0.999; o.token.material.opacity = (1 - n) * (o._fade ?? 1);
@@ -1905,7 +1924,7 @@ function updateBases(fi, g, a, moving, seen, vis, now) {
 
 function updateUnits(f, g, a, fi, team, vis, now) {
   const moving = g !== f, ev = evOf(g);
-  for (const o of world.units.values()) { o.g.visible = false; if (o.tile) o.tile.visible = false; if (o.gold) o.gold.visible = false; }
+  for (const o of world.units.values()) { o.g.visible = false; if (o.tile) o.tile.visible = false; if (o.step) o.step.visible = false; if (o.gold) o.gold.visible = false; }
   const A = umap[f], B = umap[g];
   const show = (o, x, y, own) => {
     if (vis && !own && !vis[Math.round(y) * W + Math.round(x)]) return false;
@@ -1921,6 +1940,8 @@ function updateUnits(f, g, a, fi, team, vis, now) {
       world.root.add(o.g);
       o.tile = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({map: footRingTex(), color: TC[u[1]].c, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending}));
       o.tile.renderOrder = 2; world.root.add(o.tile);
+      o.step = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({map: perceptTex('steps'), transparent: true, opacity: 0.9, depthWrite: false}));
+      o.step.renderOrder = 3; o.step.visible = false; world.root.add(o.step);     // 발소리: 머리 위 대신 발밑 칸 모서리에 (뭉쳐 있을 때 캐릭터를 가리지 않게)
       o.gold = new THREE.Sprite(new THREE.SpriteMaterial({map: goldTex(1), transparent: true, depthTest: false}));
       o.gold.renderOrder = 15; o.gold.visible = false; o.body.add(o.gold);
       world.units.set(u[0], o);
@@ -1959,6 +1980,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.g.scale.setScalar(Math.max(0.001, sc) * CH * (o.kind === 'G' ? 1.12 : 1));
     o.disc.visible = false; o.badge.visible = false; o._fade = 1;
     o.tile.visible = true; o.tile.position.set(wx(Math.round(x)), 0.012, wz(Math.round(y)));
+    o.step.visible = AGENT() && PERCEPT !== 'off' && !!u[12]; o.step.position.set(wx(Math.round(x)) + 0.31, 0.016, wz(Math.round(y)) + 0.31);
     o.tile.material.opacity = 0.3 + 0.06 * Math.sin(now * 2.4 + id);
     const fr = st === 'walk' ? 1 + (Math.floor(a * 4) % 2) : 0;
     if (!o.pix.userData.lpc && o._fr !== fr) { o._fr = fr; o.pix.material.map = bodyTex(o.kind, o.team, fr); o.pix.material.needsUpdate = true; o.glow.material.map = glowTex(o.kind, o.team, fr); o.glow.material.needsUpdate = true; }
@@ -2008,13 +2030,16 @@ function updateUnits(f, g, a, fi, team, vis, now) {
       } }
     o.pool.visible = AGENT(); o.pool.scale.set(1 / CH, 1, 1 / CH);
     { const pv = A.get(id), hurt = moving && pv && u[5] < pv[5];     // 지금 느끼는 것: 바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔 → 머리 위 작은 아이콘 띠 (확대와 상관없이 같은 크기)
-      const on = AGENT() ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', u[12] && 'steps', hurt && 'hurt'].filter(Boolean) : [];
+      const on = AGENT() && PERCEPT !== 'off' ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', hurt && 'hurt'].filter(Boolean) : [];
+      const picked = (hoverC && hoverC[0] === Math.round(x) && hoverC[1] === Math.round(y)) || selId === id;
+      const dot = PERCEPT === 'sel' && !picked;      // '선택만': 나머지는 작은 점 하나
       const ic = o.icons[0]; o.icons.forEach((x, k) => { if (k) x.visible = false; });
       ic.visible = on.length > 0;
       if (ic.visible) {
-        const key = on.join(',');
-        if (ic.userData.k !== key) { ic.userData.k = key; ic.material.map = perceptStrip(on); ic.material.needsUpdate = true; ic.material.sizeAttenuation = false; }
-        ic.scale.set(0.022 * on.length, 0.022, 1);
+        const key = dot ? '.' : on.join(',');
+        if (ic.userData.k !== key) { ic.userData.k = key; ic.material.map = dot ? perceptDot() : perceptStrip(on); ic.material.needsUpdate = true; ic.material.sizeAttenuation = false; }
+        const sz = dot ? 0.008 : 0.02 * (picked ? 1 : ICONK);
+        ic.scale.set(sz * (dot ? 1 : on.length), sz, 1);
         ic.center.set(0.5, 0); above(ic, NEAR > 0.5 ? topW + 0.2 : 0.68 * CH + 0.04);
       } }
     if (o._hk !== hp10) { o._hk = hp10; o.bar.material.map = hpTex(hp10, o.team); o.bar.material.needsUpdate = true; }
@@ -2548,7 +2573,8 @@ function frame(f, g, a, fi, team, vis, seen) {
   const canSee = (x, y) => !vis || vis[y * W + x] === 1;
   fxBegin();
   { const d = camera.position.distanceTo(controls.target), s0 = Math.max(W, H);   // 처음 화면 (지도 전체) 부터 도트, 더 멀어지면 아이콘
-    NEAR = Math.min(1, Math.max(0, (s0 * 1.44 - d) / (s0 * 0.12))); }
+    NEAR = Math.min(1, Math.max(0, (s0 * 1.44 - d) / (s0 * 0.12)));
+    ICONK = Math.min(1, Math.max(0.55, s0 * 0.75 / d)); }
   if (world.wum) world.wum.forEach(w => { lod(w); const th = w.g.rotation.y, off = 0.3 / 1.7; w.pix.position.set(-Math.sin(th) * off, 0, Math.cos(th) * off); w.token.position.copy(w.pix.position).multiplyScalar(0.6); });
   applyFog(fi, team, vis, seen);
   updateStatic(fi, team, seen, now);
@@ -2606,6 +2632,7 @@ function frame(f, g, a, fi, team, vis, seen) {
 const SH = new THREE.Vector3(), FOC = new THREE.Vector3(), OFF = new THREE.Vector3();
 let spect = false, focusPt = null, focusT = 0;
 function setSpectate(on) { spect = on; focusPt = null; }
+function setPercepts(m) { PERCEPT = m === 'sel' || m === 'off' ? m : 'all'; }
 function spectate(g) {
   const now = performance.now() / 1000;
   let sx = 0, sz = 0, n = 0;
@@ -2679,5 +2706,5 @@ function legend() {                          // 오른쪽 '표시' 칸에 쓸 �
   return o;
 }
 
-window.View3D = {build, frame, resize, resetCam, focus, setSpectate, look, legend, locate, dbg: () => world};
+window.View3D = {build, frame, resize, resetCam, focus, setSpectate, setPercepts, look, legend, locate, dbg: () => world};
 if (window.onView3DReady) window.onView3DReady();
