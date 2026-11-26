@@ -823,6 +823,9 @@ window.onView3DReady=()=>{ if(R)View3D.build(); View3D.resize(); buildLegend();
   };   // 화면은 3D 하나뿐이다 (2D 화면은 없앴다)
 setTimeout(()=>{ if(!window.View3D){const b=$('banner');b.style.display='block';b.textContent='3D 화면을 띄울 수 없습니다 (브라우저의 WebGL 을 확인하세요)';} },6000);
 window.addEventListener('resize',()=>{layout();lastSide=-1;});
+// 다른 화면 (토너먼트 대진표) 이 보내 주는 리플레이: {type:'wumpus-replay', replay, round}
+window.addEventListener('message',e=>{const d=e.data;if(!d||d.type!=='wumpus-replay'||!d.replay)return;
+  try{setPlay(false);}catch(_){} load(d.replay);lastSide=-1;if(typeof d.round==='number')P=Math.max(0,Math.min(N-1,d.round));});
 // 끌어다 놓기
 document.addEventListener('dragover',e=>e.preventDefault());
 document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(!f)return;

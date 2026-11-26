@@ -93,6 +93,7 @@ python -m wumpus scrim mybot starter            # 맵 10개에서 양쪽 진영�
 | [게임 규칙](docs/RULES.md) | 목표 · 맵 · 모험가 · 아홉 지각 · 구덩이 · 웜퍼스 · 금 · 야영지 · 행동 · 차례 순서 · 코드 검사 · 모든 수치 |
 | [봇 API](docs/API.md) | `turn(me, view, memory)`, 지각, 행동, 공유 메모리, 디버그 표시, 연산 한도 · 코드 검사 |
 | [스크림 도구](docs/SCRIM.md) | 여러 맵 묶음 대전, 승률 · 시간 · 오류 보기, CSV |
+| [토너먼트](docs/TOURNAMENT.md) | 학생 봇 전체로 스위스 예선 → 더블 일리미네이션 본선. 대진표 · 공개 범위 · 리플레이 · zip 묶기 (프로그램 화면) |
 | [리플레이 도구](docs/REPLAY.md) | 리플레이 파일, 뷰어 화면, 지각 아이콘, 명장면 · 사건 알림 · 금 줄다리기, 팀 시야, .json 형식 |
 | [맵](docs/MAPS.md) | 맵 목록 · 그림 보기 · 새 맵 만들기 · 맵 파일 형식 |
 
@@ -115,6 +116,7 @@ PDF 문서 (인쇄용, 학위논문 양식). 규칙서 · 가이드북은 `pytho
 | `python -m wumpus maps [list / show 맵 / gen]` | 맵 목록 · 글자 그림 · 새 맵 |
 | `python -m wumpus new 이름` | 새 봇 폴더 |
 | `python -m wumpus check 봇` | 봇 점검 (코드 검사 · 오류 · 차례 시간 · 연산) |
+| `python -m wumpus tournament` | 토너먼트 프로그램 (Windows 는 `tournament.bat` 더블클릭) |
 
 `run` · `scrim` · `check` 에 `--no-ops-limit` 를 붙이면 연산 셈을 꺼서 빠르게 돌린다 (공식 규칙은 아니다).
 

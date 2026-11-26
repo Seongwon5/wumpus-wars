@@ -7,6 +7,7 @@
   python -m wumpus maps   [list | show 맵 | gen --seed N --name 이름]    맵 목록 · 그림 · 만들기
   python -m wumpus new    새봇이름 [--from starter]                    봇 폴더 만들기
   python -m wumpus check  봇                                         봇 점검 (오류 · 시간)
+  python -m wumpus tournament                                        토너먼트 프로그램 (스위스 예선 → 더블 일리미네이션)
 
 pip install -e . 로 설치하면 'python -m wumpus' 대신 'wumpus' 만 써도 된다.
 """
@@ -370,6 +371,27 @@ def cmd_check(a):
             _say('     -', s)
 
 
+def cmd_tournament(a):
+    from . import tournament as T
+    if a.action == 'gui':
+        T.serve(a.port, not a.no_open)
+        return
+    if not a.dir:
+        raise SystemExit('토너먼트 폴더를 주세요: python -m wumpus tournament %s <폴더>' % a.action)
+    if a.action == 'run':
+        if not os.path.isfile(os.path.join(a.dir, 'config.json')):
+            if not a.bots:
+                raise SystemExit('새 토너먼트에는 --bots <학생 봇 폴더> 가 필요하다')
+            cfg = T.create(a.dir, a.bots, name=a.name, n_maps=a.maps, swiss_rounds=a.rounds, seed=a.seed, jobs=a.jobs)
+            _say(f"토너먼트 '{cfg['name']}': {len(cfg['teams'])}팀, 맵 {len(cfg['maps'])}개 (새로 만듦), 예선 {cfg['swiss_rounds']}라운드")
+        T.write_viewer(a.dir)
+        r = T.Runner(a.dir, jobs=a.jobs, log=_say)
+        r.run()
+        _say('진행:', r.st['phase'], f"({r.games_done()}판 끝)")
+    elif a.action == 'pack':
+        _say('저장:', T.pack(a.dir, out=a.out, hide=a.hide))
+
+
 def main(argv=None):
     try:
         sys.stdout.reconfigure(errors='replace')
@@ -431,6 +453,17 @@ def main(argv=None):
     p.add_argument('--time-limit', type=float, default=None)
     p.add_argument('--no-ops-limit', action='store_true', help='연산 한도를 끈다 (빠르지만 공식 규칙이 아니다)')
     p.set_defaults(fn=cmd_check)
+
+    p = sub.add_parser('tournament', help='토너먼트 프로그램 (스위스 예선 → 더블 일리미네이션 본선)')
+    p.add_argument('action', nargs='?', default='gui', choices=['gui', 'run', 'pack'], help='gui: 화면 (기본) · run: 화면 없이 끝까지 · pack: zip 으로 묶기')
+    p.add_argument('dir', nargs='?', help='토너먼트 폴더 (run · pack)')
+    p.add_argument('--bots', help='학생 봇 폴더 (안에 이름/main.py) — 새 토너먼트를 만들 때')
+    p.add_argument('--name'); p.add_argument('--maps', type=int, default=21, help='새로 만들 맵 수 (기본 21)')
+    p.add_argument('--rounds', type=int, default=7, help='스위스 예선 라운드 (기본 7)')
+    p.add_argument('--seed', type=int); p.add_argument('--jobs', type=int, help='동시에 돌릴 판 수 (기본 CPU 수 - 2)')
+    p.add_argument('--hide', help='pack: 처음 열 때 숨길 범위 (예: 8 이면 8강부터, GF 면 그랜드 파이널부터)')
+    p.add_argument('--out', help='pack: zip 경로'); p.add_argument('--port', type=int, default=8770); p.add_argument('--no-open', action='store_true')
+    p.set_defaults(fn=cmd_tournament)
 
     a = ap.parse_args(argv)
     try:
