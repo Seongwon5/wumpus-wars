@@ -26,7 +26,7 @@ from wumpus.api import (Move, Mine, Attack, Shoot, Spawn, debug,
                         EXPLORER, CAMP,                        # 종류 (모험가 = EXPLORER)
                         EMPTY, WALL, GOLD, CAMP_TILE,          # 칸 글자 '.' '#' 'G' 'C'
                         DIRS, mirror, cheb, direction_to,      # 도우미
-                        COST, CARRY_MAX, MAX_ROUNDS)           # 규칙 수치
+                        MAX_ROUNDS)                            # 규칙 수치 (모험가 값 · 짐은 view.cost · view.carry_max)
 ```
 
 ## 2. 좌표와 방향
@@ -88,7 +88,7 @@ from wumpus.api import (Move, Mine, Attack, Shoot, Spawn, debug,
 | `view.width`, `view.height` | 맵 크기 |
 | `view.round`, `view.bank`, `view.score`, `view.team` | 라운드, 우리 금고, 우리 점수 (바친 금 합), 팀 번호 |
 | `view.unit_count` | 우리 팀 살아 있는 모험가 수 |
-| `view.carry_max` | 모험가가 들 수 있는 금 (기본 규칙은 사실상 무한 `10**6`) |
+| `view.carry_max` | 모험가가 들 수 있는 금 (상한 없음: `10**6`) |
 | `view.cost` | 유닛 값 사전 `{EXPLORER: 20}` |
 
 ## 5. 행동
