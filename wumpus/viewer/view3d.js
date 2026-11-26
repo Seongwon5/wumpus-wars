@@ -216,7 +216,7 @@ function badgeTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {
     g.fillStyle = '#2a1600'; g.font = '800 92px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(String(carry), 186, 192);
   }
-  if (arrows >= 0) {           // 남은 화살: 왼쪽 아래 화살 표지에 숫자 (0 이면 붉게)
+  if (arrows > 0 || (arrows === 0 && kind === 'G')) {           // 남은 화살: 왼쪽 아래 화살 표지에 숫자 (0 이면 붉게. 시안 4 모험가는 0 이면 표시 없음)
     g.beginPath(); g.arc(70, 186, 64, 0, 7); g.fillStyle = '#0b0705'; g.fill();
     g.beginPath(); g.arc(70, 186, 55, 0, 7); g.fillStyle = arrows ? '#dfeeff' : '#ff6a3d'; g.fill();
     g.strokeStyle = '#1a2230'; g.lineWidth = 7; g.beginPath(); g.moveTo(38, 214); g.lineTo(62, 190); g.stroke();
@@ -290,7 +290,7 @@ function tokenTex(kind, team, carry = 0, hp10 = 10, arrows = -1) {   // 둥근 �
     g.fillStyle = ink; g.font = '800 30px Cinzel, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(txt, cx, cy + 2);
   };
-  if (arrows >= 0) chip(30, 130, arrows ? '#dfeeff' : '#ff6a3d', arrows ? '➶' + arrows : '🗡', '#1a2230');
+  if (arrows > 0 || (arrows === 0 && kind === 'G')) chip(30, 130, arrows ? '#dfeeff' : '#ff6a3d', arrows ? '➶' + arrows : '🗡', '#1a2230');   // 시안 4 모험가는 화살 0 이면 표시 없음
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   t.magFilter = THREE.NearestFilter; t.anisotropy = 4;
   _tok.set(key, t);
@@ -595,6 +595,41 @@ function garrowTex() {                      // 바닥에 비스듬히 꽂힌 화
     K.outline('#140c06');
   }, 41)));
 }
+function bowTex(drawn) {                    // 시안 4: 쏠 때 드는 활 (세로로 선 나무 활, 오른쪽이 쏘는 쪽). drawn 이면 시위를 당겨 화살을 건 모습
+  return pxMemo('bow' + (drawn ? 1 : 0), () => pxTex(pxCanvas(16, 28, K => {
+    const wood = '#9a6a34', woodD = '#6a4420', tip = '#e8d8a8';
+    for (let y = 1; y < 27; y++) {                // 활대: 오른쪽으로 휜 호
+      const t = (y - 14) / 13, x = 9 + Math.round(4 * (1 - t * t));
+      K.P(x, y, wood); K.P(x + 1, y, woodD);
+    }
+    K.R(12, 12, 2, 4, '#4a2e16');                  // 손잡이 감은 가죽
+    K.P(9, 1, tip); K.P(9, 26, tip);
+    const sx = drawn ? 3 : 9;                      // 시위: 당기면 왼쪽으로 꺾인다
+    for (let y = 2; y < 26; y++) { const k = Math.abs(y - 14) / 12, x = Math.round(sx + (9 - sx) * k); K.P(x, y, '#f4f0e0'); }
+    if (drawn) {                                   // 건 화살: 시위에서 오른쪽으로
+      K.R(3, 14, 12, 1, '#d8c08a'); K.P(15, 14, '#ffffff'); K.P(14, 13, '#ffffff'); K.P(14, 15, '#ffffff');
+      K.P(3, 13, '#e04030'); K.P(3, 15, '#e04030'); K.P(4, 13, '#e04030'); K.P(4, 15, '#e04030');
+    }
+    K.outline('#140c06');
+  }, 53)));
+}
+function backArrowTex() {                   // 시안 4: 등에 곧게 세운 큰 화살 한 발 (화살촉이 위)
+  return pxMemo('barrow', () => pxTex(pxCanvas(9, 40, K => {
+    K.R(4, 6, 1, 28, '#d8b878'); K.R(3, 6, 1, 28, '#a8884a');                 // 화살대
+    K.P(4, 0, '#ffffff'); K.R(3, 1, 3, 1, '#e8f0ff'); K.R(2, 2, 5, 2, '#c8d4e8'); K.R(2, 4, 5, 1, '#8a96aa'); K.R(3, 5, 3, 1, '#6a7488');   // 쇠 화살촉
+    for (let y = 30; y < 39; y++) { const w = y < 33 ? y - 29 : 3; K.R(4 - w, y, w, 1, '#e04030'); K.R(5, y, w, 1, '#c02818'); }        // 깃 (빨강)
+    K.R(3, 34, 3, 1, '#f0f0e0');
+    K.outline('#140c06');
+  }, 61)));
+}
+function sackTex() {                        // 시안 4: 허리춤의 금 자루 (짐 상한이 없어 든 금이 많을수록 커진다)
+  return pxMemo('sack', () => pxTex(pxCanvas(16, 16, K => {
+    K.E(8, 10, 6, 5, '#8a5a2a'); K.E(7.5, 9.5, 5, 4, '#a8743a'); K.R(6, 3, 4, 3, '#8a5a2a'); K.R(5, 5, 6, 1, '#5a3a18');   // 자루 · 묶은 끈
+    K.P(6, 2, '#ffd24a'); K.P(8, 1, '#ffd24a'); K.P(10, 2, '#ffe680'); K.P(7, 2, '#e8a820'); K.P(9, 2, '#e8a820');           // 삐져나온 금화
+    K.P(5, 9, '#c89048'); K.P(6, 8, '#c89048'); K.R(7, 11, 3, 1, '#ffd24a');                                              // 금 문양
+    K.outline('#140c06');
+  }, 67)));
+}
 function brazierTex(fr) {                   // 모서리 화로 기둥
   return pxMemo('braz' + fr, () => pxTex(pxCanvas(16, 40, K => {
     K.R(3, 36, 10, 4, '#5a4632'); K.R(3, 36, 10, 1, '#7a6448');
@@ -727,7 +762,14 @@ function perceptTex(k) {                       // 지각 도트 아이콘 (머�
     if (k === 'breeze') { K.L(3, 5, 10, 5, '#bfe9ff'); K.L(4, 8, 11, 8, '#8fd0ff'); K.L(3, 11, 8, 11, '#bfe9ff'); K.P(10, 4, '#bfe9ff'); K.P(11, 7, '#8fd0ff'); }
     else if (k === 'stench') { for (const x of [4, 7, 10]) { K.L(x, 11, x + 1, 8, '#9adf3a'); K.L(x + 1, 8, x, 4, '#c8ff6a'); } }
     else if (k === 'glitter') { K.L(7, 2, 7, 12, '#ffe070'); K.L(2, 7, 12, 7, '#ffe070'); K.R(6, 6, 3, 3, '#fff8d0'); K.P(4, 4, '#ffc63a'); K.P(10, 10, '#ffc63a'); K.P(10, 4, '#ffc63a'); K.P(4, 10, '#ffc63a'); }
-    else if (k === 'bump') { K.R(6, 2, 2, 7, '#ff9a40'); K.R(6, 10, 2, 2, '#ff9a40'); }
+    else if (k === 'bump') {                       // 부딪힘: 벽돌에 부딪혀 튀는 충격선
+      K.R(1, 3, 5, 3, '#c8784a'); K.R(1, 7, 5, 3, '#a85e38'); K.R(1, 11, 5, 2, '#c8784a'); K.P(3, 6, '#5a3020'); K.P(3, 10, '#5a3020');
+      K.L(8, 7, 12, 7, '#ffb040'); K.L(8, 5, 11, 2, '#ffd070'); K.L(8, 9, 11, 12, '#ffd070'); K.P(7, 7, '#fff0c0'); }
+    else if (k === 'scream') {                     // 웜퍼스의 비명: 초록 음파가 퍼진다
+      K.E(3, 7, 1.6, 2.4, '#c8ff6a'); K.L(6, 4, 7, 7, '#9adf3a'); K.L(7, 7, 6, 10, '#9adf3a'); K.L(9, 2, 11, 7, '#c8ff6a'); K.L(11, 7, 9, 12, '#c8ff6a'); K.P(13, 7, '#9adf3a'); }
+    else if (k === 'cry') {                        // 외침 (모험가가 쓰러짐): 붉은 해골
+      K.E(7, 6, 4.4, 4.2, '#efe6d6'); K.R(5, 9, 5, 3, '#efe6d6'); K.R(4, 5, 2, 2, '#c02818'); K.R(8, 5, 2, 2, '#c02818'); K.P(7, 8, '#5a2018');
+      K.P(5, 11, '#5a2018'); K.P(7, 11, '#5a2018'); K.P(9, 11, '#5a2018'); }
     else if (k === 'steps') { K.E(5, 5, 1.6, 2.2, '#e8dcc4'); K.E(9, 9, 1.6, 2.2, '#e8dcc4'); K.P(5, 8, '#e8dcc4'); K.P(9, 12, '#e8dcc4'); }
     else if (k === 'warmth') { K.E(7, 9, 3.2, 3.4, '#ff7a2a'); K.E(7, 8, 2, 2.6, '#ffc24a'); K.E(7, 9.5, 1, 1.2, '#fff3b0'); K.P(5, 4, '#ff7a2a'); K.P(9, 3, '#ffb03a'); K.P(7, 2, '#ff7a2a'); }
     else if (k === 'hurt') { K.E(5, 6, 2.2, 2.2, '#ff4a3a'); K.E(9, 6, 2.2, 2.2, '#ff4a3a'); K.L(3, 7, 7, 11, '#ff4a3a', 2); K.L(11, 7, 7, 11, '#ff4a3a', 2); }
@@ -1926,7 +1968,9 @@ function updateBases(fi, g, a, moving, seen, vis, now) {
 
 function updateUnits(f, g, a, fi, team, vis, now) {
   const moving = g !== f, ev = evOf(g);
-  for (const o of world.units.values()) { o.g.visible = false; if (o.tile) o.tile.visible = false; if (o.step) o.step.visible = false; if (o.gold) o.gold.visible = false; }
+  // 맵 전체가 듣는 지각: 이번 라운드에 웜퍼스가 쓰러졌으면 비명, 모험가가 쓰러졌으면 외침. 넘어가는 동안 모든 모험가 머리 위에 뜬다
+  const heard = moving && a < 0.85 ? [ev.scream.size > 0 && 'scream', [...ev.die.keys()].some(id => !R.map.base_ids.includes(id)) && 'cry'].filter(Boolean) : [];
+  for (const o of world.units.values()) { o.g.visible = false; if (o.tile) o.tile.visible = false; if (o.step) o.step.visible = false; if (o.gold) o.gold.visible = false; if (o.aura) o.aura.visible = false; }
   const A = umap[f], B = umap[g];
   const show = (o, x, y, own) => {
     if (vis && !own && !vis[Math.round(y) * W + Math.round(x)]) return false;
@@ -1938,14 +1982,8 @@ function updateUnits(f, g, a, fi, team, vis, now) {
   const getU = (u) => {
     let o = world.units.get(u[0]);
     if (!o) {
-      o = makeChar(u[2], u[1]);
-      world.root.add(o.g);
-      o.tile = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({map: footRingTex(), color: TC[u[1]].c, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending}));
-      o.tile.renderOrder = 2; world.root.add(o.tile);
-      o.step = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({map: perceptTex('steps'), transparent: true, opacity: 0.9, depthWrite: false}));
-      o.step.renderOrder = 3; o.step.visible = false; world.root.add(o.step);     // 발소리: 머리 위 대신 발밑 칸 모서리에 (뭉쳐 있을 때 캐릭터를 가리지 않게)
-      o.gold = new THREE.Sprite(new THREE.SpriteMaterial({map: goldTex(1), transparent: true, depthTest: false}));
-      o.gold.renderOrder = 15; o.gold.visible = false; o.body.add(o.gold);
+      const sp = world.spare && world.spare[u[2] + u[1]];     // 렉 줄이기: 쉬는 틈에 미리 만든 묶음을 꺼내 쓴다
+      o = sp && sp.length ? sp.pop() : newUnitObj(u[2], u[1]);
       world.units.set(u[0], o);
       o.g.rotation.y = Math.atan2(W / 2 - u[3], H / 2 - u[4]);
     }
@@ -1953,7 +1991,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
   };
   for (const u of F[g].u) {
     const id = u[0], p = A.get(id), o = getU(u);
-    let x = u[3], y = u[4], st = 'idle';
+    let x = u[3], y = u[4], st = 'idle', arw = null;
     const atk = moving ? (ev.atk.get(id) || ev.stab.get(id)) : null, psh = moving ? ev.push.get(id) : null, pushed = moving ? ev.pushed.get(id) : null;
     if (pushed && p) {                                  // 밀려서 미끄러진다 (몸은 휘청)
       const e = easeOut(Math.min(1, Math.max(0, (a - 0.25) / 0.45)));
@@ -1967,6 +2005,9 @@ function updateUnits(f, g, a, fi, team, vis, now) {
       x = p[3] + (u[3] - p[3]) * e; y = p[4] + (u[4] - p[4]) * e;
       st = 'walk';
       o.face = Math.atan2(u[3] - p[3], u[4] - p[4]);
+    } else if (moving && (arw = (ev.list || []).find(v => v[0] === 'arrow' && v[1] === id))) {
+      st = 'attack';                                    // 시안 4 화살: 활을 당겨 쏜다
+      o.face = Math.atan2(arw[4] - arw[2], arw[5] - arw[3]);
     } else if (atk) {
       st = atk[0] === 'stab' ? 'push' : 'attack';
       o.face = Math.atan2(atk[4] - atk[2], atk[5] - atk[3]);
@@ -2003,6 +2044,46 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.pix.scale.x = o.pix.userData.w * (o._left ? -1 : 1);
     o.pix.material.rotation = st === 'mine' || st === 'attack' || st === 'push' ? Math.sin(Math.PI * Math.min(1, a / 0.6)) * 0.35 * (o._left ? 1 : -1) : 0;
     }
+    { const s0 = moving && a < 0.5 && p ? p : u, H0 = o.pix.scale.y || 1;     // 시안 4: 쏠 때 드는 활 · 등의 큰 화살 · 금 자루
+      const bw = o.bow;
+      if (arw && a < 0.55 && o.kind === 'E') {          // 쏘기: 앞으로 든 활을 당겼다가 (a < 0.14) 놓는다 (평소에는 활을 보이지 않는다)
+        const drawn = a < 0.14;
+        if (bw.userData.k !== 'f' + drawn) { bw.userData.k = 'f' + drawn; bw.material.map = bowTex(drawn); bw.material.needsUpdate = true; }
+        AP0.set(wx(arw[2]), 0.8, wz(arw[3])).project(camera); AP1.set(wx(arw[4]), 0.8, wz(arw[5])).project(camera);
+        bw.material.rotation = Math.atan2(AP1.y - AP0.y, (AP1.x - AP0.x) * camera.aspect);
+        const kick = drawn ? 1 : 1 + 0.12 * Math.sin(Math.PI * Math.min(1, (a - 0.14) / 0.2));   // 놓는 순간 활이 튄다
+        bw.scale.set(H0 * 0.36 * kick, H0 * 0.62 * kick, 1);
+        bw.position.set(o.pix.position.x, H0 * 0.4, o.pix.position.z);
+        bw.renderOrder = 16; bw.visible = NEAR > 0.15;
+      } else bw.visible = false;
+      { const cg = s0[6] || 0, v4 = R.const.rules && R.const.rules.v4;   // 시안 4: 금 자루와 보물 운반자 빛
+        o.sack.visible = v4 && o.kind === 'E' && cg > 0 && NEAR > 0.3;
+        if (o.sack.visible) {
+          const sz = H0 * (0.13 + 0.045 * Math.log2(1 + cg)), dr = lpcDir(o.g.rotation.y), sd = dr === 1 ? -1 : 1;
+          o.sack.scale.set(sz, sz, 1);
+          o.sack.position.set(o.pix.position.x + H0 * 0.11 * sd, H0 * 0.05, o.pix.position.z);
+          o.sack.renderOrder = (o.pix.renderOrder || 6) + (dr === 2 ? 1 : -1);
+        }
+        o.aura.visible = v4 && cg >= 15;
+        if (o.aura.visible) {
+          const pul = 0.5 + 0.5 * Math.sin(now * 5 + id);
+          o.aura.position.set(o.g.position.x, 0.03, o.g.position.z); o.aura.scale.setScalar(1.1 + 0.25 * pul + Math.min(0.6, cg / 80));
+          o.aura.material.opacity = 0.35 + 0.35 * pul;
+        } }
+      const ba = o.barrow, has = o.kind === 'E' && s0[8] !== undefined && s0[8] > 0 && !(arw && a >= 0.12);   // 큰 화살: 쏘면 (당겼다 놓는 순간) 사라지고, 채우면 다시
+      ba.visible = has && NEAR > 0.3;
+      if (ba.visible) {
+        const dr = lpcDir(o.g.rotation.y), back = dr === 0, refill = moving && p && p[8] === 0 && u[8] > 0;
+        const pop = refill ? 1 + 0.5 * Math.sin(Math.PI * Math.min(1, a / 0.5)) : 1;
+        ba.scale.set(H0 * 0.1 * pop, H0 * 0.46 * pop, 1);
+        ba.material.rotation = back ? 0.3 : -0.3;                // 등에 비스듬히: 화살촉이 어깨 위로
+        ba.position.set(o.pix.position.x, H0 * 0.58, o.pix.position.z);   // 몸 한가운데 뒤, 윗부분만 머리 · 어깨 위로 솟는다
+        ba.renderOrder = (o.pix.renderOrder || 6) + (back ? 2 : -2);
+        if (refill && a < 0.6) {                            // 다시 채우는 순간: 반짝임
+          const sp = fx('aspark', aSprite(starTex)); sp.position.copy(ba.position).applyMatrix4(o.body.matrixWorld);
+          sp.scale.setScalar(0.6 + a * 1.2); sp.material.opacity = 1 - a / 0.6; sp.material.color.setHex(0xe8f0ff); sp.renderOrder = 23;
+        }
+      } }
     lod(o);
     const src = moving && a < 0.5 && p ? p : u;
     o.pips.forEach((pp, i) => pp.visible = i < src[6]);
@@ -2010,7 +2091,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.quiver.forEach((q, i) => q.visible = arr < 0 || i < arr);
     if (o.dagger) o.dagger.visible = arr === 0;
     const hp10 = Math.max(0, Math.min(10, Math.ceil(src[5] / R.const.hp[u[2]] * 10))), bk = src[6] + ':' + hp10 + ':' + arr;
-    if (o._bk !== bk) { o._bk = bk; o.token.material.map = tokenTex(o.kind, o.team, src[6], hp10, arr); o.token.material.needsUpdate = true; }
+    if (o._bk !== bk && (TEXB-- > 0 || o._bk === undefined)) { o._bk = bk; o.token.material.map = tokenTex(o.kind, o.team, src[6], hp10, arr); o.token.material.needsUpdate = true; }
     const mx = R.const.hp[u[2]];
     o.hp.visible = false;                          // 멀리서는 아이콘 고리, 가까이서는 머리 위 도트 막대
     // 도트 캐릭터는 카메라를 보고 서 있으므로, 머리 위 표시는 '화면 위쪽' 으로 올린다 (세계 높이로 올리면 화면 아래쪽 유닛은 몸통에 겹친다)
@@ -2021,7 +2102,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
       gd.visible = cg > 0;
       if (cg > 0) {
         const cap = typeof R.const.carry === 'number' ? R.const.carry : 5, gk = cg + (cg >= cap ? 'f' : '');
-        if (gd.userData.k !== gk) { gd.userData.k = gk; gd.material.map = goldTex(cg, cg >= cap); gd.material.needsUpdate = true; }
+        if (gd.userData.k !== gk && (TEXB-- > 0 || gd.userData.k === undefined)) { gd.userData.k = gk; gd.material.map = goldTex(cg, cg >= cap); gd.material.needsUpdate = true; }
         const wpp = 2 * camera.position.distanceTo(o.g.position) * Math.tan(camera.fov * Math.PI / 360) / renderer.domElement.clientHeight;
         const sz = Math.min(40 * wpp, Math.max(17 * wpp, 0.3));     // 화면에서 17~40px
         const near = NEAR > 0.5, dx = near ? 0.27 + sz * 0.5 : 0.36;
@@ -2033,7 +2114,7 @@ function updateUnits(f, g, a, fi, team, vis, now) {
     o.pool.visible = AGENT(); o.pool.scale.set(1 / CH, 1, 1 / CH);
     { const pv0 = A.get(id); if (moving && pv0 && u[5] < pv0[5]) dmgText(pv0[5] - u[5], o.g.position.x, 1.75, o.g.position.z, a); }
     { const pv = A.get(id), hurt = moving && pv && u[5] < pv[5];     // 지금 느끼는 것: 바람 · 악취 · 반짝임 · 부딪힘 · 발소리 · 아픔 → 머리 위 작은 아이콘 띠 (확대와 상관없이 같은 크기)
-      const on = AGENT() && PERCEPT !== 'off' ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', u[13] && 'warmth', hurt && 'hurt'].filter(Boolean) : [];
+      const on = AGENT() && PERCEPT !== 'off' ? [u[7] && 'breeze', u[9] && 'stench', u[10] && 'glitter', u[11] && 'bump', u[13] && 'warmth', hurt && 'hurt'].filter(Boolean).concat(heard) : [];
       const picked = (hoverC && hoverC[0] === Math.round(x) && hoverC[1] === Math.round(y)) || selId === id;
       const dot = PERCEPT === 'sel' && !picked;      // '선택만': 나머지는 작은 점 하나
       const ic = o.icons[0]; o.icons.forEach((x, k) => { if (k) x.visible = false; });
@@ -2326,16 +2407,164 @@ function dangerFx(fi, now, canSee) {
     ring(wx(x), wz(y), 0.06, 0.3 + beat * 0.3, 0xff7a4a, beat * 0.35);
   }
 }
+// 시안 4 화살: 맵을 가로지르는 크고 빛나는 화살 (조준 빛 → 빛줄기와 잔상 → 명중 섬광)
+const aSprite = (map) => () => new THREE.Sprite(new THREE.SpriteMaterial({map: map(), color: 0xffffff, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending}));
+function arrowFx(id, ax, ay, tx, ty, hit, team, a, g) {
+  const tc = TC[team] ? TC[team].c : 0xffffff, tl = TC[team] ? TC[team].l : 0xffffff;
+  const x0 = wx(ax), z0 = wz(ay), x1 = wx(tx), z1 = wz(ty), y = 0.85;
+  const dist = Math.abs(tx - ax) + Math.abs(ty - ay), fly = Math.min(0.5, 0.12 + dist * 0.025);
+  const T0 = 0.12, T1 = T0 + fly;
+  if (a < T0 + 0.05) {                                   // 1. 조준: 쏘는 몸에 팀 색 빛이 모인다
+    const q = Math.min(1, a / T0), s = fx('aglow', aSprite(softTex));
+    s.position.set(x0, y, z0); s.scale.setScalar(0.5 + q * 1.8); s.material.color.setHex(tl); s.material.opacity = 0.95; s.renderOrder = 22;
+    ring(x0, z0, 0.08, 1.1 - q * 0.8, tc, q);
+  }
+  if (a > T0) {                                          // 2. 빛줄기: 날아가는 동안 화살 뒤로 밝게, 뒤에 천천히 사라진다
+    const q = Math.min(1, (a - T0) / fly), hx = x0 + (x1 - x0) * q, hz = z0 + (z1 - z0) * q;
+    const fade = a < T1 ? 1 : Math.max(0, 1 - (a - T1) / (1 - T1));
+    if (fade > 0.01) { lane(x0, z0, hx, hz, tc, 0.85 * fade); lane(x0, z0, hx, hz, 0xffffff, 0.45 * fade); }
+    const n = Math.min(30, 6 + dist * 2);                // 지나간 자리에서 빛 알갱이가 흩날린다
+    for (let k = 0; k < n; k++) {
+      const t = hash(id + k, g) * q, age = a - (T0 + t * fly);
+      if (age <= 0 || age > 0.5) continue;
+      const m = fx('p', () => new THREE.Mesh(cubeG, addMat(0xffffff)));
+      m.position.set(x0 + (x1 - x0) * t + (hash(k, id) - 0.5) * 0.35, y + age * 1.4 * hash(k + 3, g), z0 + (z1 - z0) * t + (hash(id, k) - 0.5) * 0.35);
+      m.material.color.setHex(k % 3 ? tl : 0xffffff); m.material.opacity = 1 - age / 0.5; m.scale.setScalar(1.8 * (1 - age)); m.rotation.set(0, 0, 0);
+    }
+  }
+  if (a > T0 && a < T1) {                                // 3. 화살: 크게 빛나는 머리와 긴 잔상
+    const q = (a - T0) / fly;
+    for (let k = 5; k >= 0; k--) {
+      const qq = q - k * 0.045; if (qq < 0) continue;
+      const s = fx('ahead', aSprite(softTex));
+      s.position.set(x0 + (x1 - x0) * qq, y, z0 + (z1 - z0) * qq);
+      s.scale.setScalar(k ? 1.3 - k * 0.18 : 2.0); s.material.color.setHex(k ? tc : 0xffffff); s.material.opacity = k ? 0.6 - k * 0.09 : 1; s.renderOrder = 22 - k;
+    }
+    const m = fx('arrow', makeArrow), hx = x0 + (x1 - x0) * q, hz = z0 + (z1 - z0) * q;
+    m.position.set(hx, y, hz); m.lookAt(x1, y, z1); m.scale.setScalar(2.4);
+    m.userData.trail.visible = true; m.userData.glow.visible = true; m.userData.head.material.color.setHex(0xffffff);
+    m.userData.glow.material.color.setHex(tl); m.userData.glow.material.opacity = 1; m.userData.trail.material.color.setHex(tl);
+    for (const f of m.userData.fl) f.material.color.setHex(tc);
+    const st = fx('aspark', aSprite(starTex));
+    st.position.set(hx, y, hz); st.scale.setScalar(1.4 + 0.35 * Math.sin(a * 70)); st.material.opacity = 0.95; st.renderOrder = 23;
+  }
+  if (a >= T1) {                                         // 4. 명중
+    const q = Math.min(1, (a - T1) / Math.max(0.05, 1 - T1));
+    const fl = fx('aflash', aSprite(softTex));
+    fl.position.set(x1, y, z1); fl.renderOrder = 23; fl.material.opacity = Math.max(0, 1 - q * 1.6);
+    if (hit === 'w') {                                   // 웜퍼스: 큰 초록 폭발 · 섬광 · 명중!
+      fl.scale.setScalar(4.5 * (1 - q) + 1); fl.material.color.setHex(0xe8ffb0);
+      burst(x1, z1, 0.9, 44, 0x9adf3a, q, 3.4, id * 31 + g, 2.5, 1.9);
+      burst(x1, z1, 1.0, 26, 0xffffff, q, 2.6, id * 7 + g, 1.5, 1.4);
+      ring(x1, z1, 0.15, 0.3 + q * 2.6, 0xc8ff5a, 1 - q); ring(x1, z1, 0.15, 0.2 + q * 1.6, 0xffffff, 1 - q);
+      if (q < 0.9) { const s2 = bigText('명중!', '#d8ff7a', 0.8); s2.position.set(x1, 2.3 + q * 0.8, z1); s2.material.opacity = 1 - q; }
+    } else if (hit === 'u') {                            // 모험가: 팀 색 폭발 · 피해 숫자
+      fl.scale.setScalar(3 * (1 - q) + 0.6); fl.material.color.setHex(tl);
+      burst(x1, z1, 0.8, 26, tl, q, 2.6, id * 13 + g, 3, 1.4);
+      burst(x1, z1, 0.8, 12, 0xffffff, q, 2, id * 17 + g, 3, 1);
+      ring(x1, z1, 0.6, 0.2 + q * 1.4, tc, 1 - q);
+      if (q < 0.9) { const s3 = textSprite('-6', '#ff5a48'); s3.position.set(x1, 1.4 + q * 0.7, z1); s3.scale.set(0.9, 0.45, 1); s3.material.opacity = 1 - q * q; s3.renderOrder = 24; }
+    } else {                                             // 벽 · 맵 끝: 불꽃이 튄다
+      fl.scale.setScalar(2 * (1 - q) + 0.4); fl.material.color.setHex(0xffe0a0);
+      burst(x1, z1, 0.7, 18, 0xffd080, q, 2, id * 19 + g, 3, 1.1);
+      ring(x1, z1, 0.5, 0.2 + q * 0.9, 0xffc060, 1 - q);
+    }
+  }
+}
+// 시안 4 금의 흐름: 금화가 쓰러진 자리 (또는 굴) 에서 분수처럼 터져 나와, 잠깐 떠 있다가 받는 쪽으로 빨려 들어간다.
+// t 는 0 ~ 2 (사건이 난 라운드와 그다음 라운드에 걸쳐 보인다)
+function coinFlow(id, x0, y0, x1, y1, amt, t, g, label, color) {
+  const X0 = wx(x0), Z0 = wz(y0), X1 = wx(x1), Z1 = wz(y1);
+  const n = Math.min(12, Math.max(5, Math.ceil(amt / 3))), tc = color || 0xffd34a;   // 렉 줄이기: 최대 12 닢
+  for (let k = 0; k < n; k++) {
+    const h1 = hash(id * 7 + k, g), h2 = hash(k, id + g), ang = h1 * Math.PI * 2, rad = 0.25 + h2 * 0.45;
+    const hx = X0 + Math.cos(ang) * rad, hz = Z0 + Math.sin(ang) * rad, hy = 1.1 + hash(k + 9, id) * 0.8;   // 떠 있는 자리
+    const go = 0.42 + k * 0.035;                           // 이 금화가 날아가기 시작하는 때
+    let P = null;
+    if (t < 0.42) {                                        // 1. 분수: 위로 터져 나온다
+      const q = Math.min(1, t / 0.32), e = 1 - (1 - q) * (1 - q);
+      P = [X0 + (hx - X0) * e, 0.3 + (hy - 0.3) * e + Math.sin(Math.PI * q) * 0.35, Z0 + (hz - Z0) * e];
+    } else if (t < go) {                                   // 2. 떠 있음: 살짝 흔들린다
+      P = [hx, hy + Math.sin((t + k) * 18) * 0.04, hz];
+    } else {                                               // 3. 빨려 들어간다 (점점 빨라짐)
+      const q = Math.min(1, (t - go) / 0.5);
+      if (q >= 1) continue;
+      const e = q * q * q, arc = Math.sin(Math.PI * q) * 0.5;
+      P = [hx + (X1 - hx) * e, hy + (0.9 - hy) * e + arc, hz + (Z1 - hz) * e];
+      for (let j = 1; j <= 2; j++) {                       // 빛 꼬리 (렉 줄이기: 2 개)
+        const qq = Math.max(0, q - j * 0.05), ee = qq * qq * qq;
+        const tl = fx('ctrail', () => new THREE.Sprite(new THREE.SpriteMaterial({map: softTex(), color: tc, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending})));
+        tl.position.set(hx + (X1 - hx) * ee, hy + (0.9 - hy) * ee + Math.sin(Math.PI * qq) * 0.5, hz + (Z1 - hz) * ee);
+        tl.scale.setScalar(0.34 - j * 0.07); tl.material.color.setHex(tc); tl.material.opacity = 0.55 - j * 0.14; tl.renderOrder = 21;
+      }
+    }
+    const gl = fx('cglow', () => new THREE.Sprite(new THREE.SpriteMaterial({map: softTex(), color: tc, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending})));
+    gl.position.set(P[0], P[1], P[2]); gl.scale.setScalar(0.55); gl.material.color.setHex(tc); gl.material.opacity = 0.7; gl.renderOrder = 22;
+    const c = fx('coin2', () => new THREE.Sprite(new THREE.SpriteMaterial({map: coinTex(), transparent: true, alphaTest: 0.4, depthTest: false})));
+    const spin = Math.abs(Math.cos(t * 14 + k));           // 돌면서 반짝
+    c.position.set(P[0], P[1], P[2]); c.scale.set(0.3 * (0.35 + 0.65 * spin), 0.3, 1); c.renderOrder = 23;
+  }
+  const arr = 0.42 + (n - 1) * 0.035 + 0.5;                 // 마지막 금화가 닿는 때
+  const t0 = 0.42 + 0.5;                                    // 첫 금화가 닿는 때
+  if (t > t0 && t < arr + 0.6) {                            // 4. 받는 쪽: 금빛 섬광 · 고리 · 큰 "+N"
+    const q = Math.min(1, (t - t0) / (arr + 0.6 - t0));
+    const fl = fx('cflash', () => new THREE.Sprite(new THREE.SpriteMaterial({map: softTex(), color: tc, transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending})));
+    fl.position.set(X1, 0.9, Z1); fl.scale.setScalar(1.2 + 1.4 * Math.sin(Math.PI * Math.min(1, q * 1.4))); fl.material.color.setHex(tc);
+    fl.material.opacity = 0.9 * (1 - q); fl.renderOrder = 22;
+    burst(X1, Z1, 0.9, 16, 0xfff0a0, q, 1.8, id * 11 + g, 3, 1.1);
+    ring(X1, Z1, 0.08, 0.3 + q * 1.2, tc, 1 - q); ring(X1, Z1, 0.08, 0.2 + q * 0.7, 0xffffff, 0.8 * (1 - q));
+    const pop = 1 + 0.35 * Math.sin(Math.PI * Math.min(1, q * 2.5));
+    const s2 = bigText(label || ('+' + amt), '#ffd34a', 0.55 * pop); s2.position.set(X1, 1.8 + q * 0.7, Z1); s2.material.opacity = 1 - q * q;
+  }
+}
+function moneyFx(fi, t, canSee) {                       // 한 라운드의 금 흐름 사건을 그린다 (t: 0 ~ 2)
+  if (fi < 1 || fi >= F.length) return;
+  const L = evOf(fi).list;
+  for (const e of L) {
+    if (e[0] === 'bounty') {                            // 처치 금: 쓰러진 자리 → 쓰러뜨린 챔피언
+      const [, id, kx, ky, amt, , vx, vy, tm] = e;
+      if (canSee(kx, ky) || canSee(vx, vy)) coinFlow(id, vx, vy, kx, ky, amt, t, fi, '+' + amt, TC[tm] ? 0xffd34a : 0xffd34a);
+    } else if (e[0] === 'campgold') {                   // 야영지가 잡음: 쓰러진 자리 → 야영지 (바로 점수)
+      const [, id, cx, cy, amt, , vx, vy] = e;
+      if (canSee(cx, cy) || canSee(vx, vy)) coinFlow(id, vx, vy, cx, cy, amt, t, fi, '+' + amt + ' 점수');
+    } else if (e[0] === 'hoard') {                      // 화살 처치 보물: 굴 → 쏜 챔피언 (화살이 닿은 뒤)
+      const [, id, sx, sy, amt] = e, sc = L.find(v => v[0] === 'scream' && v[1] === id);
+      if (sc && (canSee(sx, sy) || canSee(sc[2], sc[3]))) coinFlow(id * 3 + 1, sc[2], sc[3], sx, sy, amt, Math.max(0, t - 0.35), fi, '보물 +' + amt, 0xc8ff5a);
+    }
+  }
+}
+function veinFx(x, y, a, g) {                           // 시안 4 새 금맥: 빛 기둥 · 반짝임 · "새 금맥"
+  const X = wx(x), Z = wz(y), q = a;
+  const pl = fx('vpillar', () => new THREE.Mesh(pillarG, addMat(0xffd34a, 0.5)));
+  pl.position.set(X, 1.1, Z); pl.scale.set(0.6 + q * 0.5, 1, 0.6 + q * 0.5); pl.material.opacity = 0.55 * (1 - q); pl.renderOrder = 4;
+  burst(X, Z, 0.2, 16, 0xfff0a0, q, 1.2, x * 31 + y + g, -2, 1.2);
+  ring(X, Z, 0.05, 0.2 + q * 1.1, 0xffd34a, 1 - q);
+  if (q < 0.9) { const s2 = bigText('새 금맥', '#ffe27a', 0.4); s2.position.set(X, 1.5 + q * 0.5, Z); s2.material.opacity = 1 - q; }
+}
+function lostFx(id, x, y, amt, a, g) {                  // 시안 4 동굴에 삼켜진 금: 검은 연기와 "-N"
+  const X = wx(x), Z = wz(y);
+  burst(X, Z, 0.3, 14, 0x2a2420, a, 1.2, id * 13 + g, -2, 2);
+  burst(X, Z, 0.4, 8, 0xb08a30, a, 0.9, id * 17 + g, 4, 1);
+  if (a < 0.9) { const s2 = bigText('-' + amt, '#9a8a6a', 0.38); s2.position.set(X, 1.3 + a * 0.4, Z); s2.material.opacity = 1 - a; }
+}
 function effects(g, a, canSee) {
+  moneyFx(g, a, canSee); moneyFx(g - 1, 1 + a, canSee);   // 시안 4 금의 흐름 (두 라운드에 걸쳐)
   (R.map.wumpus || []).forEach(([x, y], i) => {     // 웜퍼스가 받은 피해
     const d = ((F[g - 1].w || [])[i] || 0) - ((F[g].w || [])[i] || 0);
     if (d > 0 && canSee(x, y)) dmgText(d, wx(x), 2.0, wz(y), a, true);
   });
   const baseIdx = id => R.map.base_ids.indexOf(id);
+  const arrowIds = new Set(evOf(g).list.filter(v => v[0] === 'arrow').map(v => v[1]));   // 시안 4 화살을 쏜 몸 (그 몸의 atk 사건은 화살 연출이 그린다)
   for (const e of evOf(g).list) {
     const k = e[0];
+    if (k === 'arrow') {
+      const [, id, ax, ay, tx, ty, hit, team] = e;
+      if (canSee(ax, ay) || canSee(tx, ty)) arrowFx(id, ax, ay, tx, ty, hit, team, a, g);
+      continue;
+    }
     if (k === 'atk') {
       const [, id, ax, ay, tx, ty, tid] = e;
+      if (arrowIds.has(id)) continue;
       if (!canSee(ax, ay) && !canSee(tx, ty)) continue;
       const u = umap[g].get(id) || umap[Math.max(0, g - 1)].get(id), bi = baseIdx(id), col = u ? TC[u[1]].l : bi >= 0 ? TC[bi].l : 0xffffff;
       if ((tid > 0 || tid === -1) && a > 0.45 && canSee(tx, ty)) {   // 피해 숫자: 맞은 자리 위로 떠오른다
@@ -2424,6 +2653,14 @@ function effects(g, a, canSee) {
         if (q < 0.4) { const st2 = fx('spark', () => new THREE.Sprite(new THREE.SpriteMaterial({map: starTex(), color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending})));
           st2.position.set(wx(tx), 0.8, wz(ty)); st2.scale.setScalar(0.6 + q * 2); st2.material.opacity = 1 - q / 0.4; st2.material.color.setHex(tc); }
       }
+    } else if (k === 'vein') {
+      const [, x, y] = e;
+      if (canSee(x, y)) veinFx(x, y, a, g);
+      continue;
+    } else if (k === 'lost') {
+      const [, id, x, y, amt] = e;
+      if (canSee(x, y)) lostFx(id, x, y, amt, a, g);
+      continue;
     } else if (k === 'trap') {
       const [, id, x, y] = e;
       if (!canSee(x, y)) continue;
@@ -2437,8 +2674,12 @@ function effects(g, a, canSee) {
       burst(wx(x), wz(y), 0.05, 16, 0xa88a60, q, 1.6, id * 17 + g, -1.2, 1.6);
     } else if (k === 'die') {
       const [id, x, y, cause] = [e[1], e[2], e[3], e[4]];
-      if (!canSee(x, y)) continue;
       const bi = baseIdx(id);
+      if (bi < 0) for (let i = 0; i < 2; i++) {    // 외침: 쓰러진 자리에서 맵 전체로 퍼지는 붉은 고리 (모두가 듣는다, 시야와 상관없이)
+        const q = Math.max(0, a - i * 0.14);
+        if (q > 0) ring(wx(x), wz(y), 0.3 + i * 0.25, 0.4 + q * Math.max(W, H) * 0.9, 0xff4a3a, Math.max(0, 1 - q) * 0.75);
+      }
+      if (!canSee(x, y)) continue;
       if (bi >= 0 && SHEETS.floor) {               // 야영지 파괴: 도트 불길 · 검은 연기 · 천막 조각 · 큰 도트 글씨
         burst(wx(x), wz(y), 0.4, 46, 0xff8a2a, a, 3.4, id + g, -0.5, 2.2);
         burst(wx(x), wz(y), 0.6, 30, 0xffe08a, a, 2.2, id * 3 + g, -1.2, 1.6);
@@ -2594,12 +2835,73 @@ function torches(now) {
 }
 
 // ---------------- 한 장면 그리기 ----------------
+let TEXB = 2;
+let WARM = null;                                   // 렉 줄이기: 자주 쓰는 글자를 쉬는 틈에 미리 그려 둔다
+function warmTexts() {
+  if (WARM) return;
+  WARM = [];
+  for (let n = 1; n <= 60; n++) WARM.push(['big', '+' + n, '#ffd34a'], ['big', '+' + n + ' 점수', '#ffd34a']);
+  for (let n = 1; n <= 30; n++) WARM.push(['big', '-' + n, '#9a8a6a'], ['txt', '-' + n, '#ff6a55']);
+  WARM.push(['big', '명중!', '#d8ff7a'], ['big', '새 금맥', '#ffe27a'], ['big', '보물 +30', '#ffd34a'], ['txt', '-6', '#ff5a48'], ['txt', '-3', '#ff5a48']);
+  const step = () => {
+    const t0 = performance.now();
+    while (WARM.length && performance.now() - t0 < 4) {
+      const [k, str, col] = WARM.pop(), key = str + col;
+      if (k === 'big') { if (!_big.has(key)) { const t = SHEETS.floor ? pixelText(str, col, 13) : null; if (t) _big.set(key, t); } }
+      else if (!texCache.has(key) && SHEETS.floor) texCache.set(key, pixelText(str, col, 12, 2).tex);
+    }
+    if (WARM.length) later(step, 30);
+    else later(() => {                              // 효과 묶음도 한 번씩 화면 밖에서 미리 그려 둔다 (첫 화살 · 첫 금화 · 첫 새 금맥 순간의 멈춤 줄이기)
+      try {
+        const X = -60;
+        coinFlow(1, X, X, X + 2, X, 24, 0.6, 1, '+1'); coinFlow(2, X, X, X + 2, X, 24, 1.1, 1, '+2');
+        arrowFx(1, X, X, X + 6, X, 'w', 0, 0.3, 1); arrowFx(2, X, X, X + 6, X, 'u', 0, 0.9, 1);
+        veinFx(X, X, 0.5, 1); lostFx(1, X, X, 3, 0.5, 1);
+      } catch (e) { /* 미리 그리기는 실패해도 괜찮다 */ }
+    }, 30);
+  };
+  const later = (fn, ms) => window.requestIdleCallback ? window.requestIdleCallback(fn, {timeout: ms + 500}) : setTimeout(fn, ms);
+  later(step, 300);
+}
+function newUnitObj(kind, team) {                 // 유닛 하나의 그림 묶음 (캐릭터 · 발밑 · 금화 · 활 · 등의 화살 · 금 자루 · 금빛)
+  const o = makeChar(kind, team);
+  world.root.add(o.g);
+  o.tile = new THREE.Mesh(new THREE.PlaneGeometry(0.96, 0.96).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({map: footRingTex(), color: TC[team].c, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending}));
+  o.tile.renderOrder = 2; world.root.add(o.tile);
+  o.step = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.3).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({map: perceptTex('steps'), transparent: true, opacity: 0.9, depthWrite: false}));
+  o.step.renderOrder = 3; o.step.visible = false; world.root.add(o.step);     // 발소리: 머리 위 대신 발밑 칸 모서리에 (뭉쳐 있을 때 캐릭터를 가리지 않게)
+  o.gold = new THREE.Sprite(new THREE.SpriteMaterial({map: goldTex(1), transparent: true, depthTest: false}));
+  o.gold.renderOrder = 15; o.gold.visible = false; o.body.add(o.gold);
+  o.bow = new THREE.Sprite(new THREE.SpriteMaterial({map: bowTex(false), transparent: true, alphaTest: 0.5, depthTest: false, depthWrite: false}));   // 시안 4: 쏠 때 드는 활
+  o.bow.center.set(0.5, 0.5); o.bow.visible = false; o.body.add(o.bow);
+  o.barrow = new THREE.Sprite(new THREE.SpriteMaterial({map: backArrowTex(), transparent: true, alphaTest: 0.5, depthWrite: false}));   // 시안 4: 등의 큰 화살
+  o.barrow.center.set(0.5, 0.5); o.barrow.visible = false; o.body.add(o.barrow);
+  o.sack = new THREE.Sprite(new THREE.SpriteMaterial({map: sackTex(), transparent: true, alphaTest: 0.5}));   // 시안 4: 금 자루
+  o.sack.center.set(0.5, 0.1); o.sack.visible = false; o.body.add(o.sack);
+  o.aura = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({map: softTex(), color: 0xffc63a, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending}));
+  o.aura.renderOrder = 3; o.aura.visible = false; world.root.add(o.aura);   // 시안 4: 보물 운반자 (금 15+) 발밑 금빛
+  o.g.visible = false; o.tile.visible = false;      // 꺼내 쓸 때까지 숨김
+  return o;
+}
+function fillSpare() {                                // 렉 줄이기: 팀마다 모험가 그림 묶음을 4 개씩 쉬는 틈에 미리 만들어 둔다
+  if (!world || world._spareBusy) return;
+  world.spare = world.spare || {};
+  const want = [];
+  for (const t of [0, 1]) { const k = 'E' + t; const n = (world.spare[k] || (world.spare[k] = [])).length; if (n < 4) want.push(t); }
+  if (!want.length) return;
+  world._spareBusy = true;
+  const later = (fn) => window.requestIdleCallback ? window.requestIdleCallback(fn, {timeout: 800}) : setTimeout(fn, 60);
+  later(() => { for (const t of want) world.spare['E' + t].push(newUnitObj('E', t)); world._spareBusy = false; });
+}
 function frame(f, g, a, fi, team, vis, seen) {
   if (!world) build();
   if (!world) return;
+  if (R && R.const && R.const.rules && R.const.rules.v4) warmTexts();
+  fillSpare();
   const now = performance.now() / 1000, moving = g !== f;
   const canSee = (x, y) => !vis || vis[y * W + x] === 1;
   fxBegin();
+  TEXB = 2;                                          // 렉 줄이기: 한 프레임에 새로 그리는 패 · 금화 그림은 2 개까지 (나머지는 다음 프레임)
   { const d = camera.position.distanceTo(controls.target), s0 = Math.max(W, H);   // 처음 화면 (지도 전체) 부터 도트, 더 멀어지면 아이콘
     NEAR = Math.min(1, Math.max(0, (s0 * 1.44 - d) / (s0 * 0.12)));
     ICONK = Math.min(1, Math.max(0.55, s0 * 0.75 / d)); }
@@ -2752,7 +3054,8 @@ function look(x, y, z, tx, ty, tz) {          // 확인용: 카메라를 칸 좌
 
 function legend() {                          // 오른쪽 '표시' 칸에 쓸 그림: 화면에 실제로 그리는 것과 같은 도트 아이콘
   const u = t => t.image.toDataURL(), o = {};
-  for (const k of ['breeze', 'stench', 'glitter', 'bump', 'steps', 'warmth', 'hurt']) o[k] = u(perceptTex(k));
+  for (const k of ['breeze', 'stench', 'glitter', 'bump', 'steps', 'warmth', 'hurt', 'scream', 'cry']) o[k] = u(perceptTex(k));
+  o.barrow = u(backArrowTex()); o.sack = u(sackTex());
   o.hp = u(hpTex(10, 0)); o.hpLow = u(hpTex(3, 0)); o.token = u(tokenTex('E', 0)); o.pit = u(pitHoleTex(0)); o.gold = u(goldTex(3));
   return o;
 }

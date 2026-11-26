@@ -19,7 +19,7 @@ def blank(w=20, h=20, traps=(), wumpus=None):
 
 
 def game(gmap, src0=IDLE, src1=IDLE, **rules):
-    rules = dict({'unified': False, 'agent': False}, **rules)   # 시안 1 시험 (시안 2 는 test_unified.py)
+    rules = dict({'unified': False, 'agent': False, 'v4': False}, **rules)   # 시안 1 시험 (시안 2 는 test_unified.py)
     g = Game(gmap, [src0, src1], ['a', 'b'], rules=rules)
     for u in list(g.units):                     # 처음 탐험가는 치운다 (장면을 손으로 만든다)
         g.at.pop((u.x, u.y), None)

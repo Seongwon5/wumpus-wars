@@ -4,7 +4,7 @@ import os
 import random
 from collections import deque
 
-from .api import mirror, cheb, SAFE_RADIUS, DIRS
+from .api import RULES, mirror, cheb, SAFE_RADIUS, DIRS
 
 
 MAP_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'maps')
@@ -28,13 +28,17 @@ class GameMap:
             'gold': [[x, y, a] for (x, y), a in sorted(self.ore.items())],
             'pits': sorted([x, y] for x, y in self.traps),
             'camps': [list(c) for c in self.bases],
+            **({'wumpus': [list(c) for c in self.wumpus]} if getattr(self, 'wumpus', None) else {}),   # 웜퍼스 굴 (없으면 엔진이 맵 가운데에 정한다)
         }
 
     @staticmethod
     def from_json(d):
         walls = {(x, y) for y, row in enumerate(d['rows']) for x, ch in enumerate(row) if ch == '#'}
-        return GameMap(d['w'], d['h'], d['sym'], walls, {(x, y): a for x, y, a in d['gold']},
-                       {(x, y) for x, y in d['pits']}, [tuple(c) for c in d['camps']], d.get('seed', 0), d.get('name'))
+        m = GameMap(d['w'], d['h'], d['sym'], walls, {(x, y): a for x, y, a in d['gold']},
+                    {(x, y) for x, y in d['pits']}, [tuple(c) for c in d['camps']], d.get('seed', 0), d.get('name'))
+        if d.get('wumpus'):
+            m.wumpus = [tuple(c) for c in d['wumpus']]
+        return m
 
     def ascii(self):
         """글자 그림: # 벽, G 금, P 구덩이, A/B 야영지, . 빈 칸."""
@@ -87,7 +91,12 @@ def _reachable(w, h, start_cells, blocked):
     return seen
 
 
-def generate(seed, w=None, h=None, sym=None, name=None):
+def generate(seed, w=None, h=None, sym=None, name=None, pit_rate=None):
+    """pit_rate: 구덩이 칸 비율. 기본은 규칙을 따른다 (시안 4 (RULES['v4']) 면 0.12, 아니면 3.5 ~ 5% 무작위).
+    비율이 정해지면 모든 금에 구덩이 없는 길로 닿아야 한다. 옛 맵을 만들려면 pit_rate=0."""
+    if pit_rate is None and RULES.get('v4'):
+        pit_rate = 0.12
+    pit_rate = pit_rate or None
     rng = random.Random(seed)
     for _ in range(500):
         W = w or rng.randint(20, 28)
@@ -136,7 +145,7 @@ def generate(seed, w=None, h=None, sym=None, name=None):
                     ore[m(c)] = amt
 
         traps = set()
-        n_half = int(W * H * rng.uniform(0.035, 0.05) / 2)
+        n_half = int(W * H * (pit_rate if pit_rate else rng.uniform(0.035, 0.05)) / 2)
         for _ in range(n_half):
             c = (rng.randrange(W), rng.randrange(H))
             if c in walls or c in ore or near_base(c, SAFE_RADIUS):
@@ -152,7 +161,7 @@ def generate(seed, w=None, h=None, sym=None, name=None):
         b_nbrs = {(B[0] + dx, B[1] + dy) for dx, dy in DIRS.values()}
         if not (reach & b_nbrs):
             continue
-        if ore and sum(1 for c in ore if c in reach) < 0.8 * len(ore):
+        if ore and sum(1 for c in ore if c in reach) < (1.0 if pit_rate else 0.8) * len(ore):
             continue
         return GameMap(W, H, S, walls, ore, traps, [A, B], seed, name)
     raise RuntimeError('맵 생성 실패')

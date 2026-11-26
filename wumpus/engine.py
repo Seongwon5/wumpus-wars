@@ -10,7 +10,8 @@ from .api import (DIRS, EXPLORER, ARCHER, CAMP, EMPTY, WALL, GOLD, PIT, CAMP_TIL
                   MAX_ROUNDS, MEMORY_SIZE, MAX_UNITS, START_BANK, INCOME_EVERY, COST, HP,
                   VISION_R2, ATTACK_DAMAGE, CAMP_ATTACK, CARRY_MAX, REGROW_EVERY, cheb, Move, Mine, Attack, Spawn,
                   OPS_TURN, OPS_FIRST, TIME_SAFETY_MS, ALLOWED_IMPORTS, BLOCKED_BUILTINS,
-                  Shoot, Push, _Frozen, AGENT_HP, AGENT_CARRY, WUMPUS_HP_A, WUMPUS_STRIKE_A, WUMPUS_WAKE_A, WUMPUS_HOARD_A, WUMPUS_HP_U, WUMPUS_ROAR, WUMPUS_ROAR_DMG, WUMPUS_REGEN, WUMPUS_HOARD_U, WUMPUS_RESPAWN, HP_UNIFIED, CARRY, MELEE_RANGE, BOW_RANGE, sight_cells, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror)
+                  Shoot, Push, _Frozen, AGENT_HP, AGENT_CARRY, WUMPUS_HP_A, WUMPUS_STRIKE_A, WUMPUS_WAKE_A, WUMPUS_HOARD_A, WUMPUS_HP_U, WUMPUS_ROAR, WUMPUS_ROAR_DMG, WUMPUS_REGEN, WUMPUS_HOARD_U, WUMPUS_RESPAWN, HP_UNIFIED, CARRY, MELEE_RANGE, BOW_RANGE, sight_cells, ARROW_RANGE, ARROWS_MAX, ARCHER_CARRY, DAGGER_DAMAGE, WUMPUS_HP, WUMPUS_HOARD, WUMPUS_CLEAR, RULES, mirror,
+                  V4_REGROW_EVERY, V4_REGROW_FRAC, V4_CARRY, V4_KILL_GOLD, V4_WUMPUS_HP, V4_WUMPUS_HOARD, V4_ARROWS, V4_ARROW_DMG, V4_COST, V4_START_BANK)
 
 TEAM_NAMES = ('붉은 원정대', '푸른 원정대')
 KIND_CODE = {EXPLORER: 'E', ARCHER: 'G', CAMP: 'B'}
@@ -260,6 +261,10 @@ class View(metaclass=_Frozen):
         self.screams = g.screams
         # 외침: 지금까지 쓰러진 모험가 수 (두 팀 모두, 맵 어디서든. 어떻게 쓰러졌는지 · 어느 팀인지는 알려 주지 않는다)
         self.cries = g.cries
+        # 짐 상한 (시안 4 에서는 모험가 상한 없음: 아주 큰 수)
+        self.carry_max = g.CAP.get(u.kind, 0)
+        # 생산 값 (시안 4 에서는 모험가 20): {'explorer': 값, 'archer': 값}
+        self.cost = dict(g.COST)
         # 열기: 지금 선 칸의 상하좌우 이웃에 야영지 (어느 팀이든) 가 있으면 True. 적 야영지 위치는 알려 주지 않는다
         self.warmth = u.kind != CAMP and g.warmth_at(u.x, u.y)
         self.rules = dict(g.rules)      # 켜진 규칙 (봇이 규칙에 맞게 움직이도록)
@@ -317,6 +322,8 @@ class Game:
         if rules:
             self.rules.update(rules)
         self.rules.setdefault('agent', False)
+        if self.rules.get('v4'):
+            self.rules['agent'] = True          # 시안 4 는 agent 규칙 위에 선다
         if self.rules['agent']:
             self.rules['unified'] = True
             self.rules['push'] = False
@@ -326,6 +333,13 @@ class Game:
             self.rules['line_shot'] = self.rules['arrows'] = False
         self.HPT = dict(HP_UNIFIED, **{EXPLORER: AGENT_HP}) if self.rules['agent'] else HP_UNIFIED if self.rules['unified'] else HP
         self.WHP = WUMPUS_HP_A if self.rules['agent'] else WUMPUS_HP_U
+        self.rules.setdefault('v4', False)
+        v4 = self.rules['v4']
+        if v4:
+            self.WHP = V4_WUMPUS_HP
+        self.CAP = dict(CARRY, **({EXPLORER: V4_CARRY} if v4 else {}))      # 종류마다 짐 상한
+        self.REGROW = V4_REGROW_EVERY if v4 else REGROW_EVERY
+        self.COST = dict(COST, **({EXPLORER: V4_COST} if v4 else {}))     # 생산 값
         self.map = gmap
         self.w, self.h = gmap.w, gmap.h
         self.walls = set(gmap.walls)
@@ -343,7 +357,10 @@ class Game:
         self.cries = 0                  # 쓰러진 모험가 수 (외침)
         if self.rules['wumpus']:
             for c in wumpus_cells(gmap):
-                self.wumpus[c] = (WUMPUS_HP_A if self.rules['agent'] else WUMPUS_HP_U) if self.rules['unified'] else WUMPUS_HP
+                self.wumpus[c] = self.WHP if self.rules['unified'] else WUMPUS_HP
+        self.vein_next, self.vein_cap, self.grow = {}, {}, {}
+        if self.rules['v4']:
+            self.vein_next, self.vein_cap = gold_chains(gmap, set(self.wumpus))
         self.whit = set()               # 이번 라운드에 맞은 굴
         self.wfoe = {}                  # 굴 -> 이번 라운드에 친 유닛 id (시안 3: 깨어나서 먼저 노림)
         self.wawake = {}                # 굴 -> 깨어 있는 마지막 라운드
@@ -366,7 +383,7 @@ class Game:
                     self.meter.watch(c)
             self.meter.watch_host(Me, View, UnitInfo, *[v for k, v in vars(api).items()
                                                         if not k.startswith('_') and (isinstance(v, type) or callable(v)) and getattr(v, '__module__', '') == api.__name__])
-        self.bank = [START_BANK, START_BANK]
+        self.bank = [V4_START_BANK, V4_START_BANK] if self.rules['v4'] else [START_BANK, START_BANK]
         self.score = [0, 0]
         self.memory = [[0] * MEMORY_SIZE, [0] * MEMORY_SIZE]
         self.round = 0
@@ -383,8 +400,8 @@ class Game:
         for t, (x, y) in enumerate(gmap.bases):
             b = self._new_unit(t, CAMP, x, y)
             self.bases.append(b)
-        # 처음 유닛: 팀마다 탐험가 둘 (번갈아 번호를 매긴다)
-        for _ in range(2):
+        # 처음 유닛: 팀마다 탐험가 둘 (번갈아 번호를 매긴다). 시안 4 는 없음: 금고 20 으로 야영지가 첫 모험가를 직접 뽑는다
+        for _ in range(0 if self.rules['v4'] else 2):
             for t in (0, 1):
                 c = self._free_adjacent(self.bases[t])
                 if c:
@@ -423,6 +440,21 @@ class Game:
     def breeze_at(self, x, y):
         return any((x + dx, y + dy) in self.traps for dx, dy in DIRS.values())
 
+    def _depleted(self, c):
+        """시안 4: 금맥 칸을 다 캤다 → 사슬의 다음 자리에 금 1 이 생겨 자란다 (처음 양의 절반까지)."""
+        if not self.rules['v4']:
+            return
+        self.grow.pop(c, None)
+        n = self.vein_next.get(c)
+        if n is None or n in self.ore:
+            return
+        cap = self.vein_cap[n]
+        self.ore[n] = 1
+        self.ore_max[n] = cap
+        self.grow[n] = cap
+        self.ore_changed.add(n)
+        self.events.append(['vein', n[0], n[1], c[0], c[1]])
+
     def stench_at(self, x, y):
         return any(self.wumpus.get((x + dx, y + dy), 0) > 0 for dx, dy in DIRS.values())
 
@@ -450,6 +482,8 @@ class Game:
     def _new_unit(self, team, kind, x, y):
         u = Unit(self.next_id, team, kind, x, y)
         u.hp = self.HPT[kind]
+        if self.rules['v4'] and kind == EXPLORER:
+            u.arrows = V4_ARROWS                   # 시안 4: 모험가 화살
         self.next_id += 1
         self.at[(x, y)] = u
         if self.codes[team] is None:               # 실격한 봇: 실행하지 않는다
@@ -494,7 +528,22 @@ class Game:
             raise OpsExceeded()
         return r
 
-    def _kill(self, u, cause):
+    def _kill(self, u, cause, killer=None):
+        if self.rules['v4'] and u.kind != CAMP:     # 시안 4: 금은 쓰러뜨린 쪽으로, 동굴이 죽이면 사라진다 (바닥에 떨어지는 금 없음)
+            g = u.carry
+            if killer is not None and killer.alive and cause == 'atk':
+                k = V4_KILL_GOLD if killer.team != u.team else 0
+                if killer.kind == CAMP:             # 야영지가 쓰러뜨림: 그 팀 점수 · 금고로 바로
+                    if killer.team != u.team and g + k > 0:
+                        self.score[killer.team] += g + k
+                        self.bank[killer.team] += g + k
+                        self.events.append(['campgold', killer.id, killer.x, killer.y, g + k, u.id, u.x, u.y, killer.team])
+                elif g + k > 0:                      # 챔피언이 쓰러뜨림: 그 챔피언이 즉시 든다 (같은 팀이면 처치 금 없음)
+                    killer.carry += g + k
+                    self.events.append(['bounty', killer.id, killer.x, killer.y, g + k, u.id, u.x, u.y, killer.team])
+            elif g > 0:                              # 구덩이 · 웜퍼스 (동굴): 금이 사라진다
+                self.events.append(['lost', u.id, u.x, u.y, g])
+            u.carry = 0
         u.alive = False
         u.hp = 0
         if u.kind != CAMP:
@@ -567,6 +616,11 @@ class Game:
             if cheb(u.x, u.y, b.x, b.y) <= 1:
                 u.arrows = ARROWS_MAX
                 self.events.append(['refill', u.id, u.x, u.y])
+        if u.alive and u.kind == EXPLORER and self.rules['v4'] and u.arrows < V4_ARROWS:
+            b = self.bases[u.team]
+            if cheb(u.x, u.y, b.x, b.y) <= 1:       # 시안 4: 야영지 옆에서 화살을 다시 채운다
+                u.arrows = V4_ARROWS
+                self.events.append(['refill', u.id, u.x, u.y])
         if u.alive and u.kind in (EXPLORER, ARCHER) and u.carry > 0:
             b = self.bases[u.team]
             if abs(u.x - b.x) + abs(u.y - b.y) == 1:
@@ -581,7 +635,7 @@ class Game:
                 t.hp -= CAMP_ATTACK
                 self.events.append(['atk', u.id, u.x, u.y, t.x, t.y, t.id])
                 if t.hp <= 0:
-                    self._kill(t, 'atk')
+                    self._kill(t, 'atk', u)
 
     def _fix_memory(self, team):
         mem = self.memory[team]
@@ -604,8 +658,8 @@ class Game:
         elif self.wumpus.get(n, 0) > 0:
             self.events.append(['eaten', u.id, n[0], n[1]])
             self._kill(u, 'wumpus')
-        elif self.rules['unified'] and u.kind in CARRY and self.loot.get(n, 0) > 0 and u.carry < CARRY[u.kind]:
-            take = min(self.loot[n], CARRY[u.kind] - u.carry)     # 시안 2: 떨어진 금은 들어서는 순간 줍는다
+        elif self.rules['unified'] and u.kind in CARRY and self.loot.get(n, 0) > 0 and u.carry < self.CAP[u.kind]:
+            take = min(self.loot[n], self.CAP[u.kind] - u.carry)     # 시안 2: 떨어진 금은 들어서는 순간 줍는다
             self.loot[n] -= take
             u.carry += take
             if self.loot[n] == 0:
@@ -629,7 +683,7 @@ class Game:
                     adj.hp -= DAGGER_DAMAGE
                     self.events.append(['stab', u.id, u.x, u.y, adj.x, adj.y, adj.id])
                     if adj.hp <= 0:
-                        self._kill(adj, 'atk')
+                        self._kill(adj, 'atk', u)
                 return
             u.arrows -= 1
         x, y = u.x, u.y
@@ -662,7 +716,7 @@ class Game:
                 t.hp -= ATTACK_DAMAGE
                 self.events.append(['atk', u.id, u.x, u.y, x, y, t.id])
                 if t.hp <= 0:
-                    self._kill(t, 'atk')
+                    self._kill(t, 'atk', u)
                 return
         self.events.append(['atk', u.id, u.x, u.y, x, y, 0 if hit is None else -2])   # 0 빗나감, -2 우리 편에 막힘
 
@@ -695,6 +749,44 @@ class Game:
         self.whit = set()
         self.wfoe = {}
 
+    def _arrow(self, u, d):
+        """시안 4 화살: 사거리 무한 (벽 · 맵 끝까지 일직선), 줄의 첫 대상에서 멈춘다. 살아 있는 웜퍼스는 한 방에 쓰러지고,
+        적 야영지 · 챔피언 (같은 팀 챔피언도) 은 V4_ARROW_DMG 피해. 우리 야영지는 막기만 한다."""
+        if d not in DIRS or u.arrows <= 0:
+            return
+        u.arrows -= 1
+        dx, dy = DIRS[d]
+        x, y = u.x, u.y
+        hit = None
+        while True:
+            n = (x + dx, y + dy)
+            if not self.inb(*n) or n in self.walls:
+                break
+            x, y = n
+            if self.wumpus.get(n, 0) > 0:
+                hit = 'w'
+                break
+            v = self.at.get(n)
+            if v is not None and v.alive:
+                hit = 'u'
+                break
+        self.events.append(['arrow', u.id, u.x, u.y, x, y, hit or '', u.team])
+        if hit == 'w':
+            c = (x, y)
+            self.wumpus[c] = 0
+            self.screams += 1
+            self.events.append(['scream', u.id, x, y, u.team])
+            u.carry += V4_WUMPUS_HOARD                     # 시안 4: 화살로 잡으면 쏜 모험가가 보물을 즉시 든다 (집까지 가져가야 점수)
+            self.events.append(['hoard', u.id, u.x, u.y, V4_WUMPUS_HOARD, u.team])
+        elif hit == 'u':
+            t = self.at[(x, y)]
+            if t.kind == CAMP and t.team == u.team:
+                return                                  # 우리 야영지는 화살을 막기만 한다 (피해 없음)
+            t.hp -= V4_ARROW_DMG                        # 적 야영지 · 챔피언 (같은 팀 챔피언도) 은 피해
+            self.events.append(['atk', u.id, u.x, u.y, x, y, t.id])
+            if t.hp <= 0:
+                self._kill(t, 'atk', u)
+
     def _hit(self, u, tx, ty):
         """시안 2 공격: 광부는 바로 옆, 궁수는 맨해튼 3 안 (벽이 가리면 안 됨). 야영지는 바로 옆에서만."""
         d = abs(tx - u.x) + abs(ty - u.y)
@@ -708,18 +800,21 @@ class Game:
             t.hp -= ATTACK_DAMAGE
             self.events.append(['atk', u.id, u.x, u.y, tx, ty, t.id])
             if t.hp <= 0:
-                self._kill(t, 'atk')
+                self._kill(t, 'atk', u)
             return
         if self.ore.get(c, 0) > 0 and (d == 0 or not self.rules['agent']):   # 금맥 공격 = 캐기 (시안 3: 서 있는 칸만)
-            if u.carry < CARRY[u.kind]:
+            if u.carry < self.CAP[u.kind]:
                 self.ore[c] -= 1
                 u.carry += 1
                 self.ore_changed.add(c)
                 self.events.append(['mine', u.id, u.x, u.y, tx, ty])
                 if self.ore[c] == 0:
                     del self.ore[c]
+                    self._depleted(c)
             return
         if d and self.wumpus.get(c, 0) > 0:
+            if self.rules['v4']:
+                return                          # 시안 4: 웜퍼스는 화살로만 쓰러진다 (칼은 효과 없음)
             self.whit.add(c)
             self.wfoe.setdefault(c, set()).add(u.id)
             self.wawake[c] = self.round + WUMPUS_WAKE_A          # 깨어난다
@@ -728,7 +823,7 @@ class Game:
             if self.wumpus[c] == 0:
                 self.screams += 1
                 self.events.append(['scream', u.id, tx, ty, u.team])
-                self._drop(c, WUMPUS_HOARD_A if self.rules['agent'] else WUMPUS_HOARD_U)
+                self._drop(c, V4_WUMPUS_HOARD if self.rules['v4'] else WUMPUS_HOARD_A if self.rules['agent'] else WUMPUS_HOARD_U)
             return
         t = self.at.get(c)
         if t is None or t.team == u.team or (t.kind == CAMP and d > 1):
@@ -736,7 +831,7 @@ class Game:
         t.hp -= ATTACK_DAMAGE
         self.events.append(['atk', u.id, u.x, u.y, tx, ty, t.id])
         if t.hp <= 0:
-            self._kill(t, 'atk')
+            self._kill(t, 'atk', u)
 
     def _push(self, u, d):
         if d not in DIRS:
@@ -774,7 +869,7 @@ class Game:
             self._hit(u, u.x, u.y)              # 시안 2: Mine() = 서 있는 칸의 금맥 공격
         elif isinstance(act, Mine) and u.kind in (EXPLORER, ARCHER):
             c = (u.x, u.y)
-            cap = CARRY[u.kind] if self.rules['unified'] else CARRY_MAX if u.kind == EXPLORER else (ARCHER_CARRY if self.rules['loot'] else 0)
+            cap = self.CAP[u.kind] if self.rules['unified'] else CARRY_MAX if u.kind == EXPLORER else (ARCHER_CARRY if self.rules['loot'] else 0)
             if u.kind == ARCHER and self.ground_arrows.get(c, 0) > 0 and u.arrows < ARROWS_MAX:
                 take = min(self.ground_arrows[c], ARROWS_MAX - u.arrows)
                 self.ground_arrows[c] -= take
@@ -798,8 +893,11 @@ class Game:
                 self.events.append(['mine', u.id, u.x, u.y])
                 if self.ore[c] == 0:
                     del self.ore[c]
+                    self._depleted(c)
         elif isinstance(act, Shoot) and u.kind == ARCHER and self.rules['line_shot']:
             self._shoot(u, act.d)
+        elif isinstance(act, Shoot) and u.kind == EXPLORER and self.rules['v4']:
+            self._arrow(u, act.d)
         elif isinstance(act, Push) and u.kind == EXPLORER and self.rules['push']:
             self._push(u, act.d)
         elif isinstance(act, Attack) and u.kind in (EXPLORER, ARCHER) and self.rules['unified']:
@@ -827,11 +925,11 @@ class Game:
             t.hp -= ATTACK_DAMAGE
             self.events.append(['atk', u.id, u.x, u.y, tx, ty, t.id])
             if t.hp <= 0:
-                self._kill(t, 'atk')
+                self._kill(t, 'atk', u)
         elif isinstance(act, Spawn) and u.kind == CAMP:
             if act.kind not in COST or act.d not in DIRS or (self.rules['agent'] and act.kind != EXPLORER):
                 return
-            if self.bank[u.team] < COST[act.kind]:
+            if self.bank[u.team] < self.COST[act.kind]:
                 return
             if sum(1 for v in self.units if v.alive and v.team == u.team) >= MAX_UNITS:
                 return
@@ -839,7 +937,7 @@ class Game:
             n = (u.x + dx, u.y + dy)
             if not self.inb(*n) or n in self.walls or n in self.at or n in self.traps:
                 return
-            self.bank[u.team] -= COST[act.kind]
+            self.bank[u.team] -= self.COST[act.kind]
             v = self._new_unit(u.team, act.kind, *n)
             self.units.append(v)
             self.events.append(['spawn', v.id, v.team, KIND_CODE[v.kind], v.x, v.y])
@@ -861,7 +959,7 @@ class Game:
             if u.alive:
                 units.append([u.id, u.team, KIND_CODE[u.kind], u.x, u.y, u.hp, u.carry,
                               1 if self.breeze_at(u.x, u.y) else 0,
-                              u.arrows if self.rules['arrows'] and u.kind == ARCHER else -1,
+                              u.arrows if (self.rules['arrows'] and u.kind == ARCHER) or (self.rules['v4'] and u.kind == EXPLORER) else -1,
                               1 if u.kind != CAMP and self.stench_at(u.x, u.y) else 0,
                               1 if u.kind != CAMP and (self.ore.get((u.x, u.y), 0) > 0 or self.loot.get((u.x, u.y), 0) > 0) else 0,
                               1 if u.bumped else 0,
@@ -902,8 +1000,8 @@ class Game:
             if r % INCOME_EVERY == 0:
                 self.bank[0] += 1
                 self.bank[1] += 1
-            if REGROW_EVERY and r % REGROW_EVERY == 0:
-                for c, mx in self.ore_max.items():
+            if self.REGROW and r % self.REGROW == 0:
+                for c, mx in (self.grow.items() if self.rules['v4'] else self.ore_max.items()):   # 시안 4: 새 금 자리만 자란다
                     if self.ore.get(c, 0) < mx:
                         self.ore[c] = self.ore.get(c, 0) + 1
                         self.ore_changed.add(c)
@@ -949,9 +1047,9 @@ class Game:
             },
             'const': {
                 'hp': {'E': self.HPT[EXPLORER], 'G': self.HPT[ARCHER], 'B': self.HPT[CAMP]},
-                'bow_range': BOW_RANGE, 'regrow': REGROW_EVERY, 'carry': {'E': CARRY[EXPLORER], 'G': CARRY[ARCHER]},
+                'bow_range': BOW_RANGE, 'regrow': self.REGROW, 'carry': {'E': -1 if self.rules['v4'] else self.CAP[EXPLORER], 'G': self.CAP[ARCHER]},   # -1 = 상한 없음
                 'carry': CARRY_MAX, 'max_rounds': MAX_ROUNDS,
-                'cost': {'E': COST[EXPLORER], 'G': COST[ARCHER]},
+                'cost': {'E': self.COST[EXPLORER], 'G': self.COST[ARCHER]},
                 'vision': {'E': VISION_R2[EXPLORER], 'G': VISION_R2[ARCHER], 'B': VISION_R2[CAMP]},
                 'arrows': ARROWS_MAX if self.rules['arrows'] else 0, 'arrow_range': ARROW_RANGE,
                 'wumpus_hp': self.WHP if self.rules['unified'] else WUMPUS_HP, 'agent_hp': AGENT_HP, 'wumpus_respawn': WUMPUS_RESPAWN, 'wumpus_roar': WUMPUS_ROAR, 'wumpus_roar_dmg': WUMPUS_ROAR_DMG, 'archer_carry': ARCHER_CARRY, 'dagger': DAGGER_DAMAGE,
@@ -967,6 +1065,56 @@ class Game:
             },
             'frames': self.frames,
         }
+
+
+def gold_chains(gmap, dens, length=8):
+    """시안 4 새 금 자리 사슬: 처음 금맥 칸마다 다 캔 뒤 금이 새로 생길 자리를 차례로 정한다 (맵 시드로 정해짐, 대칭).
+    자리: 벽 · 구덩이 · 굴 · 처음 금이 아님, 두 야영지에서 체비셰프 3 초과, 야영지에서 구덩이 · 굴 · 벽 없는 길로 닿음.
+    돌려주는 값: (다음 자리 표 {칸: 다음 칸}, 자리 한도 {칸: 처음 양의 절반 (올림)})."""
+    W, H, S = gmap.w, gmap.h, gmap.sym
+    blocked = set(gmap.walls) | set(gmap.traps) | set(dens)
+    starts = [(b[0] + dx, b[1] + dy) for b in gmap.bases for dx, dy in DIRS.values()]
+    seen = set(c for c in starts if 0 <= c[0] < W and 0 <= c[1] < H and c not in blocked)
+    dq = list(seen)
+    while dq:
+        x, y = dq.pop()
+        for dx, dy in DIRS.values():
+            n = (x + dx, y + dy)
+            if 0 <= n[0] < W and 0 <= n[1] < H and n not in seen and n not in blocked and n not in gmap.bases:
+                seen.add(n)
+                dq.append(n)
+    cand = sorted(c for c in seen if c not in gmap.ore and all(cheb(c[0], c[1], b[0], b[1]) > 3 for b in gmap.bases))
+    rng = random.Random(gmap.seed * 7919 + 17)
+    nxt, cap, used = {}, {}, set(gmap.ore)
+    done = set()
+    for root in sorted(gmap.ore):
+        if root in done:
+            continue
+        mroot = mirror(S, root[0], root[1], W, H)
+        done.update((root, mroot))
+        c_cap = max(1, -int(-gmap.ore[root] * V4_REGROW_FRAC // 1))
+        prev, mprev = root, mroot
+        for _ in range(length):
+            pick = None
+            for _try in range(40):
+                s = cand[rng.randrange(len(cand))] if cand else None
+                if s is None:
+                    break
+                ms = mirror(S, s[0], s[1], W, H)
+                if s in used or ms in used or (ms != s and ms not in seen) or (mroot != root and ms == s):
+                    continue
+                pick = (s, ms)
+                break
+            if pick is None:
+                break
+            s, ms = pick
+            used.update((s, ms))
+            nxt[prev], cap[s] = s, c_cap
+            prev = s
+            if mroot != root:
+                nxt[mprev], cap[ms] = ms, c_cap
+                mprev = ms
+    return nxt, cap
 
 
 def wumpus_cells(gmap):

@@ -11,7 +11,7 @@ import webbrowser
 VIEWER_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'viewer')
 
 
-def _template():
+def _template(skip=()):
     with open(os.path.join(VIEWER_DIR, 'viewer.html'), encoding='utf-8') as f:
         tpl = f.read()
     with open(os.path.join(VIEWER_DIR, 'view3d.js'), encoding='utf-8') as f:
@@ -21,7 +21,7 @@ def _template():
         import base64
         meta = json.load(open(os.path.join(sp, 'sprites.json'), encoding='utf-8'))
         img = {n: 'data:image/png;base64,' + base64.b64encode(open(os.path.join(sp, n + '.png'), 'rb').read()).decode()
-               for n in meta['sheets']}
+               for n in meta['sheets'] if n not in skip}            # 이 경기에 안 나오는 그림은 넣지 않는다
         js = 'window.SPRITES = ' + json.dumps({'meta': meta, 'img': img}) + ';' + chr(10) + js
     with open(os.path.join(VIEWER_DIR, 'vendor', 'three.bundle.min.js'), encoding='utf-8') as f:   # three.js 를 파일 안에 넣는다 (인터넷 없이 열린다)
         vendor = f.read().replace('</script', '<\\/script')
@@ -40,7 +40,8 @@ def load_json(path):
 
 def write_html(replay, path):
     """리플레이를 품은 뷰어 html 을 쓴다. replay 가 None 이면 빈 뷰어 (json 을 끌어다 놓아 연다)."""
-    html = _template()
+    rules = ((replay or {}).get('const') or {}).get('rules') or {}
+    html = _template(skip={'loot'} if rules.get('v4') else ())          # 시안 4: 바닥에 떨어진 금이 없다
     if replay is not None:
         # 뷰어는 봇의 머릿속 기록 (debug, 프레임의 'd') 을 쓰지 않는다 → html 을 가볍게 (.json 에는 남는다)
         replay = dict(replay, frames=[{k: v for k, v in fr.items() if k != 'd'} for fr in replay.get('frames', [])])

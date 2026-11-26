@@ -222,7 +222,7 @@ input[type=checkbox]{accent-color:#c79a55}
     <div class="tp t0" id="hud0"></div>
     <div class="mid" id="hudMid"></div>
     <div class="tp t1" id="hud1"></div>
-    <div id="hudGold" title="바친 금 비교: 가운데 금빛 표식이 앞선 팀 쪽에서 밀려간다. 가운데 선이 동점"><span class="gl">바친 금</span><span class="gn r" id="tg0">0</span><div id="tug"><i id="tugL"></i><i id="tugR"></i><u></u><b id="tugM"></b><span id="tugD"></span></div><span class="gn b" id="tg1">0</span><span class="gl">바친 금</span></div>
+    <div id="hudGold" title="바친 금 비율: 붉은 막대 : 푸른 막대 = 붉은 팀 바친 금 : 푸른 팀 바친 금. 표식의 숫자는 차이, 가운데 선이 동점"><span class="gl">바친 금</span><span class="gn r" id="tg0">0</span><div id="tug"><i id="tugL"></i><i id="tugR"></i><u></u><b id="tugM"></b><span id="tugD"></span></div><span class="gn b" id="tg1">0</span><span class="gl">바친 금</span></div>
   </div>
   <main>
     <div id="stage">
@@ -448,22 +448,25 @@ function buildLegend(){
   const el=$('legend');if(!el)return;
   const L=(window.View3D&&View3D.legend)?View3D.legend():{};
   const img=(u,cls)=>u?`<img src="${u}"${cls?` class="${cls}"`:''}>`:'<span></span>';
-  const P=[['breeze','바람','상하좌우에 구덩이가 있다'],['stench','악취','상하좌우에 웜퍼스 굴이 있다'],['glitter','반짝임','이 칸에 금맥이나 떨어진 금'],
+  const P=[['breeze','바람','상하좌우에 구덩이가 있다'],['stench','악취','상하좌우에 웜퍼스 굴이 있다'],['glitter','반짝임',(R.const.rules&&R.const.rules.v4)?'이 칸에 금맥':'이 칸에 금맥이나 떨어진 금'],
     ['bump','부딪힘','지난 이동이 막혔다 (벽 · 맵 끝 · 다른 모험가)'],['steps','발소리','상하좌우에 다른 모험가 (적 · 팀원 구분 없음). 발밑 칸 모서리에 표시'],['warmth','열기','상하좌우에 야영지 (어느 팀이든). 적 야영지를 찾는 단서'],['hurt','아픔','지난 차례 뒤 피해를 받았다']];
   let h='<div class="lg-h">머리 위 · 발밑: 모험가가 지금 느끼는 것</div>';
   for(const [k,n,d] of P)h+=`${img(L[k])}<span><b>${n}</b> · ${d}</span>`;
-  h+=`<span style="font-size:15px;text-align:center;color:#d8ff6a">!</span><span><b>비명</b> · 웜퍼스가 쓰러짐 (맵 전체가 듣는다, 화면 가운데 글자)</span>`;
-  h+=`<span style="font-size:15px;text-align:center;color:#e5533f">!</span><span><b>외침</b> · 모험가가 쓰러짐 (두 팀 모두, 맵 전체가 듣는다, 왼쪽 위 사건 알림)</span>`;
+  h+=`${img(L.scream)}<span><b>비명</b> · 웜퍼스가 쓰러짐 (맵 전체가 듣는다, 화면 가운데 글자)</span>`;
+  h+=`${img(L.cry)}<span><b>외침</b> · 모험가가 쓰러짐 (두 팀 모두, 맵 전체가 듣는다, 왼쪽 위 사건 알림)</span>`;
   h+='<div class="lg-h">모험가</div>';
   h+=`<span id="lg_adv"></span><span>모험가. 멀리서는 둥근 패, 가까이서는 도트 캐릭터</span>`;
   h+=`${img(L.hp,'wide')}<span>체력 (30% 이하면 주황)</span>`;
-  h+=`<span id="lg_gold"></span><span><b>든 금</b> · 체력바 옆 금화의 숫자 (5 면 가득, 밝은 테)</span>`;
+  const v4=(R.const.rules&&R.const.rules.v4);
+  h+=`<span id="lg_gold"></span><span><b>든 금</b> · 체력바 옆 금화의 숫자${v4?' (상한 없음)':' (5 면 가득, 밝은 테)'}</span>`;
+  if(v4){h+=`${img(L.sack)}<span><b>금 자루</b> · 든 금이 많을수록 커진다. 15 개 이상이면 발밑이 금빛 (보물 운반자)</span>`;
+    h+=`${img(L.barrow)}<span><b>화살 한 발</b> · 등에 멘 큰 화살. 쏘면 사라지고 야영지 옆에서 다시 생긴다</span>`;}
   h+=`<span class="sw" style="background:radial-gradient(circle,rgba(255,210,140,.9),rgba(255,170,80,.15) 70%,transparent);width:18px;height:18px;border-radius:50%;justify-self:center"></span><span>밝은 칸: 모험가가 느끼는 범위는 자기 칸뿐</span>`;
   h+='<div class="lg-h">동굴 (관전자만 보임 · 봇은 지각으로만 안다)</div>';
   h+=`<span id="lg_pit"></span><span><b>구덩이</b> · 빠지면 죽는다. 봇에게는 바람으로만</span>`;
-  h+=`<span id="lg_wum"></span><span><b>웜퍼스</b> · 잠든 골렘. 치면 깨어나 옆을 친다. 봇에게는 악취로만</span>`;
-  h+=`<span id="lg_ore"></span><span><b>금맥</b> · 숫자는 남은 금, 막대는 다시 자라는 시계</span>`;
-  h+=`<span id="lg_loot"></span><span><b>떨어진 금</b> · 들어서면 줍는다</span>`;
+  h+=`<span id="lg_wum"></span><span><b>웜퍼스</b> · ${v4?'화살로만 쓰러진다. 굴에 들어가면 죽는다. 화살로 잡으면 쏜 모험가가 보물 30 을 든다':'잠든 골렘. 치면 깨어나 옆을 친다'}. 봇에게는 악취로만</span>`;
+  h+=`<span id="lg_ore"></span><span><b>금맥</b> · 숫자는 남은 금, 막대는 다시 자라는 시계${v4?'. 다 캐면 다른 자리에 새 금맥이 생겨 자란다':''}</span>`;
+  if(!v4)h+=`<span id="lg_loot"></span><span><b>떨어진 금</b> · 들어서면 줍는다</span>`;
   h+=`<span id="lg_camp"></span><span><b>야영지</b> · 위치는 모두가 안다. 옆에서 금을 바친다</span>`;
   el.innerHTML=h;
   const put=(id,u)=>{const e=$(id);if(e&&u)e.outerHTML=`<img src="${u}">`;};
@@ -523,8 +526,8 @@ function updateHud(fi){
     } else { const g=$('hpg'+t);g.style.transition='none';g.style.width=w;void g.offsetWidth;g.style.transition=''; }
   }
   const d=fr.sc[0]-fr.sc[1],tot=(R.const.max_rounds||300);
-  { // 금 줄다리기: 차이를 크게 보여 준다 (앞선 팀 점수의 15%, 적어도 20 을 한쪽 끝으로). 가운데 선이 동점
-    const span=Math.max(20,Math.max(fr.sc[0],fr.sc[1])*0.15),pos=50+46*Math.max(-1,Math.min(1,d/span));
+  { // 금 줄다리기: 막대는 바친 금의 실제 비율 (붉은 몫 = 붉은 / 두 팀 합). 가운데 선이 동점, 둘 다 0 이면 가운데
+    const sum=fr.sc[0]+fr.sc[1],pos=sum>0?100*fr.sc[0]/sum:50;
     $('tg0').textContent=fr.sc[0];$('tg1').textContent=fr.sc[1];
     $('tugL').style.width=pos+'%';$('tugR').style.width=(100-pos)+'%';
     $('tugM').style.left=pos+'%';$('tugD').style.left=pos+'%';$('tugD').textContent=d?Math.abs(d):'';
@@ -652,7 +655,8 @@ function updateFeed(fi){
       else if(e[0]==='die'&&e[4]==='atk'&&see(e[2],e[3]))items.push(['kill',f,`${who(e[1],f)} 쓰러짐`,e[2],e[3]]);
       else if(e[0]==='die'&&e[4]==='roar'&&see(e[2],e[3]))items.push(['wump',f,`${who(e[1],f)} 웜퍼스에게 쓰러짐`,e[2],e[3]]);
       else if(e[0]==='eaten'&&see(e[2],e[3]))items.push(['wump',f,`${who(e[1],f)} 웜퍼스에게 잡아먹힘`,e[2],e[3]]);
-      else if(e[0]==='scream')items.push(['wump',f,`웜퍼스의 비명! (처치: ${who(e[1],f)}) → 굴에 보물`,e[2],e[3]]);
+      else if(e[0]==='scream')items.push(['wump',f,`웜퍼스의 비명! (처치: ${who(e[1],f)}) → ${(R.const.rules&&R.const.rules.v4)?'쏜 모험가가 보물 30 을 듦':'굴에 보물'}`,e[2],e[3]]);
+      else if(e[0]==='vein'&&see(e[1],e[2]))items.push(['camp',f,`새 금맥이 생김 (${e[1]},${e[2]})`,e[1],e[2]]);
       else if(e[0]==='push'&&see(e[5],e[6])&&!(e[5]===e[7]&&e[6]===e[8]))items.push(['push',f,`밀치기: ${who(e[1],f)} ➜ ${who(e[4],f)}`,e[5],e[6]]);
     }
     for(let t=0;t<2;t++){const d=F[f-1].bh[t]-F[f].bh[t];
@@ -666,7 +670,7 @@ function updateScream(fi){
   if(fi<prev||fi-prev>3)return;                      // 건너뛰거나 되감을 때는 띄우지 않는다
   for(let f=prev+1;f<=fi;f++)for(const e of F[f].e||[])if(e[0]==='scream'){
     const u=umap[f].get(e[1])||umap[Math.max(0,f-1)].get(e[1]),t=u?u[1]:e[4];
-    const el=$('scream');el.innerHTML=`웜퍼스의 비명!<small><span style="color:${TEAM[t].c}">${TEAM[t].name}</span> ${AG()?'모험가':'궁수'}가 웜퍼스를 쓰러뜨렸습니다 · 굴에 보물이 떨어짐</small>`;
+    const el=$('scream');el.innerHTML=`웜퍼스의 비명!<small><span style="color:${TEAM[t].c}">${TEAM[t].name}</span> ${AG()?'모험가':'궁수'}가 ${(R.const.rules&&R.const.rules.v4)?'화살로 웜퍼스를 쓰러뜨렸습니다 · 쏜 모험가가 보물 30 을 듦':'웜퍼스를 쓰러뜨렸습니다 · 굴에 보물이 떨어짐'}</small>`;
     el.classList.remove('go');void el.offsetWidth;el.classList.add('go');}
 }
 function updateSide(fi){
@@ -693,7 +697,8 @@ function updateSide(fi){
   else{
     const d=(fr.d||{})[selId]; let h=`<div class="line"><b class="${'rb'[su.team]}">#${su.id} ${TEAM[su.team].name} ${AG()&&su.kind==='E'?'모험가':KIND[su.kind]}</b> (${su.x}, ${su.y})</div>`;
     h+=`<div class="line"><span class="k">체력</span> ${su.hp}/${R.const.hp[su.kind]}`;
-    if(su.kind==='E')h+=` · <span class="k">짐</span> ${su.carry}/${R.const.carry}`;
+    if(su.kind==='E')h+=` · <span class="k">짐</span> ${su.carry}${(R.const.rules&&R.const.rules.v4)?' (상한 없음)':'/'+(R.const.carry.E||R.const.carry)}`;
+    if(su.kind==='E'&&(R.const.rules&&R.const.rules.v4)&&su.arrows>=0)h+=` · <span class="k">화살</span> ${su.arrows}/1`;
     if(su.kind==='G'&&su.arrows>=0)h+=` · <span class="k">화살</span> ${su.arrows}/${R.const.arrows}`;
     if(su.kind==='G'&&su.carry>0)h+=` · <span class="k">주운 금</span> ${su.carry}`;
     if(su.kind!=='B')h+=` · <span class="k">바람</span> ${su.vib?'<b style="color:#bfe9ff">느낌</b>':'없음'}`;
@@ -724,6 +729,12 @@ function updateSide(fi){
     else if(e[0]==='pick')L.push(`${who(e[1])} 떨어진 금 ${e[4]}개 주움`);
     else if(e[0]==='drop')L.push(`금 ${e[3]}개가 (${e[1]},${e[2]}) 에 떨어짐`);
     else if(e[0]==='refill')L.push(`${who(e[1])} 화살 채움`);
+    else if(e[0]==='arrow')L.push(`${who(e[1])} 화살 → ${e[6]==='w'?'<b style="color:#c8ff5a">웜퍼스 명중</b>':e[6]==='u'?'('+e[4]+','+e[5]+') 명중':'('+e[4]+','+e[5]+') 벽에 꽂힘'}`);
+    else if(e[0]==='hoard')L.push(`${who(e[1])} 웜퍼스 보물 <b style="color:#ffd34a">+${e[4]}</b> 듦`);
+    else if(e[0]==='bounty')L.push(`${who(e[1])} 처치 금 <b style="color:#ffd34a">+${e[4]}</b> 듦`);
+    else if(e[0]==='campgold')L.push(`${who(e[1])} 처치 금 <b style="color:#ffd34a">+${e[4]}</b> (바로 점수)`);
+    else if(e[0]==='vein')L.push(`<b style="color:#ffe27a">새 금맥</b> (${e[1]},${e[2]})`);
+    else if(e[0]==='lost')L.push(`${who(e[1])} 의 금 ${e[4]}개가 동굴에 삼켜짐`);
     else if(e[0]==='stab')L.push(`${who(e[1])} → ${who(e[6])} 단검`);
     else if(e[0]==='parrow')L.push(`${who(e[1])} 떨어진 화살 ${e[4]}개 주움`);
     else if(e[0]==='spawn')L.push(`${face(e[3],e[2]).startsWith('<img')?face(e[3],e[2]):''}<span class="${'rb'[e[2]]}">${TEAM[e[2]].name}</span> ${AG()&&e[3]==='E'?'모험가':KIND[e[3]]} #${e[1]} 생산`);

@@ -22,7 +22,7 @@ def blank(w=20, h=20, walls=(), ore=None):
 
 
 def game(gmap, s0=IDLE, s1=IDLE):
-    g = Game(gmap, [s0, s1], ['a', 'b'], rules={'unified': True, 'agent': False})
+    g = Game(gmap, [s0, s1], ['a', 'b'], rules={'unified': True, 'agent': False, 'v4': False})
     for u in list(g.units):
         g.at.pop((u.x, u.y), None)
     g.units = []
@@ -182,7 +182,7 @@ def test_wumpus_boss_strikes_one_in_range_regen_hoard_respawn():
 
 
 def _agent_game(gmap):
-    g = Game(gmap, [IDLE, IDLE], ['a', 'b'], rules={'agent': True})
+    g = Game(gmap, [IDLE, IDLE], ['a', 'b'], rules={'agent': True, 'v4': False})
     for u in list(g.units):
         g.at.pop((u.x, u.y), None)
     g.units = []

@@ -22,7 +22,7 @@ def turn(me, view, memory):
 불러올 것:
 
 ```python
-from wumpus.api import (Move, Mine, Attack, Spawn, debug,
+from wumpus.api import (Move, Mine, Attack, Shoot, Spawn, debug,
                         EXPLORER, CAMP,                        # 종류 (모험가 = EXPLORER)
                         EMPTY, WALL, GOLD, CAMP_TILE,          # 칸 글자 '.' '#' 'G' 'C'
                         DIRS, mirror, cheb, direction_to,      # 도우미
@@ -44,7 +44,8 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 | `kind` | `CAMP` 또는 `EXPLORER` (모험가) |
 | `x`, `y` | 지금 위치 |
 | `hp` | 남은 체력 |
-| `carry` | 든 금 |
+| `carry` | 든 금 (상한 없음) |
+| `arrows` | 남은 화살 (0 또는 1). 야영지 옆 (체비셰프 1) 에서 차례를 마치면 다시 1 |
 | `round` | 지금 라운드 (1 ~ 1000) |
 | `bank` | 우리 금고 |
 | `ops_limit` | 이번 차례에 쓸 수 있는 연산 (보통 10,000, 첫 차례는 더 많다) |
@@ -59,7 +60,7 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 |---|---|---|
 | `view.breeze` | `True`/`False` | 바람: 상하좌우에 구덩이 |
 | `view.stench` | `True`/`False` | 악취: 상하좌우에 살아 있는 웜퍼스 굴 |
-| `view.glitter` | `True`/`False` | 반짝임: 이 칸에 금맥이나 떨어진 금 |
+| `view.glitter` | `True`/`False` | 반짝임: 이 칸에 금맥 |
 | `view.bump` | `True`/`False` | 부딪힘: 지난 이동이 막혔다 (벽 · 맵 끝 · 모험가 · 야영지) |
 | `view.footsteps` | 정수 0 ~ 4 | 발소리: 상하좌우의 다른 모험가 수 (팀 구분 없음) |
 | `view.hurt` | 정수 | 아픔: 지난 차례 뒤 받은 피해 |
@@ -73,7 +74,6 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 |---|---|
 | `view.tile(x, y)` | 자기 칸이면 `'.'` 빈 칸 · `'G'` 금맥. 다른 칸은 `None` |
 | `view.gold(x, y)` | 자기 칸의 남은 금 (없으면 0). 다른 칸은 `None` |
-| `view.loot(x, y)` | 자기 칸의 떨어진 금. 다른 칸은 `None` |
 | `view.visible(x, y)` · `view.visible_cells()` | 모험가는 자기 칸 하나뿐 |
 | `view.units()` | 모험가는 자기 자신만 (다른 모험가는 발소리로만 안다) |
 
@@ -88,22 +88,25 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 | `view.width`, `view.height` | 맵 크기 |
 | `view.round`, `view.bank`, `view.score`, `view.team` | 라운드, 우리 금고, 우리 점수 (바친 금 합), 팀 번호 |
 | `view.unit_count` | 우리 팀 살아 있는 모험가 수 |
+| `view.carry_max` | 모험가가 들 수 있는 금 (기본 규칙은 사실상 무한 `10**6`) |
+| `view.cost` | 유닛 값 사전 `{EXPLORER: 20}` |
 
 ## 5. 행동
 
 | 행동 | 누가 | 하는 일 | 무시되는 경우 |
 |---|---|---|---|
 | `Move(d)` | 모험가 | `d` 쪽으로 한 칸 | 막히면 제자리 (다음 차례에 `view.bump`) |
-| `Mine()` | 모험가 | 선 칸의 금맥에서 금 1개 | 금맥이 아닌 칸, 이미 5개를 든 경우 |
-| `Attack(x, y)` | 모험가 | 상하좌우 옆 칸을 검으로 친다 (피해 3) | 옆 칸이 아님. 빈 칸 · 팀원이면 헛친다 |
-| `Spawn(EXPLORER, d)` | 야영지 | `d` 쪽 옆 칸에 모험가 | 금고 부족, 팀 10명, 그 칸이 맵 밖 · 벽 · 모험가 · 구덩이 |
+| `Mine()` | 모험가 | 선 칸의 금맥에서 금 1개 | 금맥이 아닌 칸 |
+| `Attack(x, y)` | 모험가 | 상하좌우 옆 칸을 검으로 친다 (피해 3) | 옆 칸이 아님. 빈 칸 · 팀원 · 웜퍼스 굴이면 헛친다 |
+| `Shoot(d)` | 모험가 | `d` 쪽 일직선으로 화살 (사거리 무한, 벽 · 맵 끝에서 멈춤). 줄의 첫 대상: 웜퍼스는 쓰러지고 보물 30 을 쏜 모험가가 든다. 모험가 (팀원도) · 적 야영지는 피해 6. 우리 야영지는 막기만 | 화살이 없음 |
+| `Spawn(EXPLORER, d)` | 야영지 | `d` 쪽 옆 칸에 모험가 (금고 20) | 금고 부족, 팀 10명, 그 칸이 맵 밖 · 벽 · 모험가 · 구덩이 |
 | `None` | 누구나 | 쉬기 | |
 
 - 안 되는 행동은 **오류 없이 그냥 무시된다.**
 - 구덩이 칸으로 `Move` 하면 떨어져 죽는다. 살아 있는 웜퍼스 굴로 `Move` 하면 잡아먹힌다.
-- **줍기 (행동 아님):** 떨어진 금이 있는 칸에 들어서면 저절로 줍는다.
+- **처치 금 (행동 아님):** 적 모험가를 쓰러뜨리면 그가 든 금 + 3 을 바로 든다 (야영지가 쓰러뜨리면 점수 · 금고로). 구덩이 · 웜퍼스에 죽으면 든 금은 사라진다. 바닥에 떨어지는 금은 없다.
 - **바침 (행동 아님):** 차례를 마칠 때 자기 야영지와 상하좌우로 맞닿아 있으면 든 금을 저절로 다 바친다.
-- **웜퍼스를 치면** 깨어나 5 라운드 동안 옆의 한 명에게 매 라운드 피해 6 을 준다.
+- **웜퍼스는 화살로만** 쓰러진다. 검은 효과가 없다. 화살 한 발로 맞히려면 악취로 굴을 추론해야 한다.
 
 ## 6. `memory`: 팀 공유 메모리
 
@@ -143,7 +146,7 @@ from wumpus.api import (Move, Mine, Attack, Spawn, debug,
 - **세는 법:** 줄 하나를 실행할 때 1, 반복이 한 번 되돌아갈 때 1, 함수 · 람다 · 제너레이터가 시작되거나 이어질 때 1. 한 줄에 몰아 쓴 반복 (`[f(x) for x in xs]`, `sum(… for …)`, `sorted(key=lambda …)`) 도 도는 만큼 센다. 내장 함수 안쪽은 세지 않는다.
 - **쓸 수 있는 모듈:** `math` · `heapq` · `collections` · `itertools` · `functools` · `random` · `bisect` · `operator` · `copy` · `wumpus.api`. 다른 모듈은 쓸 수 없다.
 - **코드 검사:** 봇 파일은 경기 전에 검사를 거치고, 걸리면 실격이다. 밑줄 두 개로 시작하는 속성 · 이름 (`x.__class__`), `getattr` · `type` · `globals` · `exec` · `open` 같은 함수, 문자열 `.format`, 허용 목록 밖의 `import` 가 걸린다. 전체 목록은 [규칙 11절](RULES.md) 에 있다. `python -m wumpus check 봇` 이 걸린 줄을 알려 준다.
-- **돌려주는 값은 정확한 종류로:** 행동은 `Move` · `Mine` · `Attack` · `Spawn` 그대로, 방향은 글자, `Attack` 의 좌표와 `memory` 값은 `int`. `Attack(3.0, 4.0)` 처럼 실수를 넣으면 그 행동은 버려진다.
+- **돌려주는 값은 정확한 종류로:** 행동은 `Move` · `Mine` · `Attack` · `Shoot` · `Spawn` 그대로, 방향은 글자, `Attack` 의 좌표와 `memory` 값은 `int`. `Attack(3.0, 4.0)` 처럼 실수를 넣으면 그 행동은 버려진다.
 - **표 · 모듈은 복사본:** `DIRS` · `COST` 같은 표와 불러온 모듈은 유닛마다 따로 받은 복사본이다. 고쳐도 그 유닛에게만 보인다.
 - **시간 안전망:** 한 차례가 1초를 넘으면 그 차례의 행동을 버린다. 내장 함수에 아주 큰 일을 넘기는 코드를 막는 장치이고, 보통 봇은 닿지 않는다.
 - 남은 양은 `ops_left()` 로 본다. 다만 **결정을 남은 양으로 가르지 않는다.** 코드를 한 줄만 바꿔도 쓰는 양이 바뀌어 결정이 줄줄이 뒤집히고, 왜 그렇게 움직였는지 설명할 수 없게 된다. 남은 양은 한도 직전에 멈추는 **비상 정지** 에만 읽는다.

@@ -9,7 +9,10 @@
   지각: view.breeze 바람 · view.stench 악취 · view.glitter 반짝임 · view.bump 부딪힘
         view.footsteps 발소리 · view.hurt 아픔 · view.screams 비명 · view.warmth 열기 · view.cries 외침
 - 우리 야영지 위치 (view.my_camp) 만 안다. 적 야영지는 맵 대칭 (좌우 H · 상하 V · 180도 R 중 하나) 으로 본 우리 야영지의 거울 칸이다.
-- 한 턴에 행동 하나: Move(d) · Mine() · Attack(x, y) (상하좌우 옆 칸) · None (쉬기). 야영지는 Spawn(EXPLORER, d).
+- 한 턴에 행동 하나: Move(d) · Mine() · Attack(x, y) (상하좌우 옆 칸) · Shoot(d) (화살) · None (쉬기). 야영지는 Spawn(EXPLORER, d).
+- 웜퍼스는 화살로만 쓰러진다 (굴에 들어가면 죽는다). 화살은 한 발 (me.arrows), 벽 · 맵 끝까지 일직선으로 날아가 줄의 첫 대상에 맞는다.
+  화살로 웜퍼스를 잡으면 쏜 모험가가 보물을 바로 든다. 화살은 야영지 옆에서 다시 채운다.
+- 금은 쓰러뜨린 쪽으로 간다 (든 금 + 처치 금). 구덩이 · 웜퍼스에게 죽으면 든 금이 사라진다. 짐 상한은 view.carry_max, 모험가 값은 view.cost.
 - 연산 한도: 유닛마다 한 차례에 10,000 (첫 차례만 200,000). 넘은 차례는 행동이 버려진다. 그래서 길 찾기에 상한 (SEARCH_CAP) 을 둔다.
 - 불러올 수 있는 모듈: math · heapq · collections · itertools · functools · random · bisect · operator · copy · wumpus.api
 - 팀끼리 나눌 정보는 memory (32비트 정수 16칸, 맵 전체는 못 담는다) 에 적는다.
@@ -24,13 +27,15 @@
 4. 아픔: 옆 칸을 차례로 쳐서 반격한다. 적 야영지 옆에 서면 체력이 넉넉할 때 야영지를 친다.
 5. 비명: 웜퍼스가 쓰러졌다는 뜻이다. 악취를 느꼈던 칸에 다시 가서 사라졌는지 확인한다.
 6. memory: 찾은 금맥의 위치를 적어 팀과 나눈다. 바친 뒤에는 아는 금맥으로 돌아가고, 팀원이 찾은 금맥 쪽으로 탐험한다.
+   위험을 감수해 들어간 칸도 적어 둔다 (살아남으면 지운다). 지워지지 않은 칸은 누군가 쓰러진 칸이니 팀 모두가 피한다.
+7. 화살: 악취로 굴이 한 칸으로 좁혀지고 같은 줄에 있으면 쏜다 (보물 30).
 
 TODO 표시가 있는 곳부터 고쳐 보자.
 """
 from collections import deque
 
-from wumpus.api import (Move, Mine, Attack, Spawn, debug, DIRS, mirror,
-                        EXPLORER, CAMP, WALL, CARRY_MAX, COST, MAX_ROUNDS, MAX_UNITS)
+from wumpus.api import (Move, Mine, Attack, Spawn, Shoot, debug, DIRS, mirror,
+                        EXPLORER, CAMP, WALL, COST, MAX_ROUNDS, MAX_UNITS)
 
 # ---------------- 이 모험가의 기억 (지식 베이스) ----------------
 visited = set()      # 서 본 칸 (살아서 서 봤으니 안전하다)
@@ -48,10 +53,12 @@ bumps = {}           # 칸 -> 연달아 부딪힌 횟수
 move_fs = 0          # 지난 차례 (움직인 차례) 의 발소리
 busy = {}            # 서 본 칸 -> 다른 모험가에게 막힌 라운드
 swing = 0            # 반격할 때 다음에 칠 방향 번호
+pending = None       # 위험을 감수해 들어간 칸을 적어 둔 memory 자리 (살아남으면 다음 차례에 지운다)
 SEARCH_CAP = 220     # 한 차례의 길 찾기에서 펼칠 칸 수 상한 (연산 한도 안에 들도록 일의 양을 직접 센다)
 work_left = 0        # 이번 차례에 더 펼칠 수 있는 칸 수
 FIGHT_HP = 5         # 체력이 이보다 많을 때만 적 야영지를 친다
 BUSY_ROUNDS = 8      # 다른 모험가에게 막힌 칸은 이 라운드 동안 돌아간다
+RETURN_AT = 10       # 금을 이만큼 들면 바치러 돌아간다 (짐 상한이 없는 규칙. 많이 들수록 쓰러질 때 잃는 금도 많다)
 D4 = tuple(DIRS.values())
 syms = {'H', 'V', 'R'}  # 아직 지우지 못한 맵 대칭 (적 야영지 = 우리 야영지의 거울 칸)
 
@@ -77,7 +84,7 @@ def turn(me, view, memory):
 # ---------------- 야영지 ----------------
 def camp_turn(me, view, memory):
     # TODO: 언제, 몇 명을 만들지 정해 보자 (금고를 아껴 둘 수도 있다)
-    if me.bank < COST[EXPLORER] or view.unit_count >= MAX_UNITS:
+    if me.bank < view.cost.get(EXPLORER, COST[EXPLORER]) or view.unit_count >= MAX_UNITS:
         return None
     taken = {(u.x, u.y) for u in view.units()}
     for d, (dx, dy) in DIRS.items():
@@ -94,10 +101,17 @@ def neighbors(c, w, h):
 
 
 def adventurer_turn(me, view, memory):
-    global last_target, swing, heard, here, came_from, work_left, move_fs
+    global last_target, swing, heard, here, came_from, work_left, move_fs, pending
     work_left = SEARCH_CAP
     pos = (me.x, me.y)
     w, h = view.width, view.height
+    # 0. 팀 기억: memory 의 음수 칸은 "누군가 위험을 감수해 들어간 칸". 그 모험가가 살아남았으면 스스로 지웠을 것이다.
+    #    남아 있으면 그 칸에서 쓰러졌다 (구덩이 · 굴) → 팀 모두가 벽처럼 피한다. 새로 뽑힌 모험가가 같은 구덩이에 또 빠지지 않는다
+    if pending is not None:
+        if memory[pending] < 0:
+            memory[pending] = 0                     # 살아남았다 → 그 칸은 안전했다
+        pending = None
+    doom = {((-v - 1) % w, (-v - 1) // w) for v in memory if v < 0}
     if pos != here:
         came_from, here = here, pos
 
@@ -166,20 +180,44 @@ def adventurer_turn(me, view, memory):
             debug.say('아프다 → (%d,%d) 반격' % t)
             return Attack(*t)
 
-    # 4. 반짝이면 캔다 (떨어진 금은 들어서면 저절로 줍는다). 금맥 위치는 memory 에 적어 팀과 나눈다
+    # 3.5 화살: 악취 칸의 이웃 가운데 안전이 증명되지 않은 칸이 하나뿐이면 그 칸이 굴이다 (명제 논리: 악취 → 이웃 어딘가에 굴).
+    #     굴이 같은 줄에 있고 그 사이를 모두 서 봤으면 (벽이 없으면) 그쪽으로 쏜다
+    if me.arrows > 0:
+        for sc in stench:
+            cand = [n for n in neighbors(sc, w, h) if n not in safe and n not in walls]
+            if len(cand) != 1:
+                continue
+            den = cand[0]
+            if den[0] != pos[0] and den[1] != pos[1]:
+                continue
+            dx, dy = (den[0] > pos[0]) - (den[0] < pos[0]), (den[1] > pos[1]) - (den[1] < pos[1])
+            c, clear = (pos[0] + dx, pos[1] + dy), True
+            while c != den:
+                if c not in visited:
+                    clear = False
+                    break
+                c = (c[0] + dx, c[1] + dy)
+            if clear:
+                debug.say('화살 → 굴 (%d,%d)' % den)
+                return Shoot(next(d for d, v in DIRS.items() if v == (dx, dy)))
+        # TODO: 화살로 적 모험가나 적 야영지를 쏠 때를 정해 보자 (화살은 줄의 첫 대상에 맞는다: 팀원이 가로막으면 팀원이 맞는다)
+
+    # 4. 반짝이면 캔다. 금맥 위치는 memory 에 적어 팀과 나눈다
     code = 1 + pos[0] + pos[1] * w                  # 칸 하나를 정수 하나로 (0 은 빈 칸)
     gold = view.gold(*pos) or 0
     if gold > 0 and code not in memory and 0 in memory:
         memory[memory.index(0)] = code
     elif gold == 0 and code in memory:              # 다 캔 금맥은 지운다
         memory[memory.index(code)] = 0
-    if view.glitter and gold > 0 and me.carry < CARRY_MAX:
+    full = min(view.carry_max, RETURN_AT)
+    if view.glitter and gold > 0 and me.carry < full:
         debug.say('반짝임 → 채굴')
         return Mine()
 
-    # 5. 가득 차면 (또는 경기 끝이 가까우면) 야영지 옆 칸으로 돌아간다
+    # 5. 금을 충분히 들었으면 (또는 경기 끝이 가까우면) 야영지 옆 칸으로 돌아간다 (화살 보물을 들었을 때도)
+    # TODO: 집이 멀거나 적이 가까우면 덜 들고도 돌아가 보자 (쓰러지면 든 금을 상대가 가져간다)
     home = set(neighbors(view.my_camp, w, h)) - walls
-    if me.carry >= CARRY_MAX or (me.carry > 0 and me.round > MAX_ROUNDS - 60):
+    if me.carry >= full or (me.carry > 0 and me.round > MAX_ROUNDS - 60):
         return go(me, pos, home, w, h, '귀환')
 
     # 6. 비명을 들었으면 악취 칸을 다시 확인하러 간다 (악취가 사라졌으면 그 둘레가 안전해진다)
@@ -189,7 +227,7 @@ def adventurer_turn(me, view, memory):
             return act
 
     # 7. 아는 금맥으로 돌아가 캔다 (내가 서 본 금맥 가운데 가장 가까운 곳. 팀원이 다 캤다고 지운 곳은 빠진다)
-    veins = [((v - 1) % w, (v - 1) // w) for v in memory if v]
+    veins = [((v - 1) % w, (v - 1) // w) for v in memory if v > 0]
     known = {v for v in veins if v in visited and v != pos}
     if known:
         act = go(me, pos, known, w, h, '금맥으로')
@@ -207,11 +245,16 @@ def adventurer_turn(me, view, memory):
             if act is not None:
                 return act
         return go(me, pos, frontier, w, h, '탐험 (안전)')
-    unknown = {n for c in danger for n in neighbors(c, w, h)} - visited - walls - camps - {view.my_camp}
-    return go(me, pos, unknown, w, h, '탐험 (위험 감수)')
+    unknown = {n for c in danger for n in neighbors(c, w, h)} - visited - walls - camps - {view.my_camp} - doom
+    # TODO: 위험한 칸 가운데 덜 위험한 칸을 고르자 (바람 칸 여럿에 둘러싸인 칸일수록 구덩이일 확률이 높다)
+    act = go(me, pos, unknown, w, h, '탐험 (위험 감수)', doom)
+    if act is not None and last_target not in safe and 0 in memory:
+        pending = memory.index(0)                   # 들어가기 전에 적는다. 살아남으면 다음 차례에 지운다
+        memory[pending] = -(1 + last_target[0] + last_target[1] * w)
+    return act
 
 
-def go(me, pos, goals, w, h, label):
+def go(me, pos, goals, w, h, label, avoid=()):
     """아는 안전한 칸으로만 걸어 goals 중 가장 가까운 칸으로 한 걸음 (너비 우선 탐색)."""
     global last_target, work_left
     if not goals:
@@ -235,7 +278,7 @@ def go(me, pos, goals, w, h, label):
             debug.say('%s → (%d,%d)' % (label, c[0], c[1]))
             return Move(next(d for d, (dx, dy) in DIRS.items() if (pos[0] + dx, pos[1] + dy) == c))
         for n in neighbors(c, w, h):
-            if n not in prev and n not in walls and n not in blocked and (n in safe or n in goals):
+            if n not in prev and n not in walls and n not in blocked and n not in avoid and (n in safe or n in goals):
                 prev[n] = c
                 q.append(n)
     return None

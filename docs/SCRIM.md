@@ -19,19 +19,19 @@ python -m wumpus scrim mybot starter
 스크림: mybot vs starter | 맵 10개 x 시드 1개 x 진영 2 = 20판 | 동시에 4판
 
 맵              시드  A 진영      결과         라운드     금 A:B  끝난 이유
-dusty_vault        1  mybot 붉은  mybot 승       1000    460:393  1000라운드 끝, 바친 금
-dusty_vault        1  mybot 푸른  starter 승     1000    393:460  1000라운드 끝, 바친 금
-jackal_hall        1  mybot 붉은  starter 승     1000    315:425  1000라운드 끝, 바친 금
+dusty_vault        1  mybot 붉은  mybot 승       1000    161:153  1000라운드 끝, 바친 금
+dusty_vault        1  mybot 푸른  starter 승     1000    153:161  1000라운드 끝, 바친 금
+jackal_hall        1  mybot 붉은  starter 승     1000      13:70  1000라운드 끝, 바친 금
 ...
-twin_pillars       1  mybot 붉은  mybot 승        538    127:208  야영지 파괴
-twin_pillars       1  mybot 푸른  starter 승      538    208:127  야영지 파괴
+twin_pillars       1  mybot 붉은  starter 승     1000    234:336  1000라운드 끝, 바친 금
+twin_pillars       1  mybot 푸른  mybot 승       1000    336:234  1000라운드 끝, 바친 금
 
-== 요약 (20판, 49초) ==
+== 요약 (20판, 30초) ==
 mybot: 10승  starter: 10승  무승부: 0   ->  mybot 승률 50.0%
-평균 바친 금  mybot 469.4  :  starter 469.4
-평균 라운드 954 | 야영지 파괴로 끝난 판 2/20
-차례 시간 (ms) 평균/최대  mybot 0.41/96.4  starter 0.41/79.4
-연산 (차례당) 최대  mybot 6,872  starter 6,872 | 한도 초과 차례  mybot 0번  starter 0번
+평균 바친 금  mybot 202.3  :  starter 202.3
+평균 라운드 876 | 야영지 파괴로 끝난 판 4/20
+차례 시간 (ms) 평균/최대  mybot 0.31/5.4  starter 0.31/5.2
+연산 (차례당) 최대  mybot 7,098  starter 7,098 | 한도 초과 차례  mybot 0번  starter 0번
 ```
 
 막 복사한 봇은 시작용 봇과 똑같으므로 10승 10패다 (진영만 바뀐 같은 경기). 봇을 고칠 때마다 이 숫자가 어떻게 바뀌는지 본다.
@@ -119,10 +119,10 @@ python -m wumpus check mybot
 ```
 봇 점검: mybot (bots/mybot/main.py)
   코드 검사 통과, turn 함수 있음
-  붉은 원정대 진영 vs starter: 승 (1000라운드 끝, 바친 금, 1000라운드, 금 513:501)
-    차례 시간 평균 0.33 ms, 최대 3.3 ms | 연산 (차례당) 평균 1,011, 최대 6,554 | 오류 0번
-  푸른 원정대 진영 vs starter: 패 (1000라운드 끝, 바친 금, 1000라운드, 금 501:513)
-    차례 시간 평균 0.34 ms, 최대 2.6 ms | 연산 (차례당) 평균 1,024, 최대 6,561 | 오류 0번
+  붉은 원정대 진영 vs starter: 패 (1000라운드 끝, 바친 금, 1000라운드, 금 318:424)
+    차례 시간 평균 0.34 ms, 최대 2.6 ms | 연산 (차례당) 평균 998, 최대 6,554 | 오류 0번
+  푸른 원정대 진영 vs starter: 승 (1000라운드 끝, 바친 금, 1000라운드, 금 424:318)
+    차례 시간 평균 0.32 ms, 최대 3.4 ms | 연산 (차례당) 평균 916, 최대 6,654 | 오류 0번
 ```
 
 코드 검사 (금지된 코드), 문법 오류, `turn` 없음, 경기 중 예외 (처음 몇 개의 메시지와 라운드), 차례 시간, 연산을 한 번에 본다. 제출 전에 꼭 돌린다.

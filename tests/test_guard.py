@@ -83,7 +83,7 @@ class Guard(unittest.TestCase):
 class Isolation(unittest.TestCase):
     def test_view_holds_no_game(self):
         g, rep = play(IDLE)
-        v = engine.View(g, g.units[0])
+        v = engine.View(g, (g.units or g.bases)[0])
         for val in vars(v).values():
             self.assertNotIsInstance(val, (Game, engine.Unit))
         self.assertFalse(hasattr(v, '_g'))
