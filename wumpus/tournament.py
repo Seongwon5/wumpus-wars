@@ -347,48 +347,30 @@ def _resolve(B, seeds):
 
 
 def _layout(B):
-    """화면 배치: 열 (시간 순서) 과 세로 자리. 부전승 경기는 그리지 않는다 (구조로 미리 정해진다)."""
-    M = B['matches']
-    col = {}
-
-    def c(mid):
-        if mid in col:
-            return col[mid]
-        m = M[mid]
-        prev = [c(s.get('win') or s.get('lose')) for s in m['src'] if 'seed' not in s]
-        base = max(prev) if prev else 0
-        col[mid] = base + (1 if m.get('shown', True) else 0)
-        return col[mid]
-    for mid in M:
-        c(mid)
-    for mid in M:
-        M[mid]['col'] = col[mid]
+    """화면 배치 (Cambridge 와 같다): 열 = 실제 라운드. 승자조 r 라운드는 그 패자가 내려갈 패자조 라운드 바로 앞 열
+    (1, 2, 4, 6, …: 두 라운드에 한 번), 패자조 j 라운드는 j+1 열, 그랜드 파이널 2k, 결승 리셋 2k+1.
+    부전승 경기도 그린다 (— Bye). 세로는 나무 모양: 잎은 차례로, 안쪽은 자식들의 가운데. 화면도 같은 계산을 다시 한다."""
+    M, k = B['matches'], B['k']
+    for m in M.values():
+        m['col'] = {'W': 1 if m['rnd'] == 1 else 2 * m['rnd'] - 2, 'L': m['rnd'] + 1, 'GF': 2 * k, 'GF2': 2 * k + 1}[m['br']]
     slot = [0.0]
 
     def lay(mid, br):
         m = M[mid]
-        ys = []
-        for s in m['src']:
-            src = s.get('win') or s.get('lose')
-            if src and ('win' in s) and M[src]['br'] in br:
-                y = lay(src, br)
-                if y is not None:
-                    ys.append(y)
-        if m.get('shown', True):
-            y = sum(ys) / len(ys) if ys else slot[0]
-            if not ys:
-                slot[0] += 1
-            m['y'] = y
-            return y
-        return sum(ys) / len(ys) if ys else None
-    lay(B['wb'][-1][0], ('W',))
-    top = slot[0]
-    slot[0] = top + 0.8                                    # 패자조는 승자조 아래
+        ys = [lay(s['win'], br) for s in m['src'] if 'win' in s and M[s['win']]['br'] == br]
+        if ys:
+            m['y'] = sum(ys) / len(ys)
+        else:
+            m['y'] = slot[0]
+            slot[0] += 1
+        return m['y']
+    lay(B['wb'][-1][0], 'W')
+    B['wb_rows'] = slot[0]
+    slot[0] += 0.8
     if B['lb']:
-        lay(B['lb'][-1][0], ('L',))
-    B['wb_rows'] = top
+        lay(B['lb'][-1][0], 'L')
     B['rows'] = slot[0]
-    gy = M[B['wb'][-1][0]].get('y', 0)
+    gy = M[B['wb'][-1][0]]['y']
     M['GF']['y'] = gy
     M['GF2']['y'] = gy
 

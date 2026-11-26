@@ -45,6 +45,8 @@ main{flex:1;position:relative;min-height:0;margin:0 18px 6px}
 .m .sc{width:24px;text-align:right;color:#b8c0c6;font-variant-numeric:tabular-nums}
 .m .w .nm,.m .w .sc{color:var(--win);font-weight:700}
 .m .tbd .nm{color:#6c767e;font-style:italic}
+.m .bye .nm,.m .bye .sd,.m .bye .sc{color:#5d676f}
+svg#lines path.drop{stroke-dasharray:3 3}
 .m .no{position:absolute;left:-22px;top:15px;font-size:10px;color:#6f7a82;width:18px;text-align:right}
 .m.hid{background:#1f2429;border-style:dashed}.m.hid .sc{color:#8a7a55}
 .m.run{border-color:#4f6b85}.m.run .sc{color:#7fb0dd}
@@ -176,20 +178,34 @@ const seedOf=t=>D.seeds?D.seeds.indexOf(t)+1:0;
 
 // ---------- 대진 정보 ----------
 const M=()=>D.bracket?D.bracket.matches:{};
-function shown(){return Object.values(M()).filter(m=>m.shown&&!(m.id==='GF2'&&m.skip));}
+// Cambridge 배치: 열 = 실제 라운드. 승자조는 그 패자가 내려갈 패자조 라운드 바로 앞 열 (두 라운드에 한 번),
+// 패자조는 매 라운드. 부전승 경기도 그린다 (— Bye). 화면이 열 때 계산하므로 예전에 만든 토너먼트도 같은 모양이 된다
+function prepBracket(){const B=D.bracket,k=B.k,ms=B.matches;
+  for(const m of Object.values(ms)){delete m._e;m.col=m.br==='W'?(m.rnd===1?1:2*m.rnd-2):m.br==='L'?m.rnd+1:m.br==='GF'?2*k:2*k+1;}
+  let slot=0;                                   // 세로 자리: 나무 모양 (잎은 차례로, 안쪽은 자식들의 가운데)
+  const lay=(id,br)=>{const m=ms[id];const ys=m.src.filter(s=>s.win&&ms[s.win].br===br).map(s=>lay(s.win,br));
+    m.y=ys.length?ys.reduce((a,b)=>a+b,0)/ys.length:slot++;return m.y;};
+  const wf=B.wb[B.wb.length-1][0];lay(wf,'W');B.wb_rows=slot;slot+=0.8;
+  if(B.lb.length)lay(B.lb[B.lb.length-1][0],'L');B.rows=slot;
+  ms.GF.y=ms[wf].y;ms.GF2.y=ms[wf].y;}
+function shown(){return Object.values(M());}
 function stageName(m){const k=D.bracket.k;if(m.br==='GF')return '그랜드 파이널';if(m.br==='GF2')return '결승 리셋';
   if(m.br==='W'){const t=D.bracket.size>>(m.rnd-1);return m.rnd===k?'승자조 결승':'승자조 '+m.rnd+' 라운드 ('+t+'강)';}
   const last=D.bracket.lb.length;return m.rnd===last?'패자조 결승':'패자조 '+m.rnd+' 라운드';}
-function isHidden(m){return m.col>=hideCol&&!revealed.has(m.id);}
-function done(m){return m.winner!==undefined&&m.winner!==null&&!m.bye;}
+// 결과와 상관없이 빈 자리 (Bye): 시드가 팀 수보다 크거나, 앞 경기가 부전승이라 패자가 없을 때
+function emptySlot(s){if('seed' in s)return s.seed>D.bracket.n;const m=M()[s.win||s.lose];
+  if(m._e===undefined){const a=emptySlot(m.src[0]),b=emptySlot(m.src[1]);m._e=[a&&b,a||b];}return s.win?m._e[0]:m._e[1];}
+function isBye(m){return m.br!=='GF2'&&m.src.some(emptySlot);}
+function isHidden(m){return !isBye(m)&&m.col>=hideCol&&!revealed.has(m.id);}
+function done(m){return m.winner!==undefined&&m.winner!==null&&!isBye(m)&&!m.bye&&!m.skip;}
 // 자리의 팀이 보이는가: 시드는 늘, 경기에서 온 팀은 그 경기 (부전승이면 그 앞) 가 공개됐을 때
 function slotVisible(slot){if('seed' in slot)return true;const src=M()[slot.win||slot.lose];if(!src)return false;
-  if(src.bye){return src.src.every(s=>slotVisible(s));}
+  if(isBye(src))return src.src.filter(s=>!emptySlot(s)).every(slotVisible);
   if(src.winner===undefined)return false;return !isHidden(src);}
-function slotTeam(m,i){const t=m.teams?m.teams[i]:null;if(t==null||t<0)return null;return slotVisible(m.src[i])?t:undefined;}
+// -1: Bye · undefined: 아직 모름 또는 숨김 · 숫자: 팀
+function slotTeam(m,i){if(emptySlot(m.src[i]))return -1;const t=m.teams?m.teams[i]:null;if(t==null||t<0)return undefined;return slotVisible(m.src[i])?t:undefined;}
 function slotHint(m,i){const s=m.src[i];if('seed' in s)return '시드 #'+s.seed;const src=M()[s.win||s.lose];
-  let n=src;while(n&&!n.shown){const ss=n.src.find(x=>!('seed' in x));if(!ss)break;n=M()[ss.win||ss.lose];}
-  return (s.win?'승자: ':'패자: ')+(n&&n.shown?'M'+n.no:'?');}
+  if(m.teams&&m.teams[i]!=null&&m.teams[i]>=0)return '? (숨김)';return (s.win?'승자: ':'패자: ')+'M'+src.no;}
 
 // ---------- 그리기 ----------
 function colInfo(){const ms=shown();const cols=[...new Set(ms.map(m=>m.col))].sort((a,b)=>a-b);
@@ -206,25 +222,26 @@ function render(){
     h+=`<div class="colh" data-col="${c}" style="left:${X[c]}px;width:${collapsed.has(c)?40:BOXW}px" title="눌러서 접기 · 펼치기">${collapsed.has(c)?'›':'↓ '+lbl}</div>`;}
   h+=`<div class="sect" style="left:${LEFT}px;top:${TOP+4}px">승자조</div>`;
   h+=`<div class="sect" style="left:${LEFT}px;top:${TOP+30+(D.bracket.wb_rows+.1)*ROWH}px">패자조</div>`;
-  const teamHit=t=>hlTeam!=null&&t===hlTeam;
   for(const m of ms){if(collapsed.has(m.col))continue;
-    const hid=isHidden(m),fin=done(m),run=!fin&&m.games&&m.games.length;
-    const rows=[0,1].map(i=>{const t=slotTeam(m,i);const tm=TEAM(t);
-      const w=fin&&!hid&&m.winner===t;const sc=fin?(hid?'?':m.score[i]):(run&&!hid?liveScore(m,i):'');
-      if(t===undefined)return `<div class="r tbd"><span class="sd"></span><span class="nm">${hid?'? (숨김)':esc(slotHint(m,i))}</span><span class="sc">${sc}</span></div>`;
-      if(!tm)return `<div class="r tbd"><span class="sd"></span><span class="nm">${esc(slotHint(m,i))}</span><span class="sc"></span></div>`;
+    const bye=isBye(m),hid=isHidden(m),fin=done(m),run=!fin&&!bye&&m.games&&m.games.length;
+    const rows=m.skip?['결승 리셋 없음','(승자조 우승팀이 이김)'].map(x=>`<div class="r bye"><span class="sd">—</span><span class="nm">${x}</span><span class="sc">-</span></div>`).join(''):[0,1].map(i=>{const t=slotTeam(m,i);
+      if(t===-1)return `<div class="r bye"><span class="sd">—</span><span class="nm">Bye</span><span class="sc">-</span></div>`;
+      if(t===undefined)return `<div class="r tbd"><span class="sd"></span><span class="nm">${esc(slotHint(m,i))}</span><span class="sc">${bye?'-':fin&&hid?'?':''}</span></div>`;
+      const tm=TEAM(t);const w=bye?m.winner===t:(fin&&!hid&&m.winner===t);const sc=bye?'-':fin?(hid?'?':m.score[i]):(run&&!hid?liveScore(m,i):'');
       return `<div class="r${w?' w':''}"><span class="sd">#${seedOf(t)}</span><span class="nm">${esc(tm.name)}</span><span class="sc">${sc}</span></div>`;}).join('');
     const has=hlTeam!=null&&m.teams&&[0,1].some(i=>slotTeam(m,i)===hlTeam);
-    const cls='m'+(hid?' hid':'')+(run?' run':'')+(has?' hl':'')+(hlTeam!=null&&!has?' dim':'');
+    const cls='m'+(bye?' byem':'')+(hid?' hid':'')+(run?' run':'')+(has?' hl':'')+(hlTeam!=null&&!has?' dim':'');
     h+=`<div class="${cls}" data-id="${m.id}" style="left:${X[m.col]}px;top:${yPx(m)}px"><span class="no">${m.no}</span>${rows}${hid&&fin?'<span class="lock">숨김</span>':''}</div>`;}
-  // 선: 승자가 올라가는 길만 (내려가는 패자는 선 없이)
+  // 선: 이긴 팀이 올라가는 길은 실선, 승자조에서 내려오는 패자는 왼쪽의 짧은 점선
   let p='';
-  const nearest=s=>{let n=M()[s.win];while(n&&!n.shown){const ss=n.src.find(x=>x.win);if(!ss)return null;n=M()[ss.win];}return n;};
-  for(const m of ms){if(collapsed.has(m.col))continue;for(const s of m.src){if(!s.win)continue;const a=nearest(s);if(!a||collapsed.has(a.col))continue;
-      if(a.br!==m.br&&!(m.br==='GF'||m.br==='GF2'))continue;
-      const x1=X[a.col]+BOXW,y1=yPx(a)+BOXH/2,x2=X[m.col],y2=yPx(m)+BOXH/2,mx=x2-18;
+  for(const m of ms){if(collapsed.has(m.col))continue;const x2=X[m.col],y2=yPx(m)+BOXH/2;
+    m.src.forEach((s,i)=>{const yy=yPx(m)+(i?BOXH*0.75:BOXH*0.25);
+      if(s.lose&&M()[s.lose].br!==m.br&&m.br==='L'){p+=`<path class="drop" d="M${x2-22} ${yy}H${x2}"/>`;return;}
+      if(!s.win)return;const a=M()[s.win];if(!a||collapsed.has(a.col))return;
+      if(a.br!==m.br&&!(m.br==='GF'||m.br==='GF2'))return;
+      const x1=X[a.col]+BOXW,y1=yPx(a)+BOXH/2,mx=x2-18;
       const on=hlTeam!=null&&a.winner===hlTeam&&!isHidden(a);
-      p+=`<path class="${on?'hl':''}" d="M${x1} ${y1}H${mx}V${y2}H${x2}"/>`;}}
+      p+=`<path class="${on?'hl':''}" d="M${x1} ${y1}H${mx}V${y2}H${x2}"/>`;});}
   $('canvas').innerHTML=`<svg id="lines" width="${width+300}" height="${TOP+60+D.bracket.rows*ROWH}">${p}</svg>`+h;
   $('canvas').style.width=(width+300)+'px';$('canvas').style.height=(TOP+80+D.bracket.rows*ROWH)+'px';
   applyZoom();
@@ -254,7 +271,7 @@ $('bRefresh').onclick=()=>{APP?refresh(true):location.reload();};
 
 // ---------- 공개 범위 ----------
 function hideColForTeams(t){if(t==='none')return Infinity;if(t==='all')return 1;if(!D||!D.bracket)return 1;const k=D.bracket.k,size=D.bracket.size;
-  if(t==='GF')return M().GF.col;for(let r=1;r<=k;r++){if((size>>(r-1))===+t){const ms=D.bracket.wb[r-1].map(id=>M()[id]).filter(m=>m.shown);if(ms.length)return Math.min(...ms.map(m=>m.col));}}return Infinity;}
+  if(t==='GF')return M().GF.col;for(let r=1;r<=k;r++){if((size>>(r-1))===+t){const ms=D.bracket.wb[r-1].map(id=>M()[id]);if(ms.length)return Math.min(...ms.map(m=>m.col));}}return Infinity;}
 function buildHideSel(){const s=$('hideSel');if(!D||!D.bracket){s.innerHTML='<option>모두 공개</option>';return;}
   const k=D.bracket.k,size=D.bracket.size,opts=[['1','모두 숨김 (하나씩 공개)'],['Infinity','모두 공개']];
   for(let r=2;r<=k;r++){const t=size>>(r-1),c=hideColForTeams(t);if(c===Infinity)continue;opts.push([String(c),(r===k?'승자조 결승':t+'강')+'부터 숨김 (라운드 '+c+'~)']);}
@@ -277,8 +294,8 @@ function openTeam(t){const tm=TEAM(t);const mine=D.bracket?shown().filter(m=>m.t
   let h=`<div class="track"><div>스위스 예선: <b>${st?st.rank+'위':'-'}</b> · ${st?st.pts:0}점 (${st?st.wdl.join('-'):''})${D.seeds?' · 본선 시드 #'+seedOf(t):''}</div></div>`;
   h+='<table style="margin-top:12px"><tr><th>경기</th><th>단계</th><th>상대</th><th class="n">점수</th><th>결과</th></tr>';
   for(const m of mine){const i=m.teams[0]===t?0:1,o=slotTeam(m,1-i),hid=isHidden(m);
-    const res=!done(m)?'<span class="pill">진행 전</span>':hid?'<span class="pill">숨김</span>':m.winner===t?'<span class="pill w">승</span>':'<span class="pill r">패</span>';
-    h+=`<tr class="click" data-m="${m.id}"><td>M${m.no}</td><td>${stageName(m)}</td><td>${o==null?'-':o===undefined?'?':esc(TEAM(o).name)}</td><td class="n">${done(m)&&!hid?m.score[i]+' : '+m.score[1-i]:'?'}</td><td>${res}</td></tr>`;}
+    const res=isBye(m)?'<span class="pill w">부전승</span>':!done(m)?'<span class="pill">진행 전</span>':hid?'<span class="pill">숨김</span>':m.winner===t?'<span class="pill w">승</span>':'<span class="pill r">패</span>';
+    h+=`<tr class="click" data-m="${m.id}"><td>M${m.no}</td><td>${stageName(m)}</td><td>${o===-1?'Bye':o==null?'?':esc(TEAM(o).name)}</td><td class="n">${isBye(m)?'-':done(m)&&!hid?m.score[i]+' : '+m.score[1-i]:'?'}</td><td>${res}</td></tr>`;}
   h+='</table>';
   const last=mine[mine.length-1];let fate='';
   if(D.champion===t&&!mine.some(isHidden))fate='🏆 우승';else if(last&&done(last)&&!isHidden(last)&&last.winner!==t&&(last.br==='L'||last.br==='GF'||last.br==='GF2'))fate=stageName(last)+'에서 탈락';
@@ -296,6 +313,9 @@ function gameRow(gid,i,hid,teamsOrder){const g=D.games[gid];if(!g)return '';cons
   return `<tr><td class="n">${i}</td><td title="${esc(mp.name)}">${esc(mp.name.split('_')[0])} <span class="note">${mp.w}×${mp.h}</span></td><td><span class="pill r">●</span> ${esc(R.name)}</td><td><span class="pill b">●</span> ${esc(B.name)}</td><td>${res}</td><td class="n">${gold}</td><td>${fin?`<button class="play" data-g="${gid}">▶ 보기</button>`:''}</td></tr>`;}
 let curList=[];
 function openMatch(m){if(!m)return;const hid=isHidden(m);
+  if(m.skip){drawer('M'+m.no+' · 결승 리셋','치르지 않음','<div class="track">그랜드 파이널에서 승자조 우승팀이 이겨 리셋 경기가 필요 없었다 (패자조 쪽이 이겼다면 둘 다 1패라 한 번 더 치른다).</div>');return;}
+  if(isBye(m)){const ts=[0,1].map(i=>slotTeam(m,i)).filter(t=>t!==-1);
+    drawer('M'+m.no+' · '+stageName(m),'부전승 (상대가 없는 자리)',ts.length?`<div class="track">${ts[0]===undefined?'앞 경기의 승자':esc(TEAM(ts[0]).name)} 이(가) 경기 없이 다음 라운드로 올라간다. 대진표 칸 수 (${D.bracket.size}) 보다 팀이 적어 생기는 빈 자리이고, 예선 상위 시드가 받는다.</div>`:'<div class="track">양쪽 모두 빈 자리라 아무도 올라가지 않는다.</div>');return;}
   const ts=[0,1].map(i=>slotTeam(m,i));
   const tn=i=>ts[i]==null?'-':ts[i]===undefined?'?':esc(TEAM(ts[i]).name);
   const fin=done(m);
@@ -358,6 +378,7 @@ function showTab(){const home=APP&&!D;$('home').style.display=home?'block':'none
   if(!home&&tab==='bracket'&&(needFit||Z<0.1))requestAnimationFrame(()=>{fit();needFit=false;});}
 let needFit=true;
 function setData(d,refit){const first=!D||!d||(D.config.id!==d.config.id);const hadB=!!(D&&D.bracket);D=d;if(!D){showTab();return;}
+  if(D.bracket)prepBracket();
   if(first){hlTeam=null;$('search').value='';collapsed.clear();$('drawer').classList.remove('on');}
   if(first||refit||(!hadB&&D.bracket))needFit=true;
   $('tname').textContent=D.config.name+' · '+D.config.teams.length+'팀 · 맵 '+D.config.maps.length+'개 · '+D.config.created;
