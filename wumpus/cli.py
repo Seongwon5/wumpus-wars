@@ -398,6 +398,7 @@ def main(argv=None):
     except Exception:
         pass
     ap = argparse.ArgumentParser(prog='wumpus', description=f'웜퍼스 워즈 {__version__} 도구')
+    ap.add_argument('--version', action='version', version=f'웜퍼스 워즈 엔진 {__version__} (2026-11-27 동결)')
     sub = ap.add_subparsers(dest='cmd', required=True)
 
     p = sub.add_parser('run', help='경기 하나를 돌리고 리플레이를 만든다')
