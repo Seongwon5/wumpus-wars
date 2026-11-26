@@ -41,11 +41,22 @@ def _jload(path, default=None):
         return default
 
 
+def _replace(tmp, dst):
+    """Windows 에서는 다른 쪽 (화면 서버) 이 파일을 읽는 순간 덮어쓰기가 거부된다 → 잠깐 기다렸다 다시."""
+    for i in range(50):
+        try:
+            os.replace(tmp, dst)
+            return
+        except PermissionError:
+            time.sleep(0.05 + 0.02 * i)
+    os.replace(tmp, dst)
+
+
 def _jsave(path, obj):
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as f:
         json.dump(obj, f, ensure_ascii=False, separators=(',', ':'))
-    os.replace(tmp, path)
+    _replace(tmp, path)
 
 
 def find_bots(bots_dir):
@@ -119,7 +130,7 @@ def _game(task):
     b64 = base64.b64encode(gzip.compress(raw, 6)).decode('ascii')
     with open(out_js + '.tmp', 'w', encoding='ascii') as f:
         f.write('__wwReplay(%s,"%s");\n' % (json.dumps(gid), b64))
-    os.replace(out_js + '.tmp', out_js)
+    _replace(out_js + '.tmp', out_js)
     m = rep['meta']
     return {'winner': m['winner'], 'reason': m['reason'], 'rounds': m['rounds'], 'score': m['score']}
 
@@ -564,7 +575,7 @@ def write_data(tdir, cfg=None, st=None):
     txt = json.dumps(data, ensure_ascii=False, separators=(',', ':'))
     with open(os.path.join(tdir, 'data.js.tmp'), 'w', encoding='utf-8') as f:
         f.write('window.TOURNAMENT=' + txt + ';\n')
-    os.replace(os.path.join(tdir, 'data.js.tmp'), os.path.join(tdir, 'data.js'))
+    _replace(os.path.join(tdir, 'data.js.tmp'), os.path.join(tdir, 'data.js'))
     return data
 
 
@@ -610,8 +621,13 @@ def _read_data(tdir):
     p = os.path.join(tdir, 'data.js')
     if not os.path.isfile(p):
         return None
-    txt = open(p, encoding='utf-8').read().strip()
-    return json.loads(txt[len('window.TOURNAMENT='):].rstrip(';'))
+    for i in range(20):
+        try:
+            txt = open(p, encoding='utf-8').read().strip()
+            return json.loads(txt[len('window.TOURNAMENT='):].rstrip(';'))
+        except (PermissionError, ValueError):
+            time.sleep(0.05)
+    return None
 
 
 def _pick(kind):
