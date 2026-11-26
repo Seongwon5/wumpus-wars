@@ -461,7 +461,7 @@ def main(argv=None):
     p.add_argument('--name'); p.add_argument('--maps', type=int, default=21, help='새로 만들 맵 수 (기본 21)')
     p.add_argument('--rounds', type=int, default=7, help='스위스 예선 라운드 (기본 7)')
     p.add_argument('--seed', type=int); p.add_argument('--jobs', type=int, help='동시에 돌릴 판 수 (기본 CPU 수 - 2)')
-    p.add_argument('--hide', help='pack: 처음 열 때 숨길 범위 (예: 8 이면 8강부터, GF 면 그랜드 파이널부터)')
+    p.add_argument('--hide', default='all', help='pack: 처음 열 때 숨길 범위. all = 모두 숨김 (기본, 하나씩 공개) · none = 모두 공개 · 8 = 8강부터 · GF = 그랜드 파이널부터')
     p.add_argument('--out', help='pack: zip 경로'); p.add_argument('--port', type=int, default=8770); p.add_argument('--no-open', action='store_true')
     p.set_defaults(fn=cmd_tournament)
 

@@ -13,7 +13,8 @@ button{cursor:pointer;font-weight:600}button:hover{border-color:#5a6670}button:d
 button.main{background:#2f6f45;border-color:#3c8a57}button.main:hover{background:#357c4e}
 input::placeholder{color:#6c767e}
 #app{display:flex;flex-direction:column;height:100%}
-header{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid #262d33}
+header{display:flex;align-items:center;gap:8px 12px;padding:12px 18px;border-bottom:1px solid #262d33;flex-wrap:wrap}
+header button,#bar button,header h1{white-space:nowrap}
 header h1{font-size:17px;margin:0;letter-spacing:.02em}header h1 b{color:var(--gold)}
 header .sub{color:var(--dim);font-size:13px}
 header .sp{flex:1}
@@ -168,7 +169,7 @@ function toast(t,ms=2600){const e=$('toast');e.textContent=t;e.style.display='bl
 function key(k){return 'ww-t-'+(D&&D.config.id)+'-'+k;}
 function loadPrefs(){try{revealed=new Set(JSON.parse(localStorage.getItem(key('rev'))||'[]'));}catch(_){revealed=new Set();}
   let h=null;try{h=localStorage.getItem(key('hide'));}catch(_){}
-  hideCol=h!==null?+h:(D.hide?hideColForTeams(D.hide):Infinity);}
+  hideCol=h!==null?+h:hideColForTeams(D.hide==null?'all':D.hide);}
 function savePrefs(){try{localStorage.setItem(key('rev'),JSON.stringify([...revealed]));localStorage.setItem(key('hide'),String(hideCol));}catch(_){}}
 const TEAM=t=>t==null||t<0?null:D.config.teams[t];
 const seedOf=t=>D.seeds?D.seeds.indexOf(t)+1:0;
@@ -252,14 +253,14 @@ $('bFull').onclick=()=>{document.fullscreenElement?document.exitFullscreen():doc
 $('bRefresh').onclick=()=>{APP?refresh(true):location.reload();};
 
 // ---------- 공개 범위 ----------
-function hideColForTeams(t){if(!D||!D.bracket)return Infinity;const k=D.bracket.k,size=D.bracket.size;
+function hideColForTeams(t){if(t==='none')return Infinity;if(t==='all')return 1;if(!D||!D.bracket)return 1;const k=D.bracket.k,size=D.bracket.size;
   if(t==='GF')return M().GF.col;for(let r=1;r<=k;r++){if((size>>(r-1))===+t){const ms=D.bracket.wb[r-1].map(id=>M()[id]).filter(m=>m.shown);if(ms.length)return Math.min(...ms.map(m=>m.col));}}return Infinity;}
 function buildHideSel(){const s=$('hideSel');if(!D||!D.bracket){s.innerHTML='<option>모두 공개</option>';return;}
-  const k=D.bracket.k,size=D.bracket.size,opts=[['Infinity','모두 공개']];
+  const k=D.bracket.k,size=D.bracket.size,opts=[['1','모두 숨김 (하나씩 공개)'],['Infinity','모두 공개']];
   for(let r=2;r<=k;r++){const t=size>>(r-1),c=hideColForTeams(t);if(c===Infinity)continue;opts.push([String(c),(r===k?'승자조 결승':t+'강')+'부터 숨김 (라운드 '+c+'~)']);}
   opts.push([String(M().GF.col),'그랜드 파이널부터 숨김']);
   s.innerHTML=opts.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('');s.value=String(hideCol);
-  if(s.value!==String(hideCol))s.value='Infinity';}
+  if(s.value!==String(hideCol))s.value='1';}
 $('hideSel').onchange=e=>{hideCol=e.target.value==='Infinity'?Infinity:+e.target.value;revealed.clear();savePrefs();render();renderSwiss();};
 
 // ---------- 검색 ----------
@@ -378,10 +379,10 @@ async function refresh(force){try{const s=await api('status');live=s;
 $('bStop').onclick=async()=>{try{await api(live&&live.running?'stop':'resume',{});refresh();}catch(e){toast(e.message);}};
 $('bHome').onclick=async()=>{await api('close',{});D=null;refresh.v=null;$('bHome').style.display='none';$('bPack').style.display='none';showTab();loadRecent();};
 $('bPack').onclick=async()=>{const hv=$('hideSel').selectedOptions[0];
-  if(!confirm('zip 을 만듭니다. 공개 범위: '+(hv?hv.textContent:'모두 공개')+'\n(받는 사람이 처음 열 때의 공개 범위입니다)'))return;
+  if(!confirm('zip 을 만듭니다. 공개 범위: '+(hv?hv.textContent:'모두 숨김')+'\n(받는 사람이 처음 열 때의 공개 범위입니다)'))return;
   toast('zip 을 만드는 중… (리플레이가 많으면 1~2분)',60000);
-  try{const r=await api('pack',{hide:hideCol===Infinity?null:hideColTeams()});toast('저장했습니다: '+r.path,9000);}catch(e){toast('실패: '+e.message,6000);}};
-function hideColTeams(){if(hideCol===M().GF.col)return 'GF';const k=D.bracket.k,size=D.bracket.size;for(let r=2;r<=k;r++){const t=size>>(r-1);if(hideColForTeams(t)===hideCol)return t;}return null;}
+  try{const r=await api('pack',{hide:hideColTeams()});toast('저장했습니다: '+r.path,9000);}catch(e){toast('실패: '+e.message,6000);}};
+function hideColTeams(){if(hideCol===Infinity)return 'none';if(hideCol<=1)return 'all';if(hideCol===M().GF.col)return 'GF';const k=D.bracket.k,size=D.bracket.size;for(let r=2;r<=k;r++){const t=size>>(r-1);if(hideColForTeams(t)===hideCol)return t;}return null;}
 async function pick(kind,target){try{const r=await api('pick',{kind});if(r.path)$(target).value=r.path;return r.path;}catch(e){toast(e.message);}}
 $('hPickBots').onclick=()=>pick('dir','hBots');$('hPickOut').onclick=()=>pick('dir','hOut');$('hPickOpen').onclick=()=>pick('dir','hOpen');$('hPickZip').onclick=()=>pick('zip','hOpen');
 $('hScan').onclick=async()=>{const o=$('hScanOut');o.style.display='block';o.innerHTML='<div>확인 중…</div>';

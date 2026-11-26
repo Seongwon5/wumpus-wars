@@ -586,11 +586,11 @@ def write_viewer(tdir):
     shutil.copyfile(os.path.join(VIEWER_DIR, 'tournament.html'), os.path.join(tdir, 'index.html'))
 
 
-def pack(tdir, out=None, hide=None):
+def pack(tdir, out=None, hide='all'):
     """다른 컴퓨터에서 열 zip 하나: index.html (대진표) · viewer.html · data.js · replays/ · maps/. 봇 코드는 넣지 않는다."""
     cfg = _jload(os.path.join(tdir, 'config.json'))
     st = _jload(os.path.join(tdir, 'state.json'))
-    st['hide'] = hide
+    st['hide'] = hide or 'all'                       # 처음 열 때: 'all' 모두 숨김 (기본) · 'none' 모두 공개 · 숫자 N 이면 N강부터 · 'GF'
     write_data(tdir, cfg, st)
     write_viewer(tdir)
     out = out or os.path.join(os.path.dirname(os.path.abspath(tdir)), cfg['name'] + '.zip')
