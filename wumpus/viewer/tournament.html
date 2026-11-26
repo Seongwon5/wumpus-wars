@@ -197,6 +197,8 @@ function emptySlot(s){if('seed' in s)return s.seed>D.bracket.n;const m=M()[s.win
   if(m._e===undefined){const a=emptySlot(m.src[0]),b=emptySlot(m.src[1]);m._e=[a&&b,a||b];}return s.win?m._e[0]:m._e[1];}
 function isBye(m){return m.br!=='GF2'&&m.src.some(emptySlot);}
 function isHidden(m){return !isBye(m)&&m.col>=hideCol&&!revealed.has(m.id);}
+// 결승 리셋이 열리는지는 그랜드 파이널 결과다 → 그랜드 파이널이 숨겨져 있으면 리셋 칸도 '?'
+function resetVeiled(m){return m.br==='GF2'&&(isHidden(M().GF)||!done(M().GF));}
 function done(m){return m.winner!==undefined&&m.winner!==null&&!isBye(m)&&!m.bye&&!m.skip;}
 // 자리의 팀이 보이는가: 시드는 늘, 경기에서 온 팀은 그 경기 (부전승이면 그 앞) 가 공개됐을 때
 function slotVisible(slot){if('seed' in slot)return true;const src=M()[slot.win||slot.lose];if(!src)return false;
@@ -224,13 +226,14 @@ function render(){
   h+=`<div class="sect" style="left:${LEFT}px;top:${TOP+30+(D.bracket.wb_rows+.1)*ROWH}px">패자조</div>`;
   for(const m of ms){if(collapsed.has(m.col))continue;
     const bye=isBye(m),hid=isHidden(m),fin=done(m),run=!fin&&!bye&&m.games&&m.games.length;
-    const rows=m.skip?['결승 리셋 없음','(승자조 우승팀이 이김)'].map(x=>`<div class="r bye"><span class="sd">—</span><span class="nm">${x}</span><span class="sc">-</span></div>`).join(''):[0,1].map(i=>{const t=slotTeam(m,i);
+    const veil=resetVeiled(m);
+    const rows=veil?['결승 리셋','(그랜드 파이널 결과에 따라)'].map(x=>`<div class="r tbd"><span class="sd"></span><span class="nm">${x}</span><span class="sc">?</span></div>`).join(''):m.skip?['결승 리셋 없음','(승자조 우승팀이 이김)'].map(x=>`<div class="r bye"><span class="sd">—</span><span class="nm">${x}</span><span class="sc">-</span></div>`).join(''):[0,1].map(i=>{const t=slotTeam(m,i);
       if(t===-1)return `<div class="r bye"><span class="sd">—</span><span class="nm">Bye</span><span class="sc">-</span></div>`;
       if(t===undefined)return `<div class="r tbd"><span class="sd"></span><span class="nm">${esc(slotHint(m,i))}</span><span class="sc">${bye?'-':fin&&hid?'?':''}</span></div>`;
       const tm=TEAM(t);const w=bye?m.winner===t:(fin&&!hid&&m.winner===t);const sc=bye?'-':fin?(hid?'?':m.score[i]):(run&&!hid?liveScore(m,i):'');
       return `<div class="r${w?' w':''}"><span class="sd">#${seedOf(t)}</span><span class="nm">${esc(tm.name)}</span><span class="sc">${sc}</span></div>`;}).join('');
     const has=hlTeam!=null&&m.teams&&[0,1].some(i=>slotTeam(m,i)===hlTeam);
-    const cls='m'+(bye?' byem':'')+(hid?' hid':'')+(run?' run':'')+(has?' hl':'')+(hlTeam!=null&&!has?' dim':'');
+    const cls='m'+(bye?' byem':'')+(hid||veil?' hid':'')+(run?' run':'')+(has?' hl':'')+(hlTeam!=null&&!has?' dim':'');
     h+=`<div class="${cls}" data-id="${m.id}" style="left:${X[m.col]}px;top:${yPx(m)}px"><span class="no">${m.no}</span>${rows}${hid&&fin?'<span class="lock">숨김</span>':''}</div>`;}
   // 선: 이긴 팀이 올라가는 길은 실선, 승자조에서 내려오는 패자는 왼쪽의 짧은 점선
   let p='';
@@ -313,6 +316,7 @@ function gameRow(gid,i,hid,teamsOrder){const g=D.games[gid];if(!g)return '';cons
   return `<tr><td class="n">${i}</td><td title="${esc(mp.name)}">${esc(mp.name.split('_')[0])} <span class="note">${mp.w}×${mp.h}</span></td><td><span class="pill r">●</span> ${esc(R.name)}</td><td><span class="pill b">●</span> ${esc(B.name)}</td><td>${res}</td><td class="n">${gold}</td><td>${fin?`<button class="play" data-g="${gid}">▶ 보기</button>`:''}</td></tr>`;}
 let curList=[];
 function openMatch(m){if(!m)return;const hid=isHidden(m);
+  if(resetVeiled(m)){drawer('M'+m.no+' · 결승 리셋','그랜드 파이널을 먼저 공개하세요','<div class="track">결승 리셋은 그랜드 파이널에서 패자조 팀이 이겼을 때만 열린다. 열리는지 여부가 곧 그랜드 파이널 결과이므로, 그랜드 파이널을 공개하기 전에는 가려 둔다.</div>');return;}
   if(m.skip){drawer('M'+m.no+' · 결승 리셋','치르지 않음','<div class="track">그랜드 파이널에서 승자조 우승팀이 이겨 리셋 경기가 필요 없었다 (패자조 쪽이 이겼다면 둘 다 1패라 한 번 더 치른다).</div>');return;}
   if(isBye(m)){const ts=[0,1].map(i=>slotTeam(m,i)).filter(t=>t!==-1);
     drawer('M'+m.no+' · '+stageName(m),'부전승 (상대가 없는 자리)',ts.length?`<div class="track">${ts[0]===undefined?'앞 경기의 승자':esc(TEAM(ts[0]).name)} 이(가) 경기 없이 다음 라운드로 올라간다. 대진표 칸 수 (${D.bracket.size}) 보다 팀이 적어 생기는 빈 자리이고, 예선 상위 시드가 받는다.</div>`:'<div class="track">양쪽 모두 빈 자리라 아무도 올라가지 않는다.</div>');return;}
@@ -394,7 +398,7 @@ async function refresh(force){try{const s=await api('status');live=s;
     const p=$('prog');if(s.running||(s.phase&&s.phase!=='done'&&s.total)){p.style.display='flex';const pct=s.total?100*s.done/s.total:0;$('pfill').style.width=pct.toFixed(1)+'%';
       $('ptxt').textContent=(s.phase==='swiss'?'스위스 예선':s.phase==='bracket'?'본선':'')+` · ${s.done}/${s.total}판`+(s.eta?` · 남은 시간 약 ${Math.ceil(s.eta/60)}분`:'')+(s.running?'':' · 멈춤');
       $('bStop').textContent=s.running?'멈추기':'이어서 돌리기';$('bStop').style.display=s.can_run?'':'none';}else p.style.display='none';
-    $('status').textContent=(s.log&&s.log.length)?s.log[s.log.length-1]:'';
+    let st=(s.log&&s.log.length)?s.log[s.log.length-1]:'';if(D&&D.bracket&&hideCol!==Infinity)st=st.replace(/우승:.*/,'모든 경기 완료');$('status').textContent=st;
     if(s.loaded&&(force||s.version!==refresh.v)){refresh.v=s.version;const d=await api('data');setData(d,force);}
     if(!s.loaded&&D){setData(null);}}catch(e){$('status').textContent='서버와 연결이 끊겼습니다';}}
 $('bStop').onclick=async()=>{try{await api(live&&live.running?'stop':'resume',{});refresh();}catch(e){toast(e.message);}};

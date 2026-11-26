@@ -388,6 +388,8 @@ def cmd_tournament(a):
         r = T.Runner(a.dir, jobs=a.jobs, log=_say)
         r.run()
         _say('진행:', r.st['phase'], f"({r.games_done()}판 끝)")
+        if r.st.get('champion') is not None:
+            _say('우승:', r.cfg['teams'][r.st['champion']]['name'])
     elif a.action == 'pack':
         _say('저장:', T.pack(a.dir, out=a.out, hide=a.hide))
 

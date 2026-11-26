@@ -512,7 +512,7 @@ class Runner:
                 if 'winner' in B['matches']['GF2']:
                     st['phase'] = 'done'
                     st['champion'] = B['matches']['GF2']['winner']
-                    self.log('끝. 우승: %s' % cfg['teams'][st['champion']]['name'])
+                    self.log('끝. 모든 경기 완료')                  # 우승팀 이름은 남기지 않는다 (화면에서 결과를 숨긴 채 발표할 수 있게)
                     self.save()
                 break
             self.log('본선: %s' % ', '.join(ready[:6]) + (' 외 %d' % (len(ready) - 6) if len(ready) > 6 else ''))
