@@ -51,7 +51,7 @@ python -m wumpus viewer                          # 빈 뷰어 (viewer.html). .js
 
 ## 3. 화면에 보이는 것
 
-![모험가 머리 위의 지각 아이콘 (반짝임 · 부딪힘) 과 발밑 칸의 발자국 (발소리)](images/percepts.jpg)
+![모험가들이 모인 장면. 등의 큰 화살 (남은 화살), 허리의 금 자루 (든 금), 발밑 칸의 발자국 (발소리)](images/percepts.jpg)
 
 | 모습 | 뜻 |
 |---|---|

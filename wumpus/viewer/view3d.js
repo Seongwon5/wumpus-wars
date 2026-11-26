@@ -2226,6 +2226,7 @@ function fx(type, make) {
 function fxBegin() { for (const k in used) used[k] = 0; for (const k in pool) for (const o of pool[k]) o.visible = false; }
 const addMat = (c, o = 1) => new THREE.MeshBasicMaterial({color: c, transparent: true, opacity: o, depthWrite: false, blending: THREE.AdditiveBlending});
 const ringG = new THREE.RingGeometry(0.85, 1, 40).rotateX(-Math.PI / 2);
+const waveG = new THREE.RingGeometry(0.97, 1, 96).rotateX(-Math.PI / 2);     // 맵 전체로 퍼지는 소리 (비명 · 외침): 반지름이 커도 띠는 가늘게
 const cubeG = new THREE.BoxGeometry(0.06, 0.06, 0.06);
 const sphG = new THREE.SphereGeometry(1, 16, 12);
 const windG = new THREE.TorusGeometry(0.42, 0.012, 4, 24, Math.PI * 0.55);
@@ -2259,6 +2260,11 @@ function lane(x0, z0, x1, z1, color, op) {     // 화살이 지나는 줄: 바�
 }
 const pillarG = new THREE.CylinderGeometry(0.38, 0.38, 2.2, 24, 1, true);
 
+function wave(x, z, y, r, color, op) {
+  const m = fx('wave', () => new THREE.Mesh(waveG, addMat(0xffffff)));
+  m.position.set(x, y, z); m.scale.setScalar(Math.max(0.01, r));
+  m.material.color.setHex(color); m.material.opacity = op;
+}
 function ring(x, z, y, r, color, op) {
   const m = fx('ring', () => new THREE.Mesh(ringG, addMat(0xffffff)));
   m.position.set(x, y, z); m.scale.setScalar(Math.max(0.01, r));
@@ -2677,7 +2683,7 @@ function effects(g, a, canSee) {
       const bi = baseIdx(id);
       if (bi < 0) for (let i = 0; i < 2; i++) {    // 외침: 쓰러진 자리에서 맵 전체로 퍼지는 붉은 고리 (모두가 듣는다, 시야와 상관없이)
         const q = Math.max(0, a - i * 0.14);
-        if (q > 0) ring(wx(x), wz(y), 0.3 + i * 0.25, 0.4 + q * Math.max(W, H) * 0.9, 0xff4a3a, Math.max(0, 1 - q) * 0.75);
+        if (q > 0) wave(wx(x), wz(y), 0.3 + i * 0.25, 0.4 + q * Math.max(W, H) * 0.9, 0xff4a3a, Math.max(0, 1 - q) * 0.6);
       }
       if (!canSee(x, y)) continue;
       if (bi >= 0 && SHEETS.floor) {               // 야영지 파괴: 도트 불길 · 검은 연기 · 천막 조각 · 큰 도트 글씨
@@ -2764,7 +2770,7 @@ function effects(g, a, canSee) {
       const [, id, x, y] = e;
       for (let i = 0; i < 3; i++) {              // 맵 전체로 퍼지는 비명의 고리
         const q = Math.max(0, a - i * 0.12);
-        if (q > 0) ring(wx(x), wz(y), 0.3 + i * 0.25, 0.5 + q * Math.max(W, H) * 0.9, 0xc8ff5a, Math.max(0, 1 - q) * 0.9);
+        if (q > 0) wave(wx(x), wz(y), 0.3 + i * 0.25, 0.5 + q * Math.max(W, H) * 0.9, 0xc8ff5a, Math.max(0, 1 - q) * 0.9);
       }
       const m = fx('pillar', () => new THREE.Mesh(pillarG, addMat(0xffffff)));
       m.position.set(wx(x), 1.6, wz(y)); m.material.color.setHex(0xb8ff4a); m.material.opacity = 0.8 * (1 - a);

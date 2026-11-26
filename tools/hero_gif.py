@@ -18,7 +18,7 @@ from PIL import Image
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CHROME = os.environ.get('CHROME', r'C:\Program Files\Google\Chrome\Application\chrome.exe')
-STEP, CAM, SIZE, CROP = 0.125, '11.5,10.5,25', (1600, 1000), (0, 215, 1280, 945)   # 한 장에 0.125 라운드, 지도 칸만 잘라 쓴다
+STEP, CAM, SIZE, CROP = 0.125, '11.5,10.5,25', (1600, 1000), (35, 262, 1245, 950)   # 한 장에 0.125 라운드, 지도 칸만 잘라 쓴다
 WIDTH, COLORS, TOL, FRAME_MS, JOBS = 800, 256, 14, 80, 4
 
 
