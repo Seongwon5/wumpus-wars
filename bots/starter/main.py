@@ -13,9 +13,10 @@
 - 웜퍼스는 화살로만 쓰러진다 (굴에 들어가면 죽는다). 화살은 한 발 (me.arrows), 벽 · 맵 끝까지 일직선으로 날아가 줄의 첫 대상에 맞는다.
   화살로 웜퍼스를 잡으면 쏜 모험가가 보물을 바로 든다. 화살은 야영지 옆에서 다시 채운다.
 - 금은 쓰러뜨린 쪽으로 간다 (든 금 + 처치 금). 구덩이 · 웜퍼스에게 죽으면 든 금이 사라진다. 짐 상한은 view.carry_max, 모험가 값은 view.cost.
-- 연산 한도: 유닛마다 한 차례에 10,000 (첫 차례만 200,000). 넘은 차례는 행동이 버려진다. 그래서 길 찾기에 상한 (SEARCH_CAP) 을 둔다.
+- 연산 한도: 유닛마다 한 차례에 20,000 (첫 차례만 200,000). 넘은 차례는 행동이 버려진다. 그래서 길 찾기에 상한 (SEARCH_CAP) 을 둔다.
 - 불러올 수 있는 모듈: math · heapq · collections · itertools · functools · random · bisect · operator · copy · wumpus.api
-- 팀끼리 나눌 정보는 memory (32비트 정수 16칸, 맵 전체는 못 담는다) 에 적는다.
+- 팀끼리 나눌 정보는 memory (32비트 정수 1024칸) 에 적는다. 맵 한 칸에 정수 하나씩 (memory[x + y * width]) 담을 수도 있다.
+  이 봇은 앞 16칸 (LIST) 만 '칸 번호 목록' 으로 쓴다 (메모리 전체를 차례마다 훑으면 연산이 든다).
 - 코드 검사: `x.__class__` 같은 밑줄 두 개 속성, getattr · type · exec · open, 문자열 .format 은 쓸 수 없다 (걸리면 실격).
 
 이 봇이 하는 일 (아홉 지각 가운데 외침만 TODO, 네 행동 · memory 를 고루 쓴다)
@@ -54,6 +55,7 @@ move_fs = 0          # 지난 차례 (움직인 차례) 의 발소리
 busy = {}            # 서 본 칸 -> 다른 모험가에게 막힌 라운드
 swing = 0            # 반격할 때 다음에 칠 방향 번호
 pending = None       # 위험을 감수해 들어간 칸을 적어 둔 memory 자리 (살아남으면 다음 차례에 지운다)
+LIST = 16            # memory 앞 16칸을 금맥 · 위험 칸 목록으로 쓴다 (나머지 칸은 비워 둔다: 맵 지도를 담아 보자)
 SEARCH_CAP = 220     # 한 차례의 길 찾기에서 펼칠 칸 수 상한 (연산 한도 안에 들도록 일의 양을 직접 센다)
 work_left = 0        # 이번 차례에 더 펼칠 수 있는 칸 수
 FIGHT_HP = 5         # 체력이 이보다 많을 때만 적 야영지를 친다
@@ -111,7 +113,8 @@ def adventurer_turn(me, view, memory):
         if memory[pending] < 0:
             memory[pending] = 0                     # 살아남았다 → 그 칸은 안전했다
         pending = None
-    doom = {((-v - 1) % w, (-v - 1) // w) for v in memory if v < 0}
+    mem = memory[:LIST]
+    doom = {((-v - 1) % w, (-v - 1) // w) for v in mem if v < 0}
     if pos != here:
         came_from, here = here, pos
 
@@ -205,10 +208,12 @@ def adventurer_turn(me, view, memory):
     # 4. 반짝이면 캔다. 금맥 위치는 memory 에 적어 팀과 나눈다
     code = 1 + pos[0] + pos[1] * w                  # 칸 하나를 정수 하나로 (0 은 빈 칸)
     gold = view.gold(*pos) or 0
-    if gold > 0 and code not in memory and 0 in memory:
-        memory[memory.index(0)] = code
-    elif gold == 0 and code in memory:              # 다 캔 금맥은 지운다
-        memory[memory.index(code)] = 0
+    if gold > 0 and code not in mem and 0 in mem:
+        memory[mem.index(0)] = code
+        mem = memory[:LIST]
+    elif gold == 0 and code in mem:                 # 다 캔 금맥은 지운다
+        memory[mem.index(code)] = 0
+        mem = memory[:LIST]
     full = min(view.carry_max, RETURN_AT)
     if view.glitter and gold > 0 and me.carry < full:
         debug.say('반짝임 → 채굴')
@@ -227,7 +232,7 @@ def adventurer_turn(me, view, memory):
             return act
 
     # 7. 아는 금맥으로 돌아가 캔다 (내가 서 본 금맥 가운데 가장 가까운 곳. 팀원이 다 캤다고 지운 곳은 빠진다)
-    veins = [((v - 1) % w, (v - 1) // w) for v in memory if v > 0]
+    veins = [((v - 1) % w, (v - 1) // w) for v in mem if v > 0]
     known = {v for v in veins if v in visited and v != pos}
     if known:
         act = go(me, pos, known, w, h, '금맥으로')
@@ -248,8 +253,9 @@ def adventurer_turn(me, view, memory):
     unknown = {n for c in danger for n in neighbors(c, w, h)} - visited - walls - camps - {view.my_camp} - doom
     # TODO: 위험한 칸 가운데 덜 위험한 칸을 고르자 (바람 칸 여럿에 둘러싸인 칸일수록 구덩이일 확률이 높다)
     act = go(me, pos, unknown, w, h, '탐험 (위험 감수)', doom)
-    if act is not None and last_target not in safe and 0 in memory:
-        pending = memory.index(0)                   # 들어가기 전에 적는다. 살아남으면 다음 차례에 지운다
+    mem = memory[:LIST]
+    if act is not None and last_target not in safe and 0 in mem:
+        pending = mem.index(0)                   # 들어가기 전에 적는다. 살아남으면 다음 차례에 지운다
         memory[pending] = -(1 + last_target[0] + last_target[1] * w)
     return act
 

@@ -644,6 +644,9 @@ class Game:
 
     def _fix_memory(self, team):
         mem = self.memory[team]
+        if (len(mem) == MEMORY_SIZE and set(map(type, mem)) == {int}
+                and min(mem) >= -(1 << 31) and max(mem) < (1 << 31)):
+            return                                # 흔한 경우: 고칠 것이 없다 (1024 칸을 C 로 한 번에 본다)
         fixed = []
         for v in list(mem[:MEMORY_SIZE]):
             if type(v) is not int:                # 정수만 받는다 (다른 것은 0)

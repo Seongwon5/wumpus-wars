@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wumpus-wars"
-version = "1.1.0"
+version = "1.2.0"
 description = "웜퍼스 워즈: 인공지능개론 배틀코드형 봇 대전 게임 (엔진 · 스크림 · 리플레이 뷰어)"
 readme = "README.md"
 requires-python = ">=3.8"
