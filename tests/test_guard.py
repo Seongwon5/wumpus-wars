@@ -88,6 +88,20 @@ class Isolation(unittest.TestCase):
             self.assertNotIsInstance(val, (Game, engine.Unit))
         self.assertFalse(hasattr(v, '_g'))
 
+    def test_no_real_submodule_through_from_import(self):
+        """`from wumpus import engine` 이 sys.modules 의 진짜 엔진 (과 그 안의 os) 으로 새지 않아야 한다 (1.0.1)."""
+        for src in ("from wumpus import engine\n", "from wumpus import cli\n", "from collections import abc\n"):
+            leak = src + "LEAK = 1\n" + IDLE
+            if src.startswith('from wumpus'):
+                self.assertTrue(guard.check(leak), src)
+            old = guard.check
+            guard.check = lambda *a, **k: []       # 코드 검사를 비껴갔다고 치고, 실행 단계에서도 막히는지
+            try:
+                g, rep = play(leak)
+            finally:
+                guard.check = old
+            self.assertTrue(any('ImportError' in str(e) for e in errors(rep)), src)
+
     def test_engine_tables_are_copies(self):
         src = ("from wumpus.api import DIRS, COST, HP, RULES\n"
                "DIRS['N'] = (0, -5)\nCOST['explorer'] = 0\nHP['camp'] = 1\nRULES['agent'] = False\n" + IDLE)

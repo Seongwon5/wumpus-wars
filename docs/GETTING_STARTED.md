@@ -27,9 +27,9 @@ python -m wumpus run starter starter --open
 
 ```
 맵 temple_gate (24x24, 대칭 H) | 푸른 원정대 (starter) 승리 - 1000라운드 끝, 바친 금
-라운드 1000 | 바친 금 318 : 424 | 7.3초
-  붉은 원정대 starter: 차례당 평균 0.35 ms, 최대 2.9 ms | 연산 (차례당) 평균 998, 최대 6,554
-  푸른 원정대 starter: 차례당 평균 0.32 ms, 최대 3.5 ms | 연산 (차례당) 평균 916, 최대 6,654
+라운드 1000 | 바친 금 289 : 432 | 6.6초
+  붉은 원정대 starter: 차례당 평균 0.27 ms, 최대 4.9 ms | 연산 (차례당) 평균 861, 최대 6,646
+  푸른 원정대 starter: 차례당 평균 0.29 ms, 최대 4.0 ms | 연산 (차례당) 평균 937, 최대 5,878
 리플레이: replays/starter-vs-starter-temple_gate-s1.json
 뷰어    : replays/starter-vs-starter-temple_gate-s1.html
 ```

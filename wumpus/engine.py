@@ -108,7 +108,7 @@ def _make_importer():
         m = cache.get(name)
         if m is not None:
             return m
-        m = cache[name] = types.ModuleType(name)
+        m = cache[name] = types.ModuleType('ww_bot.' + name)   # 진짜 이름을 쓰면 `from 모듈 import 이름` 이 sys.modules 의 진짜 하위 모듈 (wumpus.engine 등) 로 빠져나간다
         if name == 'wumpus':
             m.api = proxy('wumpus.api')
             return m
@@ -127,6 +127,8 @@ def _make_importer():
         return m
 
     def bot_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == 'wumpus' and fromlist and any(n != 'api' for n in fromlist):
+            raise ImportError("봇에서는 wumpus 에서 api 만 불러올 수 있다")
         if level or name not in ALLOWED_IMPORTS:
             raise ImportError(f"봇에서는 '{name}' 모듈을 쓸 수 없다 (쓸 수 있는 것: {', '.join(ALLOWED_IMPORTS[1:])})")
         return proxy(name) if fromlist else proxy(name.split('.')[0])
@@ -1006,7 +1008,7 @@ class Game:
                         self.ore[c] = self.ore.get(c, 0) + 1
                         self.ore_changed.add(c)
             order = self.bases if r % 2 == 1 else self.bases[::-1]
-            for u in list(order) + sorted(self.units, key=lambda v: v.id):
+            for u in list(order) + self._unit_order(r):
                 if u.alive and not self.over:
                     self._take_turn(u)
             if self.rules['unified'] and self.wumpus and not self.over:
@@ -1018,6 +1020,18 @@ class Game:
         if not self.over:
             self._judge()
         return self.replay()
+
+    def _unit_order(self, r):
+        """이번 라운드 모험가 순서: 두 팀을 번갈아 (팀 안에서는 번호 순). 홀수 라운드는 붉은, 짝수 라운드는 푸른이 먼저.
+        번호 순서로만 움직이면 1 라운드에 먼저 뽑힌 붉은 첫 모험가가 경기 내내 먼저 움직인다."""
+        first = 0 if r % 2 == 1 else 1
+        teams = [sorted((u for u in self.units if u.team == t), key=lambda v: v.id) for t in (first, 1 - first)]
+        out = []
+        for i in range(max(len(teams[0]), len(teams[1]))):
+            for q in teams:
+                if i < len(q):
+                    out.append(q[i])
+        return out
 
     def _judge(self):
         keys = [(self.score[t], self.bases[t].hp, sum(1 for u in self.units if u.team == t)) for t in (0, 1)]

@@ -1,6 +1,6 @@
 # 웜퍼스 워즈 (Wumpus Wars)
 
-> **엔진 버전 1.0.0 · 2026-11-27 동결.** 이 뒤로 규칙 · 엔진 · 맵 생성기는 바뀌지 않는다. 내 엔진이 같은지는 `python -m wumpus --version` 으로 확인한다.
+> **엔진 버전 1.0.1 · 2026-11-27 동결.** 이 뒤로 규칙 · 엔진 · 맵 생성기는 바뀌지 않는다. (1.0.1: 봇 import 보안 수정, 모험가 차례를 두 팀이 번갈아 하도록 바꿈. [바뀐 점](#101-에서-바뀐-점)) 내 엔진이 같은지는 `python -m wumpus --version` 으로 확인한다.
 
 인공지능개론 배틀코드형 과제 게임이다. 수업의 **웜퍼스 월드 (Wumpus World)** 를 두 팀 대전으로 옮겼다. 학생은 **봇 코드**만 짠다. 경기 중에 사람은 아무것도 하지 않고, 봇의 판단만으로 승부가 난다.
 
@@ -87,7 +87,7 @@ python -m wumpus scrim mybot starter            # 맵 10개에서 양쪽 진영�
 
 | 파일 | 내용 |
 |---|---|
-| `demo/starter_vs_starter.html` | 시작용 봇끼리의 한 판 (맵 temple_gate). 1000 라운드 끝에 318 : 424. 화살 · 처치 금 · 새 금맥을 볼 수 있다 |
+| `demo/starter_vs_starter.html` | 시작용 봇끼리의 한 판 (맵 temple_gate). 1000 라운드 끝에 289 : 432. 화살 · 처치 금 · 새 금맥을 볼 수 있다 |
 
 ## 설명서
 
@@ -145,6 +145,12 @@ docs/              설명서, 그림 (images/), PDF (pdf/)
 tools/             PDF 조판 (md2thesis.py · proposal.py · thesis.py), 그림 합성 (lpc_build.py), 대표 GIF (hero_gif.py), 쉽게 보기 그림 · PDF (easy_gifs.py · easy_pdf.py)
 tests/             기본 점검 (python -m unittest discover tests)
 ```
+
+## 1.0.1 에서 바뀐 점
+
+- **보안:** `from wumpus import engine` 처럼 `wumpus` 에서 `api` 밖의 것을 불러오면, 봇이 엔진 속과 컴퓨터의 파일에 닿을 수 있었다. 코드 검사와 실행 단계 모두에서 막는다 (코드 검사에 걸리면 실격). `from wumpus.api import ...` 는 그대로 된다.
+- **차례 순서:** 모험가가 번호 순서로만 움직이면 1 라운드에 먼저 뽑힌 붉은 첫 모험가가 경기 내내 먼저 움직였다. 이제 두 팀이 번갈아 움직이고, 먼저 움직이는 팀이 라운드마다 바뀐다 ([규칙 10절](docs/RULES.md)). 같은 봇 · 맵 · 시드의 결과가 1.0.0 과 다를 수 있다.
+- 봇 API 와 수치는 바뀌지 않았다. 1.0.0 용으로 짠 봇은 고치지 않아도 된다.
 
 ## 쓴 오픈소스
 

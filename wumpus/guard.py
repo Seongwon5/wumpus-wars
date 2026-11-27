@@ -9,7 +9,7 @@
   (글자 넣기는 f-string 이나 % 를 쓴다).
 - `getattr` `setattr` `delattr` `vars` `globals` `locals` `type` `dir` `eval` `exec` `compile` `open` `input` 부르기.
   (같은 이름의 자기 변수 · 함수를 만들어 쓰는 것은 된다. 종류 확인은 isinstance 를 쓴다.)
-- 허용 목록 (api.ALLOWED_IMPORTS) 밖의 import, 상대 import.
+- 허용 목록 (api.ALLOWED_IMPORTS) 밖의 import, 상대 import, `from wumpus import` 의 api 밖의 이름.
 - async / await, `__del__` 정의.
 
 이 검사만으로 완전하지는 않다. 엔진도 봇에게 복사본만 주고, 봇이 돌려준 값은 종류를 엄격히 본다 (engine.py).
@@ -109,6 +109,8 @@ def check(source, limit=20):
         elif isinstance(node, ast.ImportFrom):
             if node.level or node.module not in ALLOWED_IMPORTS:
                 bad(node, f"'{'.' * node.level}{node.module or ''}' 모듈은 쓸 수 없다 (쓸 수 있는 것: {', '.join(ALLOWED_IMPORTS[1:])})")
+            if node.module == 'wumpus' and any(a.name != 'api' for a in node.names):
+                bad(node, "wumpus 에서는 api 만 불러올 수 있다 (from wumpus.api import ...)")
             for a in node.names:
                 bound(node, a.name, '이름')
                 bound(node, a.asname, '이름')
