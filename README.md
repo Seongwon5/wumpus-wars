@@ -6,6 +6,8 @@
 
 ![경기 장면 (움직이는 그림): 어두운 동굴에서 두 원정대의 모험가가 금을 캐고 싸운다](docs/images/hero.gif)
 
+> **처음이라면 → [웜퍼스 워즈 쉽게 보기](docs/EASY.md)** (움직이는 그림 4개와 실제로 돌아가는 최소 봇으로 보는 A4 두 쪽 설명. 인쇄용: [easy.pdf](docs/pdf/easy.pdf))
+
 ## 한눈에 보는 규칙
 
 - 두 원정대가 어두운 동굴에서 금을 캐 **야영지**에 바친다.
@@ -67,7 +69,7 @@ python -m wumpus scrim mybot starter            # 맵 10개에서 양쪽 진영�
 
 ## 들어 있는 봇
 
-봇은 **시작용 봇 하나** (`bots/starter`) 다. 복사해서 고쳐 쓰는 출발점이자, 처음 넘어야 할 상대다.
+봇은 **시작용 봇** (`bots/starter`) 과 **최소 봇** (`bots/mini`, 43줄. [쉽게 보기](docs/EASY.md) 5절) 이다. 시작용 봇은 복사해서 고쳐 쓰는 출발점이자, 처음 넘어야 할 상대다.
 
 | 쓰는 것 | 시작용 봇이 하는 일 |
 |---|---|
@@ -91,6 +93,7 @@ python -m wumpus scrim mybot starter            # 맵 10개에서 양쪽 진영�
 
 | 문서 | 내용 |
 |---|---|
+| [쉽게 보기](docs/EASY.md) | 움직이는 그림으로 보는 규칙 요약과 최소 봇 (A4 두 쪽) |
 | [시작하기](docs/GETTING_STARTED.md) | 설치, 첫 경기, 내 봇 만들기, 고치고 시험하는 순서 |
 | [게임 규칙](docs/RULES.md) | 목표 · 맵 · 모험가 · 아홉 지각 · 구덩이 · 웜퍼스 · 금 · 야영지 · 행동 · 차례 순서 · 코드 검사 · 모든 수치 |
 | [봇 API](docs/API.md) | `turn(me, view, memory)`, 지각, 행동, 공유 메모리, 디버그 표시, 연산 한도 · 코드 검사 |
@@ -103,6 +106,7 @@ PDF 문서 (인쇄용, 학위논문 양식). 규칙서 · 가이드북은 `pytho
 
 | 문서 | 내용 |
 |---|---|
+| [쉽게 보기](docs/pdf/easy.pdf) | 규칙 요약 · 최소 봇 (2쪽, 움직이는 그림 대신 대표 장면) |
 | [게임 규칙서](docs/pdf/rulebook.pdf) | 게임 규칙 전체, 그림, 수치 일람 (24쪽) |
 | [봇 API 가이드북](docs/pdf/api_guidebook.pdf) | 시작하기 · 봇 API · 스크림 · 리플레이 · 맵 (31쪽) |
 | [과제 제안서](docs/pdf/proposal.pdf) | 배틀코드형 과제 제안: 왜 배틀코드인가, 게임 소개, 개발 환경, 평가 방식 두 안 (25쪽) |
@@ -134,11 +138,11 @@ wumpus/            게임 패키지
   replay.py        리플레이 저장, 뷰어 html 만들기
   cli.py           명령줄 도구 (run · scrim · view · maps · new · check)
   viewer/          리플레이 뷰어 (viewer.html, 3D 화면 view3d.js, 그림 sprites/, three.js 묶음 vendor/)
-bots/              starter (시작용 봇 하나. 자기 봇도 여기에 만든다)
+bots/              starter (시작용 봇), mini (최소 봇). 자기 봇도 여기에 만든다
 maps/              맵 10개 (*.json)
 demo/              미리 만든 리플레이
 docs/              설명서, 그림 (images/), PDF (pdf/)
-tools/             PDF 조판 (md2thesis.py · proposal.py · thesis.py), 그림 합성 (lpc_build.py), 대표 GIF (hero_gif.py)
+tools/             PDF 조판 (md2thesis.py · proposal.py · thesis.py), 그림 합성 (lpc_build.py), 대표 GIF (hero_gif.py), 쉽게 보기 그림 · PDF (easy_gifs.py · easy_pdf.py)
 tests/             기본 점검 (python -m unittest discover tests)
 ```
 
