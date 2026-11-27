@@ -4,7 +4,7 @@ import random
 import time
 import types
 
-from . import api, guard
+from . import api, costs, guard
 from .ops import meter, OpsExceeded
 from .api import (DIRS, EXPLORER, ARCHER, CAMP, EMPTY, WALL, GOLD, PIT, CAMP_TILE,
                   MAX_ROUNDS, MEMORY_SIZE, MAX_UNITS, START_BANK, INCOME_EVERY, COST, HP,
@@ -374,7 +374,8 @@ class Game:
         self.names = bot_names
         # 제출 코드 검사: 모든 봇이 거친다. 걸린 봇은 실격 (코드를 실행하지 않는다)
         self.rejected = [guard.check(src) for src in bot_sources]
-        self.codes = [None if self.rejected[i] else compile(src, f'<bot {i}: {bot_names[i]}>', 'exec') for i, src in enumerate(bot_sources)]
+        # 검사를 통과한 코드는 내장 함수 · 연산자도 한 일만큼 세도록 바꿔 쓴 뒤 컴파일한다 (costs.py, 1.1.0)
+        self.codes = [None if self.rejected[i] else costs.rewrite(src, f'<bot {i}: {bot_names[i]}>') for i, src in enumerate(bot_sources)]
         # 연산 한도: 유닛마다 차례당 OPS_TURN (첫 차례는 불러오기와 합쳐 OPS_FIRST). 남겨도 쌓이지 않는다
         self.ops_on = bool(ops_limit)
         self.ostat = [[0, 0, 0, 0], [0, 0, 0, 0]]   # 팀마다 [합, 최대 (첫 차례 빼고), 차례 수, 한도 초과 수]
@@ -383,8 +384,10 @@ class Game:
             for c in self.codes:
                 if c is not None:
                     self.meter.watch(c)
+            import copy as _copy                    # copy.deepcopy 는 파이썬으로 짠 모듈이다: 안쪽 줄도 센다 (1.1.0)
             self.meter.watch_host(Me, View, UnitInfo, *[v for k, v in vars(api).items()
-                                                        if not k.startswith('_') and (isinstance(v, type) or callable(v)) and getattr(v, '__module__', '') == api.__name__])
+                                                        if not k.startswith('_') and (isinstance(v, type) or callable(v)) and getattr(v, '__module__', '') == api.__name__],
+                                  *[v for v in vars(_copy).values() if isinstance(v, types.FunctionType)])
         self.bank = [V4_START_BANK, V4_START_BANK] if self.rules['v4'] else [START_BANK, START_BANK]
         self.score = [0, 0]
         self.memory = [[0] * MEMORY_SIZE, [0] * MEMORY_SIZE]
@@ -493,7 +496,7 @@ class Game:
             return u
         b = dict(_BOT_BUILTINS)
         b['__import__'] = _make_importer()
-        ns = {'__name__': f'bot_{team}_{u.id}', '__builtins__': b}
+        ns = {'__name__': f'bot_{team}_{u.id}', '__builtins__': b, **costs.HELPERS}
         if self.turn_cb:
             self.turn_cb(team)
         u.ops_first = OPS_FIRST                    # 첫 차례 몫: 불러오기에 쓰고 남은 만큼을 첫 turn 호출에 쓴다

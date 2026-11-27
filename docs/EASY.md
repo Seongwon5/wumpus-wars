@@ -103,4 +103,4 @@ python -m wumpus scrim mybot starter    # 맵 10개 · 양쪽 진영으로 승�
 python -m wumpus check mybot            # 내기 전에 점검
 ```
 
-**처음엔 몰라도 되는 것:** 연산 한도 (한 차례 10,000. 이 봇은 50 정도만 쓴다) 와 코드 검사 (`import os` · `type()` · `exec` 같은 것만 안 쓰면 된다) 는 `check` 가 알아서 알려 준다. 자세한 규칙은 [RULES.md](RULES.md), API 는 [API.md](API.md).
+**처음엔 몰라도 되는 것:** 연산 한도 (한 차례 10,000. 이 봇은 많아야 200 정도 쓴다) 와 코드 검사 (`import os` · `type()` · `exec` 같은 것만 안 쓰면 된다) 는 `check` 가 알아서 알려 준다. 자세한 규칙은 [RULES.md](RULES.md), API 는 [API.md](API.md).

@@ -235,7 +235,7 @@ class Runner(unittest.TestCase):
         d = tempfile.mkdtemp(prefix='ww_guard_')
         hang = os.path.join(d, 'hang.py')
         with open(hang, 'w', encoding='utf-8') as f:     # 연산으로 세지 않는 내장 함수 안에서 끝나지 않는 일
-            f.write("import itertools\ndef turn(me, view, memory):\n    if me.team == 1:\n        return sum(itertools.count())\n")
+            f.write("import itertools\ns = sum\ndef turn(me, view, memory):\n    if me.team == 1:\n        return s(itertools.count())\n")   # 다른 이름에 담으면 1.1.0 비용 세기도 비껴간다
         idle = os.path.join(d, 'idle.py')
         with open(idle, 'w', encoding='utf-8') as f:
             f.write(IDLE)

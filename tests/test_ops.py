@@ -30,6 +30,18 @@ def play(a, b, rounds=None, ops=True, time_limit=None):
         engine.MAX_ROUNDS = old
 
 
+def playg(a, rounds=2):
+    """play 와 같되 Game 도 돌려준다 (봇이 memory 에 남긴 값을 보려고)."""
+    from wumpus import engine
+    old = engine.MAX_ROUNDS
+    engine.MAX_ROUNDS = rounds
+    try:
+        g = Game(load_map(MAP), [a, IDLE], ['a', 'b'], seed=1)
+        return g, g.play()
+    finally:
+        engine.MAX_ROUNDS = old
+
+
 def errors(rep, team_ids=None):
     return [e for f in rep['frames'] for e in f['e'] if e[0] == 'err']
 
@@ -127,11 +139,82 @@ class Ops(unittest.TestCase):
         self.assertEqual(errors(play(ok, IDLE, rounds=2)), [])
 
     def test_time_safety_net(self):
-        # 내장 함수에 큰 일을 시키면 연산으로는 조금만 세지만, 시간 안전망이 그 차례를 버린다
-        bot = "def turn(me, view, memory):\n    sum(range(3 * 10**6))\n    return None\n"
+        # 연산으로 세지 않는 길 (내장 함수를 다른 이름에 담아 부르기) 로 큰 일을 시키면 시간 안전망이 그 차례를 버린다
+        bot = "s = sum\ndef turn(me, view, memory):\n    s(range(3 * 10**7))\n    return None\n"
         rep = play(bot, IDLE, rounds=3, time_limit=5)
         self.assertTrue(any('시간 초과' in e[2] for e in errors(rep)))
         self.assertGreater(rep['meta']['time_ms'][0]['over'], 0)
+
+
+    def test_builtins_and_operators_are_counted(self):
+        """1.1.0: 내장 함수 · 메서드 · 연산자 · 슬라이스도 다루는 원소 수만큼 센다. 결과는 바뀌지 않는다."""
+        from wumpus import costs
+        from wumpus.ops import meter
+        src = ("import heapq, copy\n"
+               "def f_sum(xs): return sum(xs)\n"
+               "def f_sorted(xs): return sorted(xs)\n"
+               "def f_sort(xs): xs.sort()\n"
+               "def f_set(xs, ys): return set(xs) - set(ys)\n"
+               "def f_in(xs): return -1 in xs\n"
+               "def f_inset(s): return -1 in s\n"
+               "def f_slice(xs): return xs[1:-1]\n"
+               "def f_mul(): return [0] * 5000\n"
+               "def f_join(xs): return ','.join(str(x) for x in xs)\n"
+               "def f_map(xs): return list(map(abs, xs))\n"
+               "def f_heap(xs): heapq.heapify(xs)\n"
+               "def f_deep(xs): return copy.deepcopy(xs)\n"
+               "def f_num(a, b): return a * b + a - b\n"
+               "def f_aug(xs):\n    t = []\n    t += xs\n    return t\n")
+        code = costs.rewrite(src, '<t>')
+        m = meter()
+        m.watch(code)
+        import copy as _copy, types
+        m.host_done = False
+        m.watch_host(*[v for v in vars(_copy).values() if isinstance(v, types.FunctionType)])
+        g = dict(costs.HELPERS)
+        exec(code, g)
+        xs = list(range(1000))
+        def ops(fn, *a):
+            m.start(10 ** 9)
+            r = g[fn](*a)
+            return m.stop(), r
+        n, r = ops('f_sum', xs); self.assertGreaterEqual(n, 1000); self.assertEqual(r, sum(xs))
+        n, r = ops('f_sorted', xs[::-1]); self.assertGreaterEqual(n, 1000 * 10); self.assertEqual(r, xs)
+        n, _ = ops('f_sort', list(xs)); self.assertGreaterEqual(n, 1000 * 10)
+        n, r = ops('f_set', xs, xs[:500]); self.assertGreaterEqual(n, 1500); self.assertEqual(r, set(range(500, 1000)))
+        n, r = ops('f_in', xs); self.assertGreaterEqual(n, 1000); self.assertFalse(r)
+        n, _ = ops('f_inset', set(xs)); self.assertLess(n, 10)            # 집합의 in 은 싸다
+        n, r = ops('f_slice', xs); self.assertGreaterEqual(n, 998); self.assertEqual(len(r), 998)
+        n, _ = ops('f_mul'); self.assertGreaterEqual(n, 5000)
+        n, _ = ops('f_map', xs); self.assertGreaterEqual(n, 1000)        # 길이 모르는 반복자는 꺼낼 때마다
+        n, _ = ops('f_heap', list(xs)); self.assertGreaterEqual(n, 1000)
+        n, r = ops('f_deep', [[i] for i in range(200)]); self.assertGreaterEqual(n, 200); self.assertEqual(r[5], [5])
+        n, r = ops('f_num', 3, 4); self.assertLess(n, 10); self.assertEqual(r, 11)   # 숫자 연산은 비용이 없다
+        n, r = ops('f_aug', xs); self.assertGreaterEqual(n, 1000); self.assertEqual(r, xs)
+
+    def test_big_allocation_stops_before_memory(self):
+        """[0] * 10**9 같은 코드는 메모리를 쓰기 전에 연산 한도에서 끊긴다."""
+        bot = "def turn(me, view, memory):\n    x = [0] * 10**9\n    return None\n"
+        rep = play(bot, IDLE, rounds=2)
+        self.assertTrue(any('연산 한도' in e[2] for e in errors(rep)), errors(rep)[:2])
+
+    def test_rewrite_keeps_meaning(self):
+        """바꿔 쓴 코드도 같은 결과를 낸다: 클래스 안 (이름 뒤섞기), 자기 이름의 sum, 봇 클래스의 update 메서드."""
+        bot = ("class K:\n"
+               "    def __init__(self):\n        self.d = {}\n"
+               "    def update(self, k):\n        self.d[k] = 1\n        return len(self.d)\n"
+               "    def total(self, xs):\n        return sum(xs[1:]) + (2 in xs)\n"
+               "def sum(xs):\n    return 42\n"
+               "def turn(me, view, memory):\n"
+               "    k = K()\n"
+               "    memory[0] = k.update('a') + k.total([1, 2, 3])\n"
+               "    t = 5\n    t += 2\n    t -= 1\n    s = 'ab'\n    s += 'c'\n"
+               "    memory[1] = t + len(s * 2) + len({1, 2} | {3}) + len([1, 2][::-1])\n"
+               "    return None\n")
+        g, rep = playg(bot)
+        self.assertEqual(errors(rep), [])
+        self.assertEqual(g.memory[0][0], 1 + 42 + 1)
+        self.assertEqual(g.memory[0][1], 6 + 6 + 3 + 2)
 
 
 if __name__ == '__main__':

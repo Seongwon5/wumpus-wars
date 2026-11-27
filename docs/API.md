@@ -143,7 +143,7 @@ from wumpus.api import (Move, Mine, Attack, Shoot, Spawn, debug,
 ## 9. 연산 한도 · 오류 · 시간 · 재현성
 
 - **연산 한도:** 봇 코드가 한 일의 양을 센다. 유닛마다 한 차례에 10,000, 첫 차례 (봇 파일 불러오기 + 첫 `turn`) 만 200,000 이다. 남겨도 쌓이지 않는다. 넘으면 그 자리에서 차례가 끊기고 행동이 버려진다 ([규칙 11절](RULES.md)).
-- **세는 법:** 줄 하나를 실행할 때 1, 반복이 한 번 되돌아갈 때 1, 함수 · 람다 · 제너레이터가 시작되거나 이어질 때 1. 한 줄에 몰아 쓴 반복 (`[f(x) for x in xs]`, `sum(… for …)`, `sorted(key=lambda …)`) 도 도는 만큼 센다. 내장 함수 안쪽은 세지 않는다.
+- **세는 법:** 줄 하나를 실행할 때 1, 반복이 한 번 되돌아갈 때 1, 함수 · 람다 · 제너레이터가 시작되거나 이어질 때 1. 한 줄에 몰아 쓴 반복 (`[f(x) for x in xs]`, `sum(… for …)`, `sorted(key=lambda …)`) 도 도는 만큼 센다. **내장 함수 · 메서드 · 연산자 · 슬라이스도 다루는 원소 수만큼 센다** (`sum(xs)` 는 len(xs), `sorted` 는 n log n, `x in 리스트` 는 길이. 표는 [규칙 11절](RULES.md)).
 - **쓸 수 있는 모듈:** `math` · `heapq` · `collections` · `itertools` · `functools` · `random` · `bisect` · `operator` · `copy` · `wumpus.api`. 다른 모듈은 쓸 수 없다.
 - **코드 검사:** 봇 파일은 경기 전에 검사를 거치고, 걸리면 실격이다. 밑줄 두 개로 시작하는 속성 · 이름 (`x.__class__`), `getattr` · `type` · `globals` · `exec` · `open` 같은 함수, 문자열 `.format`, 허용 목록 밖의 `import` 가 걸린다. 전체 목록은 [규칙 11절](RULES.md) 에 있다. `python -m wumpus check 봇` 이 걸린 줄을 알려 준다.
 - **돌려주는 값은 정확한 종류로:** 행동은 `Move` · `Mine` · `Attack` · `Shoot` · `Spawn` 그대로, 방향은 글자, `Attack` 의 좌표와 `memory` 값은 `int`. `Attack(3.0, 4.0)` 처럼 실수를 넣으면 그 행동은 버려진다.
