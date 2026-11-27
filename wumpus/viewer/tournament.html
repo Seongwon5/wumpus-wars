@@ -321,7 +321,7 @@ function buildHideSel(){const s=$('hideSel');if(!D||!D.bracket){s.innerHTML='<op
   opts.push([String(M().GF.col),'그랜드 파이널부터 숨김']);
   s.innerHTML=opts.map(([v,l])=>`<option value="${v}">${esc(l)}</option>`).join('');s.value=String(hideCol);
   if(s.value!==String(hideCol))s.value='1';}
-$('hideSel').onchange=e=>{hideCol=e.target.value==='Infinity'?Infinity:+e.target.value;revealed.clear();revealedGames.clear();savePrefs();render();renderSwiss();};
+$('hideSel').onchange=e=>{hideCol=e.target.value==='Infinity'?Infinity:+e.target.value;revealed.clear();revealedGames.clear();paintStatus();savePrefs();render();renderSwiss();};
 
 // ---------- 검색 ----------
 function buildNames(){$('names').innerHTML=D?D.config.teams.map(t=>`<option value="${esc(t.name)}">`).join(''):'';}
@@ -473,7 +473,9 @@ function renderPlaces(){const el=$('places');if(!el)return;if(!D||!D.bracket){el
     tab='bracket';[...$('tabs').children].forEach(x=>x.classList.toggle('on',x.dataset.tab==='bracket'));showTab();requestAnimationFrame(()=>{focusMatch(m);openMatch(m);});};});}
 
 // ---------- 탭 ----------
-let tab='bracket';
+let tab='bracket',lastStatus='';
+// 상태 줄: 결과를 숨기고 있으면 '우승: …' 을 가린다 (공개 범위를 바꾸는 즉시 다시 그린다)
+function paintStatus(){let st=lastStatus;if(D&&D.bracket&&hideCol!==Infinity)st=st.replace(/우승:.*/,'모든 경기 완료');$('status').textContent=st;}
 $('tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;
   [...$('tabs').children].forEach(x=>x.classList.toggle('on',x===b));showTab();});
 function showTab(){const home=APP&&!D;$('home').style.display=home?'block':'none';$('wrap').style.display=!home&&tab==='bracket'?'block':'none';
@@ -486,7 +488,7 @@ function setData(d,refit){const first=!D||!d||(D.config.id!==d.config.id);const 
   if(first){hlTeam=null;$('search').value='';collapsed.clear();$('drawer').classList.remove('on');}
   if(first||refit||(!hadB&&D.bracket))needFit=true;
   $('tname').textContent=D.config.name+' · '+D.config.teams.length+'팀 · 맵 '+D.config.maps.length+'개 · '+D.config.created;
-  if(first){loadPrefs();buildNames();}buildHideSel();render();renderSwiss();showTab();
+  if(first){loadPrefs();buildNames();}buildHideSel();render();renderSwiss();showTab();paintStatus();
   if(D.phase==='swiss'&&first){tab='swiss';[...$('tabs').children].forEach(x=>x.classList.toggle('on',x.dataset.tab==='swiss'));showTab();}
   if(needFit&&$('wrap').clientWidth){fit();needFit=false;}}
 
@@ -498,7 +500,7 @@ async function refresh(force){try{const s=await api('status');live=s;
     const p=$('prog');if(s.running||(s.phase&&s.phase!=='done'&&s.total)){p.style.display='flex';const pct=s.total?100*s.done/s.total:0;$('pfill').style.width=pct.toFixed(1)+'%';
       $('ptxt').textContent=(s.phase==='swiss'?'스위스 예선':s.phase==='bracket'?'본선':'')+` · ${s.done}/${s.total}판`+(s.eta?` · 남은 시간 약 ${Math.ceil(s.eta/60)}분`:'')+(s.running?'':' · 멈춤');
       $('bStop').textContent=s.running?'멈추기':'이어서 돌리기';$('bStop').style.display=s.can_run?'':'none';}else p.style.display='none';
-    let st=(s.log&&s.log.length)?s.log[s.log.length-1]:'';if(D&&D.bracket&&hideCol!==Infinity)st=st.replace(/우승:.*/,'모든 경기 완료');$('status').textContent=st;
+    lastStatus=(s.log&&s.log.length)?s.log[s.log.length-1]:'';paintStatus();
     if(s.loaded&&(force||s.version!==refresh.v)){refresh.v=s.version;const d=await api('data');setData(d,force);}
     if(!s.loaded&&D){setData(null);}}catch(e){$('status').textContent='서버와 연결이 끊겼습니다';}}
 $('bStop').onclick=async()=>{try{await api(live&&live.running?'stop':'resume',{});refresh();}catch(e){toast(e.message);}};
