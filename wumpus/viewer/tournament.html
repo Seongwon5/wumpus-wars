@@ -82,7 +82,8 @@ tr.click{cursor:pointer}tr.click:hover td{background:#20262b}
 #rv .top .ttl{flex:1;font-weight:600}
 #rv iframe{flex:1;border:0;width:100%;background:#000}
 /* 예선 표 */
-#swiss{position:absolute;inset:0;overflow:auto;display:none;background:var(--panel);border-radius:12px;padding:6px 14px}
+#swiss,#places{position:absolute;inset:0;overflow:auto;display:none;background:var(--panel);border-radius:12px;padding:6px 14px}
+#places tr.hlrow td{background:#3a3222}
 #swiss td.rd{white-space:nowrap;cursor:pointer;color:#c7ced3}#swiss td.rd:hover{background:#262e34}
 #swiss td.rd .wn{color:var(--win);font-weight:700}#swiss td.rd .ls{color:#c98f86}
 /* 시작 화면 */
@@ -109,6 +110,7 @@ tr.click{cursor:pointer}tr.click:hover td{background:#20262b}
     <div class="tabs" id="tabs">
       <button data-tab="bracket" class="on">본선 대진표</button>
       <button data-tab="swiss">스위스 예선</button>
+      <button data-tab="places">최종 순위</button>
     </div>
     <span class="sp"></span>
     <span id="status"></span>
@@ -131,6 +133,7 @@ tr.click{cursor:pointer}tr.click:hover td{background:#20262b}
   <main>
     <div id="wrap"><div id="canvas"><svg id="lines"></svg></div></div>
     <div id="swiss"></div>
+    <div id="places"></div>
     <div id="home">
       <div class="cards">
         <div class="card">
@@ -247,7 +250,7 @@ function render(){
       p+=`<path class="${on?'hl':''}" d="M${x1} ${y1}H${mx}V${y2}H${x2}"/>`;});}
   $('canvas').innerHTML=`<svg id="lines" width="${width+300}" height="${TOP+60+D.bracket.rows*ROWH}">${p}</svg>`+h;
   $('canvas').style.width=(width+300)+'px';$('canvas').style.height=(TOP+80+D.bracket.rows*ROWH)+'px';
-  applyZoom();
+  applyZoom();if(tab==='places')renderPlaces();
 }
 function liveScore(m,i){let a=0,b=0;for(const gid of m.games){const g=D.games[gid];if(!g||g.w===undefined)continue;
     const wt=g.w===0?g.r:g.w===1?g.b:null;if(wt===m.teams[0])a++;else if(wt===m.teams[1])b++;}return i?b:a;}
@@ -372,12 +375,44 @@ function renderSwiss(){const el=$('swiss');if(!D){el.innerHTML='';return;}
   el.querySelectorAll('td.rd[data-r]').forEach(td=>td.onclick=()=>{const p=R[+td.dataset.r][+td.dataset.p];curList=p.games.slice();
     drawer('예선 '+(+td.dataset.r+1)+' 라운드',esc(TEAM(p.a).name)+' vs '+esc(TEAM(p.b).name),'<table><tr><th class="n">#</th><th>맵</th><th>붉은 진영</th><th>푸른 진영</th><th>승자</th><th class="n">바친 금</th><th></th></tr>'+p.games.map((g,i)=>gameRow(g,i+1,false)).join('')+'</table>');bindPlay(false);});}
 
+// ---------- 최종 순위 ----------
+// 1등 우승 · 2등 결승 (리셋이 열렸으면 리셋) 패자 · 3등부터는 패자조에서 늦게 탈락한 차례.
+// 같은 패자조 라운드에서 탈락한 팀은 공동 순위 (그 라운드의 실제 경기 수만큼). 숨긴 경기로 정해지는 자리는 '?'
+function placeGroups(){const B=D.bracket,ms=M();if(!B)return [];
+  const gf=ms.GF,gf2=ms.GF2,gfOpen=done(gf)&&!isHidden(gf);
+  const fin=gfOpen?(gf2.skip?gf:(done(gf2)&&!isHidden(gf2)?gf2:null)):null;
+  const ref=gfOpen&&!gf2.skip?gf2:gf;            // 그랜드 파이널을 공개하기 전에는 리셋 여부도 모르게 늘 그랜드 파이널을 가리킨다
+  const G=[{place:'1',size:1,medal:'🥇',why:'우승',ms:[ref],teams:fin?[{t:fin.winner,m:fin}]:[]},
+           {place:'2',size:1,medal:'🥈',why:'준우승',ms:[ref],teams:fin?[{t:fin.loser,m:fin}]:[]}];
+  let p=3;
+  for(let j=B.lb.length;j>=1;j--){const real=B.lb[j-1].map(id=>ms[id]).filter(m=>!isBye(m));if(!real.length)continue;
+    G.push({place:real.length>1?p+'~'+(p+real.length-1):String(p),size:real.length,medal:p===3?'🥉':'',why:stageName(real[0])+' 탈락',ms:real,
+            teams:real.filter(m=>done(m)&&!isHidden(m)).map(m=>({t:m.loser,m}))});
+    p+=real.length;}
+  return G;}
+function renderPlaces(){const el=$('places');if(!el)return;if(!D||!D.bracket){el.innerHTML='<div class="note" style="padding:20px">본선 대진표가 만들어지면 순위가 나온다.</div>';return;}
+  const G=placeGroups();let shownN=0,total=0;
+  let h='<table><tr><th class="n">순위</th><th>팀</th><th class="n">본선 시드</th><th class="n">예선 순위</th><th>마지막 경기</th><th>상대</th><th class="n">점수</th></tr>';
+  for(const g of G){total+=g.size;
+    for(const {t,m} of g.teams){shownN++;const i=m.teams[0]===t?0:1,o=m.teams[1-i],st=(D.standings||[]).find(r=>r.team===t);
+      const res=g.place==='1'?'우승':'패';
+      h+=`<tr class="click${hlTeam===t?' hlrow':''}" data-m="${m.id}"><td class="n"><b>${g.medal} ${g.place}</b></td><td><b>${esc(TEAM(t).name)}</b></td><td class="n">#${seedOf(t)}</td><td class="n">${st?st.rank+'위':''}</td>
+        <td>M${m.no} ${stageName(m)} <span class="pill${res==='우승'?' w':''}">${res}</span></td><td>${o>=0?esc(TEAM(o).name):'-'}</td><td class="n">${m.score[i]} : ${m.score[1-i]}</td></tr>`;}
+    const left=g.size-g.teams.length;
+    if(left>0){const hid=g.ms.filter(m=>!(done(m)&&!isHidden(m)));
+      for(let q=0;q<left;q++){const m=hid[q]||hid[0];
+        h+=`<tr class="click" data-m="${m?m.id:''}"><td class="n" style="color:var(--dim)">${g.medal} ${g.place}</td><td style="color:var(--dim)">? (숨김)</td><td></td><td></td>
+          <td class="note">${m?'M'+m.no+' '+stageName(m)+' 결과를 공개하면 나온다':''}</td><td></td><td></td></tr>`;}}}
+  el.innerHTML=`<h3 style="margin:10px 0">최종 순위 · ${shownN}/${total}팀 공개 <span class="note">(같은 패자조 라운드에서 탈락한 팀은 공동 순위 · 줄을 누르면 그 경기로)</span></h3>`+h+'</table>';
+  el.querySelectorAll('tr[data-m]').forEach(r=>{if(!r.dataset.m)return;r.onclick=()=>{const m=M()[r.dataset.m];if(!m)return;
+    tab='bracket';[...$('tabs').children].forEach(x=>x.classList.toggle('on',x.dataset.tab==='bracket'));showTab();requestAnimationFrame(()=>{focusMatch(m);openMatch(m);});};});}
+
 // ---------- 탭 ----------
 let tab='bracket';
 $('tabs').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;tab=b.dataset.tab;
   [...$('tabs').children].forEach(x=>x.classList.toggle('on',x===b));showTab();});
 function showTab(){const home=APP&&!D;$('home').style.display=home?'block':'none';$('wrap').style.display=!home&&tab==='bracket'?'block':'none';
-  $('swiss').style.display=!home&&tab==='swiss'?'block':'none';$('bar').style.display=home?'none':'flex';$('tabs').style.visibility=home?'hidden':'visible';
+  $('swiss').style.display=!home&&tab==='swiss'?'block':'none';$('places').style.display=!home&&tab==='places'?'block':'none';if(tab==='places')renderPlaces();$('bar').style.display=home?'none':'flex';$('tabs').style.visibility=home?'hidden':'visible';
   if(tab==='swiss')renderSwiss();
   if(!home&&tab==='bracket'&&(needFit||Z<0.1))requestAnimationFrame(()=>{fit();needFit=false;});}
 let needFit=true;
