@@ -111,6 +111,12 @@ details summary{color:var(--bronze2)}
 #rv.on{display:flex}
 #rv .top{display:flex;align-items:center;gap:10px;padding:7px 12px;background:linear-gradient(#1c140c,#120d08);border-bottom:1px solid var(--line)}
 #rv .top .ttl{flex:1;font-weight:600;font-family:var(--kserif);color:#fff3d6}
+#rv .top .ttl{display:flex;align-items:baseline;white-space:nowrap;overflow:hidden;min-width:0}
+#rv .top .ttl .meta{font-size:13px;color:#cdbb9c;margin-right:14px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0}
+#rv .top .ttl .tr,#rv .top .ttl .tb{font-size:21px;font-weight:800;text-shadow:0 1px 0 #000}
+#rv .top .ttl .tr{color:#ff4a3a}
+#rv .top .ttl .tb{color:#2ec4ff}
+#rv .top .ttl .vs{margin:0 10px;color:#cdbb9c;font-size:14px}
 #rv iframe{flex:1;border:0;width:100%;background:#000}
 /* ---- 예선 · 순위 표 ---- */
 #swiss,#places{position:absolute;inset:0;overflow:auto;display:none;background:linear-gradient(#150f0a,#110c08);border:1px solid var(--bronze);border-radius:6px;padding:6px 14px;
@@ -416,7 +422,7 @@ function openReplay(gid,hid,list){rvList=list||(curList.length?curList:[gid]);rv
   const f=$('rFrame');if(!f.src){frameReady=new Promise(r=>f.onload=()=>setTimeout(r,400));f.src=BASE+'viewer.html';}
   $('rv').classList.add('on');showGame();}
 function showGame(){const gid=rvList[rvIdx],g=D.games[gid],mp=D.config.maps[g.m];
-  $('rTitle').textContent=`${gid} · ${rvIdx+1}/${rvList.length}판 · 맵 ${mp.name} · ${TEAM(g.r).name} (붉은) vs ${TEAM(g.b).name} (푸른)`;
+  $('rTitle').innerHTML=`<span class="meta">${esc(gid)} · ${rvIdx+1}/${rvList.length}판 · 맵 ${esc(mp.name)}</span><span class="tr">${esc(TEAM(g.r).name)}</span><span class="vs">vs</span><span class="tb">${esc(TEAM(g.b).name)}</span>`;
   $('rPrev').disabled=rvIdx<=0;$('rNext').disabled=rvIdx>=rvList.length-1;
   window.__wwWant=gid;const s=document.createElement('script');s.src=BASE+'replays/'+gid+'.js'+(APP?'?t='+Date.now():'');
   s.onerror=()=>toast('리플레이 파일이 없습니다: '+gid);s.onload=()=>s.remove();document.body.appendChild(s);}

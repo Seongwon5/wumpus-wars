@@ -655,8 +655,10 @@ class App:
                 raise ValueError('토너먼트 폴더가 아니다 (data.js 가 없다): ' + path)
         self.close()
         self.tdir = path
-        if not os.path.isfile(os.path.join(path, 'viewer.html')):
-            write_viewer(path)
+        try:
+            write_viewer(path)                             # 열 때마다 새 뷰어로 (고친 뷰어가 예전 대회에도 반영되게)
+        except OSError:
+            pass
         _remember(path)
         if os.path.isfile(os.path.join(path, 'config.json')):
             self.runner = Runner(path, log=None)
